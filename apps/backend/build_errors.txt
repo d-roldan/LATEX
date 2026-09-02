@@ -1,0 +1,6 @@
+
+> disal-mini-mes-backend@0.1.0 build
+> nest build
+
+Found 6 error(s).
+

@@ -1,0 +1,19 @@
+{
+  "name": "Control de Planta de Látex",
+  "short_name": "Planta Látex",
+  "description": "Control productivo, calidad, envasado y trazabilidad de tanques.",
+  "lang": "es-AR",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b8fc7",
+  "prefer_related_applications": false,
+  "icons": [{
+    "src": "/icons/icon-disal.svg",
+    "sizes": "any",
+    "type": "image/svg+xml",
+    "purpose": "any maskable"
+  }]
+}

@@ -1,0 +1,13 @@
+
+> disal-mini-mes-frontend@0.1.0 build
+> tsc --noEmit && vite build
+
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32mÔ£ô[39m 2401 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m  0.63 kB[22m[1m[22m[2m Ôöé gzip:   0.39 kB[22m
+[2mdist/[22m[35massets/index-DgLl8Rqf.css  [39m[1m[2m 38.51 kB[22m[1m[22m[2m Ôöé gzip:   8.43 kB[22m
+[2mdist/[22m[36massets/index-CnOtD4N9.js   [39m[1m[33m826.08 kB[39m[22m[2m Ôöé gzip: 241.30 kB[22m
+[32mÔ£ô built in 6.39s[39m

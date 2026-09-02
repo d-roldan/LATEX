@@ -1,0 +1,271 @@
+/*
+ * DISAL Design Tokens
+ * --------------------
+ * Este archivo es la única fuente de identidad visual del producto.
+ * Los componentes y pantallas sólo consumen tokens semánticos.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Brand */
+  --color-brand-disal: #ff3b43;
+  --color-brand-disal-strong: #c9121f;
+  --color-brand-disal-soft: #ff858a;
+  --color-primary: #e72b35;
+  --color-primary-hover: #f43b45;
+  --color-primary-pressed: #bd151f;
+  --color-on-primary: #ffffff;
+  --color-on-status: #ffffff;
+  --color-on-warning: #251600;
+  --color-shadow-base: #000000;
+  --color-secondary: #182337;
+  --color-secondary-hover: #22314a;
+  --color-secondary-pressed: #101a2a;
+  --color-on-secondary: #f4f7fc;
+  --color-industrial: #3b82f6;
+  --color-industrial-hover: #5795f8;
+  --color-industrial-pressed: #2369d5;
+
+  /* Feedback */
+  --color-success: #22c55e;
+  --color-success-hover: #31d56c;
+  --color-success-pressed: #158f41;
+  --color-warning: #f8bf24;
+  --color-warning-hover: #ffcc45;
+  --color-warning-pressed: #c98e09;
+  --color-danger: #ef4444;
+  --color-danger-hover: #fa5757;
+  --color-danger-pressed: #c92525;
+  --color-info: #60a5fa;
+  --color-info-hover: #78b4fb;
+  --color-info-pressed: #377fd2;
+
+  /* Surfaces */
+  --color-background: #0b0f19;
+  --color-background-secondary: #111827;
+  --color-surface: #151e2d;
+  --color-surface-soft: #192337;
+  --color-surface-raised: #202c41;
+  --color-surface-overlay: rgba(4, 8, 16, 0.72);
+  --color-border: #2b3a53;
+  --color-border-strong: #40516e;
+  --color-text: #ffffff;
+  --color-text-secondary: #ffffff;
+  --color-text-muted: #ffffff;
+  --color-text-disabled: #ffffff;
+  --color-focus: #3b82f6;
+  --color-sidebar-text: #ffffff;
+  --color-sidebar-muted: #ffffff;
+  --color-sidebar-subtle: #ffffff;
+  --color-sidebar-strong: #ffffff;
+  --color-sidebar-border: rgba(168, 188, 231, 0.22);
+  --color-sidebar-control: rgba(255, 255, 255, 0.06);
+  --color-sidebar-user: rgba(7, 13, 25, 0.5);
+
+  /* Semantic translucent surfaces */
+  --color-success-surface: color-mix(in srgb, var(--color-success) 14%, transparent);
+  --color-warning-surface: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  --color-danger-surface: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  --color-info-surface: color-mix(in srgb, var(--color-info) 14%, transparent);
+  --color-neutral-surface: color-mix(in srgb, var(--color-text-secondary) 13%, transparent);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(180deg, var(--color-primary-hover) 0%, var(--color-primary) 48%, var(--color-primary-pressed) 100%);
+  --gradient-secondary: linear-gradient(180deg, var(--color-secondary-hover), var(--color-secondary));
+  --gradient-success: linear-gradient(180deg, var(--color-success-hover), var(--color-success-pressed));
+  --gradient-warning: linear-gradient(180deg, var(--color-warning-hover), var(--color-warning-pressed));
+  --gradient-danger: linear-gradient(180deg, var(--color-danger-hover), var(--color-danger-pressed));
+  --gradient-info: linear-gradient(180deg, var(--color-info-hover), var(--color-info-pressed));
+  --gradient-app: radial-gradient(900px 520px at 70% -18%, color-mix(in srgb, var(--color-industrial) 10%, transparent), transparent 68%),
+    linear-gradient(180deg, var(--color-background), var(--color-background-secondary));
+  --gradient-sidebar: linear-gradient(180deg, #111827 0%, #0b101b 100%);
+  --gradient-brand-plate: linear-gradient(180deg, rgba(238, 243, 251, 0.96), rgba(199, 213, 239, 0.9));
+
+  /* Shadows */
+  --shadow-color: 4 8 18;
+  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.28);
+  --shadow-sm: 0 3px 8px rgb(var(--shadow-color) / 0.3), 0 1px 2px rgb(var(--shadow-color) / 0.22);
+  --shadow-md: 0 10px 24px -10px rgb(var(--shadow-color) / 0.58), 0 2px 5px rgb(var(--shadow-color) / 0.2);
+  --shadow-lg: 0 22px 46px -18px rgb(var(--shadow-color) / 0.72), 0 8px 18px rgb(var(--shadow-color) / 0.24);
+  --shadow-xl: 0 34px 74px -24px rgb(var(--shadow-color) / 0.82), 0 14px 30px rgb(var(--shadow-color) / 0.28);
+  --shadow-button: none;
+  --shadow-button-hover: 0 7px 16px -7px rgb(var(--shadow-color) / 0.42);
+  --shadow-button-pressed: inset 0 2px 4px rgb(var(--shadow-color) / 0.2);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-focus) 23%, transparent);
+
+  /* Radius */
+  --radius-sm: 0.45rem;
+  --radius-md: 0.7rem;
+  --radius-lg: 0.9rem;
+  --radius-xl: 1.1rem;
+  --radius-pill: 999px;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.5rem;
+  --spacing-2xl: 2rem;
+
+  /* Typography */
+  --font-family-sans: 'Geist', 'Segoe UI', sans-serif;
+  --font-family-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.82rem;
+  --font-size-md: 0.92rem;
+  --font-size-lg: 1.08rem;
+  --font-size-xl: 1.35rem;
+  --font-size-2xl: 1.7rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+  --letter-spacing-tight: -0.025em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.08em;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 300ms;
+  --easing-primary: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --easing-secondary: cubic-bezier(0.34, 1.28, 0.64, 1);
+
+  /* Component-level tokens */
+  --button-height-sm: 2rem;
+  --button-height-md: 2.55rem;
+  --button-height-lg: 2.9rem;
+  --button-radius: var(--radius-md);
+  --input-height: 2.55rem;
+  --input-radius: var(--radius-md);
+  --card-radius: var(--radius-lg);
+  --card-background: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-shadow: var(--shadow-md);
+  --modal-radius: var(--radius-xl);
+  --modal-shadow: var(--shadow-xl);
+
+  /* Centro de control para pantalla de planta */
+  --tv-dark-background: linear-gradient(135deg, #070d1b 0%, #0c1426 100%);
+  --tv-dark-text: #ffffff;
+  --tv-dark-muted: #ffffff;
+  --tv-dark-panel: rgba(255, 255, 255, 0.04);
+  --tv-dark-tile: rgba(255, 255, 255, 0.08);
+  --tv-dark-border: rgba(154, 176, 221, 0.2);
+  --tv-dark-clock: #ffffff;
+  --tv-dark-clock-glow: 0 0 18px rgba(67, 210, 255, 0.45);
+  --tv-light-background: linear-gradient(135deg, #f3f7fb 0%, #dfeaf5 100%);
+  --tv-light-text: #000000;
+  --tv-light-muted: #000000;
+  --tv-light-panel: rgba(255, 255, 255, 0.72);
+  --tv-light-tile: rgba(255, 255, 255, 0.76);
+  --tv-light-border: rgba(40, 76, 118, 0.18);
+  --tv-light-clock: #071426;
+  --tv-light-clock-glow: 0 0 16px rgba(255, 255, 255, 0.8);
+
+  /* Compatibilidad: nombres históricos apuntan al Theme */
+  --bg: var(--color-background);
+  --bg-soft: var(--color-background-secondary);
+  --background: var(--color-background);
+  --panel: var(--color-surface);
+  --panel-soft: var(--color-surface-soft);
+  --panel-elevated: var(--color-surface-raised);
+  --ink: var(--color-text);
+  --ink-soft: var(--color-text-secondary);
+  --ink-muted: var(--color-text-muted);
+  --border: var(--color-border);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-on-primary);
+  --secondary: var(--color-secondary);
+  --secondary-foreground: var(--color-on-secondary);
+  --destructive: var(--color-danger);
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --accent-cyan: var(--color-info);
+  --accent-lime: var(--color-success);
+  --accent-orange: var(--color-warning);
+  --accent-rose: var(--color-danger);
+  --ok-bg: var(--color-success-surface);
+  --ok-ink: var(--color-success);
+  --warn-bg: var(--color-warning-surface);
+  --warn-ink: var(--color-warning);
+  --neutral-bg: var(--color-neutral-surface);
+  --neutral-ink: var(--color-text-secondary);
+  --sidebar-bg: var(--gradient-sidebar);
+  --sidebar-hover: color-mix(in srgb, var(--color-brand-disal) 15%, transparent);
+  --sidebar-border: color-mix(in srgb, var(--color-brand-disal) 18%, var(--color-border));
+  --shadow-panel: var(--shadow-md);
+  --shadow-soft: var(--shadow-sm);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --color-brand-disal: #e60012;
+  --color-brand-disal-strong: #b8010f;
+  --color-brand-disal-soft: #ff5d68;
+  --color-primary: #df1724;
+  --color-primary-hover: #ee2935;
+  --color-primary-pressed: #b50d18;
+  --color-secondary: #f2f5fa;
+  --color-secondary-hover: #ffffff;
+  --color-secondary-pressed: #dce3ee;
+  --color-on-secondary: #172238;
+  --color-industrial: #1d6fd8;
+  --color-industrial-hover: #2f80e7;
+  --color-industrial-pressed: #1555a6;
+  --color-success: #16a34a;
+  --color-success-hover: #22b956;
+  --color-success-pressed: #0f7d38;
+  --color-warning: #e99a09;
+  --color-warning-hover: #f5aa1b;
+  --color-warning-pressed: #b87504;
+  --color-danger: #dc2626;
+  --color-danger-hover: #eb3939;
+  --color-danger-pressed: #aa1818;
+  --color-info: #3882e6;
+  --color-info-hover: #4d91ec;
+  --color-info-pressed: #2464b9;
+  --color-background: #f7f9fc;
+  --color-background-secondary: #eef2f7;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f5f7fa;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: rgba(13, 22, 38, 0.46);
+  --color-border: #e1e7ef;
+  --color-border-strong: #c9d3e1;
+  --color-text: #000000;
+  --color-text-secondary: #000000;
+  --color-text-muted: #000000;
+  --color-text-disabled: #000000;
+  --color-focus: #2563eb;
+  --color-sidebar-text: #000000;
+  --color-sidebar-muted: #000000;
+  --color-sidebar-subtle: #000000;
+  --color-sidebar-strong: #000000;
+  --color-sidebar-border: rgba(38, 58, 88, 0.18);
+  --color-sidebar-control: rgba(20, 36, 60, 0.07);
+  --color-sidebar-user: rgba(255, 255, 255, 0.74);
+  --gradient-sidebar: linear-gradient(180deg, #f8fafc 0%, #e8eef6 100%);
+  --gradient-brand-plate: linear-gradient(180deg, #ffffff 0%, #eef3f9 100%);
+  --gradient-app: radial-gradient(880px 480px at 72% -16%, color-mix(in srgb, var(--color-industrial) 6%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--color-background), var(--color-background-secondary));
+  --shadow-color: 40 55 78;
+  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.08);
+  --shadow-sm: 0 3px 9px rgb(var(--shadow-color) / 0.09), 0 1px 2px rgb(var(--shadow-color) / 0.06);
+  --shadow-md: 0 12px 28px -16px rgb(var(--shadow-color) / 0.28), 0 2px 7px rgb(var(--shadow-color) / 0.07);
+  --shadow-lg: 0 24px 50px -22px rgb(var(--shadow-color) / 0.36), 0 8px 20px rgb(var(--shadow-color) / 0.08);
+  --shadow-xl: 0 38px 80px -28px rgb(var(--shadow-color) / 0.44), 0 14px 32px rgb(var(--shadow-color) / 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 1ms;
+    --duration-normal: 1ms;
+    --duration-slow: 1ms;
+  }
+}

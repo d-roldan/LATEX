@@ -1,0 +1,40 @@
+node_modules
+**/node_modules
+**/dist
+**/.vite
+**/.turbo
+**/.next
+coverage
+*.log
+.DS_Store
+Thumbs.db
+
+.env
+.env.*
+!.env.example
+
+# Private access inventory. Keep the real file local/encrypted only.
+docs/accesses.private.md
+docs/accesses.private.*.md
+docs/accesses.encrypted.md
+docs/accesses.encrypted.*.md
+.aider*
+
+.vscode/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Debug scripts
+debug-*.mjs
+# E2E dependencies
+e2e/node_modules/
+e2e/e2e/
+
+# Generated verification artifacts
+tmp/
+
+# Local TLS material and private keys
+infra/nginx/certs/
+*.key
+*.pem

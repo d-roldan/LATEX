@@ -1,0 +1,4 @@
+﻿src/features/operator/OperatorPage.tsx(187,27): error TS2322: Type '"default" | "success" | "destructive" | "secondary"' is not assignable to type '"default" | "success" | "warning" | "destructive" | "primary" | null | undefined'.
+  Type '"secondary"' is not assignable to type '"default" | "success" | "warning" | "destructive" | "primary" | null | undefined'.
+src/features/operator/OperatorPage.tsx(229,27): error TS2322: Type '"primary" | "secondary"' is not assignable to type '"default" | "destructive" | "secondary" | "outline" | "ghost" | null | undefined'.
+  Type '"primary"' is not assignable to type '"default" | "destructive" | "secondary" | "outline" | "ghost" | null | undefined'.

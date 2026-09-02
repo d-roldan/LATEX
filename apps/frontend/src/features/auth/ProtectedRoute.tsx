@@ -1,0 +1,26 @@
+import { Navigate, Outlet } from 'react-router-dom';
+import { getSessionUser } from './session';
+import { UserRole } from './types';
+
+interface Props {
+  allowedRoles?: UserRole[];
+}
+
+export function ProtectedRoute({ allowedRoles }: Props) {
+  const user = getSessionUser();
+  const normalizedRole = user?.role === 'OWNER' ? 'DUENO' : user?.role === 'OPERATOR' ? 'OPERARIO' : user?.role;
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && normalizedRole && !allowedRoles.includes(normalizedRole as UserRole)) {
+    const home: Record<string, string> = {
+      FABRICACION: '/fabricacion', LABORATORIO: '/laboratorio', ENVASADO: '/envasado',
+      MONITOREO: '/monitoreo', ADMIN: '/admin', OPERARIO: '/fabricacion'
+    };
+    return <Navigate to={home[normalizedRole] ?? '/monitoreo'} replace />;
+  }
+
+  return <Outlet />;
+}
