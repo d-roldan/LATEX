@@ -22,6 +22,7 @@ import {
   VersionedActionDto,
   WeightBatchDto
 } from './dto/plant.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 type Telemetry = { grossKg: number; netKg?: number; measuredAt: string; receivedAt: string };
 
@@ -49,10 +50,56 @@ const BUENOS_AIRES_OFFSET_MS = 3 * 60 * 60 * 1000;
 export class PlantService {
   private readonly weights = new Map<string, Telemetry>();
 
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly notifications: NotificationsService
+  ) {}
 
   async getConfig(companyId: string) {
     return this.loadConfig(companyId);
+  }
+
+  async publicTanks() {
+    const companyId = this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') || 'seed_company_disal';
+    const company = await this.prisma.company.findFirst({
+      where: { id: companyId, isActive: true },
+      select: { id: true }
+    });
+    if (!company) throw new NotFoundException('La pantalla de planta no está configurada');
+
+    const tanks = await this.tanks(company.id);
+    return tanks.map((tank) => ({
+      id: tank.id,
+      number: tank.number,
+      name: tank.name,
+      capacityKg: tank.capacityKg,
+      state: tank.state,
+      serviceReason: tank.serviceReason,
+      stateStartedAt: tank.stateStartedAt,
+      stateElapsedSeconds: tank.stateElapsedSeconds,
+      stateTargetSeconds: tank.stateTargetSeconds,
+      stateAttention: tank.stateAttention,
+      telemetry: {
+        grossKg: tank.telemetry.grossKg,
+        netKg: tank.telemetry.netKg,
+        measuredAt: tank.telemetry.measuredAt,
+        online: tank.telemetry.online
+      },
+      activeLot: tank.activeLot ? {
+        id: tank.activeLot.id,
+        manufacturingOrder: tank.activeLot.manufacturingOrder,
+        materialCode: tank.activeLot.materialCode,
+        description: tank.activeLot.description,
+        specificWeight: tank.activeLot.specificWeight,
+        packagingOrders: tank.activeLot.packagingOrders.map((order) => ({
+          packagingOrder: order.packagingOrder,
+          line: order.line,
+          format: order.format,
+          startedAt: order.startedAt
+        }))
+      } : null
+    }));
   }
 
   async tanks(companyId: string) {
@@ -130,7 +177,18 @@ export class PlantService {
   }
 
   async sendToLab(companyId: string, tankId: string, user: JwtUser, dto: VersionedActionDto) {
-    return this.transition(companyId, tankId, user, dto, ['FABRICANDO', 'AJUSTE'], 'LABORATORIO', dto.reason);
+    return this.prisma.$transaction(async (tx) => {
+      const tank = await this.findTank(tx, companyId, tankId);
+      if (!['FABRICANDO', 'AJUSTE'].includes(tank.state)) throw new ConflictException(`La transición ${tank.state} → LABORATORIO no está permitida`);
+      if (tank.version !== dto.version) throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
+      await this.move(tx, tank, 'LABORATORIO', user, tank.activeLotId, dto.reason);
+      await this.notifications.notifyTankAction(tx, {
+        companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'LABORATORIO',
+        title: 'Tanque disponible para analizar',
+        message: `${tank.name} ingresó a Laboratorio y espera el análisis de calidad.`
+      });
+      return { ok: true };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async quality(companyId: string, tankId: string, user: JwtUser, dto: QualityDecisionDto) {
@@ -153,6 +211,19 @@ export class PlantService {
       }});
       await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { specificWeight: state === 'APROBADO' ? dto.specificWeight : null } });
       await this.move(tx, tank, state, user, tank.activeLotId, dto.reason ?? dto.result);
+      if (state === 'APROBADO') {
+        await this.notifications.notifyTankAction(tx, {
+          companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'ENVASADO',
+          title: 'Tanque aprobado para envasar',
+          message: `${tank.name} fue aprobado por Laboratorio y está disponible para iniciar el envasado.`
+        });
+      } else {
+        await this.notifications.notifyTankAction(tx, {
+          companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'FABRICACION',
+          title: state === 'AJUSTE' ? 'Tanque requiere ajuste' : 'Tanque rechazado por Laboratorio',
+          message: `${tank.name} requiere intervención de Fabricación${dto.reason ? `: ${dto.reason}` : '.'}`
+        });
+      }
       await this.audit(tx, companyId, user, tank.id, tank.activeLotId, 'QUALITY_DECISION', 'QualityDecision', decision.id, null, dto, dto.reason);
       return { ok: true };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -217,6 +288,11 @@ export class PlantService {
       if (tank.activeLotId) await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { finishedAt: new Date() } });
       await this.move(tx, tank, 'VACIO', user, tank.activeLotId, 'Fin de envasado');
       await tx.tank.update({ where: { id: tank.id }, data: { activeLotId: null } });
+      await this.notifications.notifyTankAction(tx, {
+        companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'FABRICACION',
+        title: 'Tanque disponible para fabricar',
+        message: `${tank.name} finalizó el envasado y quedó vacío para una nueva fabricación.`
+      });
       return { ok: true };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }

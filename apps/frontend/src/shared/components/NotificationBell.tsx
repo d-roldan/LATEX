@@ -1,34 +1,35 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCircle2, ClipboardList, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Beaker, Bell, Boxes, Check, CheckCheck, Factory, Music2, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { api } from '../api/http';
+import { NotificationSound, notificationSoundOptions, playNotificationSound, previewNotificationSound, unlockNotificationSound } from '../utils/notificationSound';
 import { getSessionUser } from '../../features/auth/session';
 
-type NotificationType = 'STAGE_ASSIGNED' | 'STAGE_COMPLETED' | 'QUALITY_CONTROL_PENDING' | 'QUALITY_CONTROL_REJECTED';
+type PlantSector = 'FABRICACION' | 'LABORATORIO' | 'ENVASADO';
+type SectorFilter = PlantSector | 'TODOS';
 
 interface NotificationItem {
   id: string;
-  type: NotificationType;
+  type: 'TANK_ACTION_REQUIRED';
   title: string;
   message: string;
-  orderId?: string | null;
-  orderStageId?: string | null;
+  tankId: string;
+  targetSector: PlantSector;
   readAt?: string | null;
   createdAt: string;
 }
-
-const NOTIFICATION_ICON: Record<NotificationType, typeof ClipboardList> = {
-  STAGE_ASSIGNED: ClipboardList,
-  STAGE_COMPLETED: CheckCircle2,
-  QUALITY_CONTROL_PENDING: ShieldCheck,
-  QUALITY_CONTROL_REJECTED: ShieldAlert
-};
 
 interface NotificationResponse {
   items: NotificationItem[];
   unreadCount: number;
 }
+
+const sectorMeta = {
+  FABRICACION: { label: 'Fabricación', route: '/fabricacion', icon: Factory },
+  LABORATORIO: { label: 'Laboratorio', route: '/laboratorio', icon: Beaker },
+  ENVASADO: { label: 'Envasado', route: '/envasado', icon: Boxes }
+} as const;
 
 function relativeDate(value: string) {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
@@ -42,161 +43,171 @@ function relativeDate(value: string) {
 }
 
 export function NotificationBell() {
+  const user = getSessionUser();
+  const isAdmin = user?.role === 'ADMIN';
+  const userSector = (['FABRICACION', 'LABORATORIO', 'ENVASADO'] as const).find(sector => sector === user?.role);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement>(null);
+  const knownIdsRef = useRef<Set<string> | null>(null);
   const [open, setOpen] = useState(false);
-  const [clickingId, setClickingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<SectorFilter>(() => isAdmin ? 'TODOS' : userSector ?? 'TODOS');
+  const [soundPickerOpen, setSoundPickerOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('plant.notifications.sound') !== 'off');
+  const [selectedSound, setSelectedSound] = useState<NotificationSound>(() => {
+    const stored = localStorage.getItem('plant.notifications.soundChoice');
+    return notificationSoundOptions.some(option => option.id === stored) ? stored as NotificationSound : 'campana';
+  });
 
   const notifications = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => (await api.get<NotificationResponse>('/notifications', { params: { limit: 30 } })).data,
-    refetchInterval: 15000,
-    refetchIntervalInBackground: true,
+    queryKey: ['plant-notifications'],
+    queryFn: async () => (await api.get<NotificationResponse>('/notifications', { params: { limit: 50 } })).data,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true
   });
 
-  const readMutation = useMutation({
+  const markRead = useMutation({
+    mutationFn: async (id: string) => api.patch(`/notifications/${id}/read`),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['plant-notifications'] });
+      queryClient.setQueryData<NotificationResponse>(['plant-notifications'], current => current ? {
+        unreadCount: Math.max(0, current.unreadCount - (current.items.some(item => item.id === id && !item.readAt) ? 1 : 0)),
+        items: current.items.map(item => item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item)
+      } : current);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['plant-notifications'] })
+  });
+
+  const markAllRead = useMutation({
     mutationFn: async () => api.patch('/notifications/read-all'),
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ['notifications'] });
-      queryClient.setQueryData<NotificationResponse>(['notifications'], current => current
-        ? {
-            unreadCount: 0,
-            items: current.items.map(item => item.readAt
-              ? item
-              : { ...item, readAt: new Date().toISOString() })
-          }
-        : current
-      );
+      await queryClient.cancelQueries({ queryKey: ['plant-notifications'] });
+      queryClient.setQueryData<NotificationResponse>(['plant-notifications'], current => current ? {
+        unreadCount: 0,
+        items: current.items.map(item => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }))
+      } : current);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['plant-notifications'] })
   });
 
-  // Se marcan como leídas recién al CERRAR el popover, no al abrirlo: así el usuario
-  // llega a ver cuáles eran nuevas (fondo distinto) mientras las está mirando.
-  const closePopover = () => {
-    setOpen(false);
-    if ((notifications.data?.unreadCount ?? 0) > 0) {
-      readMutation.mutate();
+  useEffect(() => {
+    if (!notifications.data) return;
+    const currentIds = new Set(notifications.data.items.map(item => item.id));
+    if (knownIdsRef.current === null) {
+      knownIdsRef.current = currentIds;
+      return;
     }
-  };
+    const hasNewUnread = notifications.data.items.some(item => !item.readAt && !knownIdsRef.current?.has(item.id));
+    knownIdsRef.current = currentIds;
+    if (!hasNewUnread || !soundEnabled) return;
+
+    playNotificationSound(selectedSound);
+  }, [notifications.data, selectedSound, soundEnabled]);
 
   useEffect(() => {
     if (!open) return;
     const closeOnOutsideClick = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) closePopover();
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
     };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closePopover();
-    };
+    const closeOnEscape = (event: KeyboardEvent) => event.key === 'Escape' && setOpen(false);
     document.addEventListener('mousedown', closeOnOutsideClick);
     document.addEventListener('keydown', closeOnEscape);
     return () => {
       document.removeEventListener('mousedown', closeOnOutsideClick);
       document.removeEventListener('keydown', closeOnEscape);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const toggle = () => {
-    if (open) closePopover();
-    else setOpen(true);
+  const unread = notifications.data?.unreadCount ?? 0;
+  const counts = useMemo(() => Object.fromEntries(
+    (Object.keys(sectorMeta) as PlantSector[]).map(sector => [sector, notifications.data?.items.filter(item => item.targetSector === sector && !item.readAt).length ?? 0])
+  ) as Record<PlantSector, number>, [notifications.data]);
+  const visibleItems = notifications.data?.items.filter(item => isAdmin
+    ? filter === 'TODOS' || item.targetSector === filter
+    : item.targetSector === userSector
+  ) ?? [];
+
+  const toggleSound = () => {
+    const enabled = !soundEnabled;
+    if (enabled) unlockNotificationSound();
+    setSoundEnabled(enabled);
+    localStorage.setItem('plant.notifications.sound', enabled ? 'on' : 'off');
   };
 
-  const unread = notifications.data?.unreadCount ?? 0;
+  const chooseSound = (sound: NotificationSound) => {
+    setSelectedSound(sound);
+    localStorage.setItem('plant.notifications.soundChoice', sound);
+    void previewNotificationSound(sound);
+  };
 
-  const handleNotificationClick = (item: NotificationItem) => {
-    if (!item.orderId) return;
-    if (clickingId) return;
-    setClickingId(item.id);
-
-    window.setTimeout(() => {
-      setClickingId(null);
-      closePopover();
-
-    // Un operario no tiene acceso a /orders ni a /supervisor: siempre va a su propio panel,
-    // resaltando la etapa puntual de la notificación (se lo asignaron o se la rechazaron).
-    if (getSessionUser()?.role === 'OPERARIO') {
-      navigate('/operator', { state: { highlightStageId: item.orderStageId ?? undefined } });
-      return;
-    }
-
-    if (item.type === 'QUALITY_CONTROL_PENDING' || item.type === 'QUALITY_CONTROL_REJECTED') {
-      navigate('/supervisor', { state: { highlightOrderId: item.orderId } });
-      return;
-    }
-
-    navigate('/orders', {
-      state: {
-        tab: 'production',
-        orderId: item.orderId,
-        highlightOrderId: item.orderId,
-        highlightStageId: item.orderStageId ?? undefined
-      }
+  const openNotification = (item: NotificationItem) => {
+    if (!item.readAt) markRead.mutate(item.id);
+    setOpen(false);
+    navigate(sectorMeta[item.targetSector].route, {
+      state: { highlightTankId: item.tankId, notificationId: item.id, highlightNonce: Date.now() }
     });
-    }, 180);
   };
 
   return (
-    <div className="notification-center" ref={rootRef}>
-      <button
-        type="button"
-        className={`notification-bell unstyled-button${open ? ' is-open' : ''}`}
-        onClick={toggle}
-        aria-label={unread ? `${unread} notificaciones nuevas` : 'Notificaciones'}
-        aria-expanded={open}
-        title="Notificaciones"
-      >
-        <Bell size={22} />
-        {unread > 0 && <span className="notification-bell__dot">{unread > 9 ? '9+' : unread}</span>}
+    <div className="notification-center plant-notification-center" ref={rootRef}>
+      <button type="button" className={`notification-bell unstyled-button${open ? ' is-open' : ''}${unread ? ' has-unread' : ''}`} onClick={() => setOpen(value => !value)} aria-label={unread ? `${unread} notificaciones nuevas` : 'Notificaciones'} aria-expanded={open} title="Notificaciones por sector">
+        <Bell size={21}/>
+        {unread > 0 ? <span className="notification-bell__dot">{unread > 99 ? '99+' : unread}</span> : null}
       </button>
 
-      {open && (
-        <section className="notification-popover" aria-label="Lista de notificaciones">
+      {open ? (
+        <section className="notification-popover plant-notification-popover" aria-label="Notificaciones de planta">
           <header>
-            <div>
-              <h3>Notificaciones</h3>
-              <p>{unread ? `${unread} nuevas` : 'Todo está visto'}</p>
+            <div><h3>Acciones pendientes</h3><p>{unread ? `${unread} sin leer` : 'Todo está visto'}</p></div>
+            <div className="notification-header-actions">
+              <button type="button" onClick={toggleSound} aria-label={soundEnabled ? 'Silenciar notificaciones' : 'Activar sonido'} title={soundEnabled ? 'Sonido activado' : 'Sonido desactivado'}>{soundEnabled ? <Volume2 size={18}/> : <VolumeX size={18}/>}</button>
+              <button type="button" onClick={() => setSoundPickerOpen(value => !value)} aria-label="Elegir sonido de notificación" aria-expanded={soundPickerOpen} title="Elegir sonido"><Music2 size={18}/></button>
+              {soundPickerOpen ? (
+                <div className="notification-sound-picker" role="dialog" aria-label="Elegir sonido de notificación">
+                  <div className="notification-sound-picker__head"><div><strong>Sonido de notificación</strong><span>Elegí un tono para escucharlo.</span></div><button type="button" onClick={() => setSoundPickerOpen(false)} aria-label="Cerrar selector"><X size={16}/></button></div>
+                  <div className="notification-sound-picker__list">
+                    {notificationSoundOptions.map(option => (
+                      <button key={option.id} type="button" className={selectedSound === option.id ? 'is-selected' : ''} onClick={() => chooseSound(option.id)}>
+                        <span className="notification-sound-picker__play">{selectedSound === option.id ? <Check size={16}/> : <Play size={15}/>}</span>
+                        <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {unread ? <button type="button" onClick={() => markAllRead.mutate()} aria-label="Marcar todas como leídas" title="Marcar todas como leídas"><CheckCheck size={18}/></button> : null}
+              <button type="button" onClick={() => setOpen(false)} aria-label="Cerrar notificaciones"><X size={18}/></button>
             </div>
-            <button type="button" className="unstyled-button" onClick={closePopover} aria-label="Cerrar notificaciones">
-              <X size={18} />
-            </button>
           </header>
 
+          {isAdmin ? (
+            <div className="notification-sector-tabs" role="tablist" aria-label="Filtrar por sector">
+              <button className={filter === 'TODOS' ? 'is-active' : ''} onClick={() => setFilter('TODOS')}>Todos</button>
+              {(Object.keys(sectorMeta) as PlantSector[]).map(sector => (
+                <button key={sector} className={filter === sector ? 'is-active' : ''} onClick={() => setFilter(sector)}>{sectorMeta[sector].label}{counts[sector] ? <b>{counts[sector]}</b> : null}</button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="notification-list">
-            {notifications.isLoading ? (
-              <div className="notification-empty">Cargando notificaciones…</div>
-            ) : notifications.isError ? (
-              <div className="notification-empty notification-empty--error">No se pudieron cargar las notificaciones.</div>
-            ) : !notifications.data?.items.length ? (
-              <div className="notification-empty">
-                <Bell size={24} />
-                Todavía no tenés notificaciones.
-              </div>
-            ) : notifications.data.items.map(item => {
-              const Icon = NOTIFICATION_ICON[item.type] ?? ClipboardList;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`notification-item unstyled-button${item.readAt ? '' : ' is-unread'}${clickingId === item.id ? ' is-clicking' : ''}`}
-                  onClick={() => handleNotificationClick(item)}
-                  disabled={!item.orderId}
-                >
-                  <span className={`notification-item__icon notification-item__icon--${item.type.toLowerCase()}`}>
-                    <Icon size={18} />
-                  </span>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.message}</p>
-                    <time>{relativeDate(item.createdAt)}</time>
-                  </div>
-                </button>
-              );
-            })}
+            {notifications.isLoading ? <div className="notification-empty">Cargando…</div> :
+              notifications.isError ? <div className="notification-empty notification-empty--error">No se pudieron cargar las notificaciones.</div> :
+              !visibleItems.length ? <div className="notification-empty"><Bell size={24}/>No hay acciones para este sector.</div> :
+              visibleItems.map(item => {
+                const meta = sectorMeta[item.targetSector];
+                const Icon = meta.icon;
+                return (
+                  <button key={item.id} type="button" className={`notification-item unstyled-button sector-${item.targetSector.toLowerCase()}${item.readAt ? '' : ' is-unread'}`} onClick={() => openNotification(item)}>
+                    <span className="notification-item__icon"><Icon size={18}/></span>
+                    <div><span className="notification-sector-label">{meta.label}</span><strong>{item.title}</strong><p>{item.message}</p><time>{relativeDate(item.createdAt)}</time></div>
+                  </button>
+                );
+              })}
           </div>
+          <p className="notification-sound-status">{soundEnabled ? `Sonido activo: ${notificationSoundOptions.find(option => option.id === selectedSound)?.label}.` : 'El aviso sonoro está silenciado.'}</p>
         </section>
-      )}
+      ) : null}
+      <span className="sr-only" aria-live="polite">{unread ? `${unread} acciones nuevas` : ''}</span>
     </div>
   );
 }

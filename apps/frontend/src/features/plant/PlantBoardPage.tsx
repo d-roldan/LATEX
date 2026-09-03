@@ -5,6 +5,8 @@ import { api } from '../../shared/api/http';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { Input } from '../../shared/ui/Input';
+import { useLocation } from 'react-router-dom';
+import { useHighlightTarget } from '../../shared/utils/highlightTarget';
 
 type Sector = 'fabricacion' | 'laboratorio' | 'envasado' | 'monitoreo';
 type TankState = 'VACIO' | 'FABRICANDO' | 'LABORATORIO' | 'AJUSTE' | 'RECHAZADO' | 'APROBADO' | 'ENVASANDO' | 'FUERA_DE_SERVICIO';
@@ -40,6 +42,9 @@ const emptyForm = {
 };
 
 export function PlantBoardPage({ sector }: { sector: Sector }) {
+  const location = useLocation();
+  const navigationState = location.state as { highlightTankId?: string; highlightNonce?: number } | null;
+  useHighlightTarget(navigationState?.highlightTankId ? `tank-${navigationState.highlightTankId}` : null, `${location.key}:${navigationState?.highlightNonce ?? ''}`);
   const client = useQueryClient();
   const [selection, setSelection] = useState<{ tank: Tank; action: Action } | null>(null);
   const [pendingRequest, setPendingRequest] = useState<PendingRequest | null>(null);
@@ -47,12 +52,16 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const tanks = useQuery({
-    queryKey: ['plant-tanks'],
-    queryFn: async () => (await api.get<Tank[]>('/plant/tanks')).data,
+    queryKey: [sector === 'monitoreo' ? 'plant-tv-tanks' : 'plant-tanks'],
+    queryFn: async () => (await api.get<Tank[]>(sector === 'monitoreo' ? '/plant/tv' : '/plant/tanks')).data,
     refetchInterval: 2000,
     refetchIntervalInBackground: true
   });
-  const config = useQuery({ queryKey: ['plant-config'], queryFn: async () => (await api.get<Config>('/plant/config')).data });
+  const config = useQuery({
+    queryKey: ['plant-config'],
+    queryFn: async () => (await api.get<Config>('/plant/config')).data,
+    enabled: sector !== 'monitoreo'
+  });
 
   const mutation = useMutation({
     mutationFn: async ({ path, method, payload }: PendingRequest) => api[method](path, payload),
@@ -135,7 +144,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
     <div className={`plant-page plant-page--${sector}`}>
       <header className="plant-page-head">
         <div><h1>{titles[sector]}</h1></div>
-        <div className="plant-health"><Radio size={16}/><span>{onlineCount}/{tanks.data?.length ?? 9} balanzas en línea</span><button onClick={() => tanks.refetch()}><RefreshCw size={16}/></button></div>
+        <div className="plant-health"><Radio size={16}/><span>{onlineCount}/{tanks.data?.length ?? 9} balanzas en línea</span>{sector !== 'monitoreo' ? <button onClick={() => tanks.refetch()} aria-label="Actualizar estado"><RefreshCw size={16}/></button> : null}</div>
       </header>
       {tanks.isError ? <div className="plant-error"><AlertTriangle/> No se pudo leer el estado de la planta.</div> : null}
       <section className="tank-grid">
@@ -143,7 +152,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
           const weight = tank.telemetry.grossKg;
           const fill = tank.capacityKg ? Math.max(0, Math.min(100, ((weight ?? 0) / tank.capacityKg) * 100)) : 0;
           const order = tank.activeLot?.packagingOrders[0];
-          return <article className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}`} key={tank.id}>
+          return <article id={`tank-${tank.id}`} className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}`} key={tank.id}>
             <div className="tank-card__content">
               <div className="tank-card__title"><h2>{tank.name}</h2>{!tank.telemetry.online ? <span className="tank-offline"><WifiOff size={13}/> Sin señal</span> : null}</div>
               <span className="tank-state">{stateLabel[tank.state]}</span>
@@ -163,7 +172,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
             </div>
             <div className="tank-capacity">
               <span><b>MAX:</b> {tank.capacityKg ? `${tank.capacityKg.toLocaleString('es-AR')} kg` : 'Pendiente'}</span>
-              <span><b>MIN:</b> 0</span>
+              {sector !== 'monitoreo' ? <span><b>MIN:</b> 0</span> : null}
             </div>
           </article>;
         })}

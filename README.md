@@ -14,6 +14,8 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 - Pesos conservados sólo en memoria: las muestras de balanza no se escriben en PostgreSQL.
 - Interfaz responsive, menú lateral desplegable, confirmaciones internas y modo pantalla completa.
 - Vista Full HD de nueve tanques y reloj sin desplazamiento vertical.
+- Vista pública de sólo lectura para televisores en `/tv`.
+- Notificaciones por sector con sonido configurable, navegación y resaltado del tanque involucrado.
 - Duración visible por estado, semáforos configurables y línea temporal completa por OF.
 - Resumen diario para reunión, cierre persistido y exportación PDF/Excel.
 - Registro de cantidad planificada, turno, prioridad, kilogramos envasados, unidades y merma.
@@ -138,7 +140,7 @@ Estado verificado de esta versión:
 
 - Backend compilado.
 - Frontend compilado para producción.
-- 23 pruebas automatizadas aprobadas.
+- 27 pruebas automatizadas aprobadas.
 - Stack Docker operativo y API saludable.
 
 ## Seguridad y respaldo

@@ -17,9 +17,9 @@ export function ProtectedRoute({ allowedRoles }: Props) {
   if (allowedRoles && normalizedRole && !allowedRoles.includes(normalizedRole as UserRole)) {
     const home: Record<string, string> = {
       FABRICACION: '/fabricacion', LABORATORIO: '/laboratorio', ENVASADO: '/envasado',
-      MONITOREO: '/monitoreo', JEFATURA: '/jefatura', ADMIN: '/admin', OPERARIO: '/fabricacion'
+      MONITOREO: '/historial', JEFATURA: '/jefatura', ADMIN: '/admin', OPERARIO: '/fabricacion'
     };
-    return <Navigate to={home[normalizedRole] ?? '/monitoreo'} replace />;
+    return <Navigate to={home[normalizedRole] ?? '/tv'} replace />;
   }
 
   return <Outlet />;

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Headers, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -11,6 +11,10 @@ import { PlantService } from './plant.service';
 @Controller('plant')
 export class PlantController {
   constructor(private readonly service: PlantService) {}
+
+  @Get('tv')
+  @Header('Cache-Control', 'no-store')
+  tv() { return this.service.publicTanks(); }
 
   @Post('telemetry/weights')
   weights(@Headers('x-node-red-key') key: string | undefined, @Headers('x-company-id') companyId: string | undefined, @Body() dto: WeightBatchDto) {

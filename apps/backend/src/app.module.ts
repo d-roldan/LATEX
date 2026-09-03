@@ -13,6 +13,7 @@ import { RolesGuard } from './common/auth/roles.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from './common/security/rate-limit.guard';
 import { PlantModule } from './modules/plant/plant.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PlantModule } from './modules/plant/plant.module';
     CompaniesModule,
     UsersModule,
     AuditModule,
+    NotificationsModule,
     PlantModule
   ],
   controllers: [AppController],

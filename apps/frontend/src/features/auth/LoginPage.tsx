@@ -31,9 +31,9 @@ export function LoginPage() {
       setSession(response.data);
       const home: Record<string, string> = {
         FABRICACION: '/fabricacion', LABORATORIO: '/laboratorio', ENVASADO: '/envasado',
-        MONITOREO: '/monitoreo', JEFATURA: '/jefatura', ADMIN: '/admin'
+        MONITOREO: '/historial', JEFATURA: '/jefatura', ADMIN: '/admin'
       };
-      navigate(home[response.data.user.role] ?? '/monitoreo');
+      navigate(home[response.data.user.role] ?? '/tv');
     } catch (requestError) {
       if (requestedFullscreen && document.fullscreenElement) {
         await document.exitFullscreen().catch(() => undefined);

@@ -3,7 +3,10 @@ import { PlantService } from './plant.service';
 
 describe('PlantService telemetry', () => {
   const prisma = {
-    company: { findUnique: jest.fn().mockResolvedValue({ settings: {} }) },
+    company: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      findUnique: jest.fn().mockResolvedValue({ settings: {} })
+    },
     tank: {
       findMany: jest.fn().mockResolvedValue([
         {
@@ -16,9 +19,10 @@ describe('PlantService telemetry', () => {
   const config = {
     get: jest.fn((key: string) => key === 'NODE_RED_API_KEY' ? 'integration-secret' : key === 'SYSTEM_OWNER_COMPANY_ID' ? 'company-1' : undefined)
   } as any;
+  const notifications = { notifyTankAction: jest.fn() } as any;
 
   it('keeps weight readings in memory and marks the response as non-persistent', async () => {
-    const service = new PlantService(prisma, config);
+    const service = new PlantService(prisma, config, notifications);
     const result = service.ingestWeights('integration-secret', 'company-1', {
       readings: [{ scaleKey: 'TK101', grossKg: 5070.125 }]
     });
@@ -30,14 +34,28 @@ describe('PlantService telemetry', () => {
   });
 
   it('rejects a batch with an invalid integration key', () => {
-    const service = new PlantService(prisma, config);
+    const service = new PlantService(prisma, config, notifications);
     expect(() => service.ingestWeights('wrong-key', 'company-1', {
       readings: [{ scaleKey: 'TK101', grossKg: 100 }]
     })).toThrow(UnauthorizedException);
   });
 
+  it('publishes only the read-only fields needed by the TV screen', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const [tank] = await service.publicTanks();
+
+    expect(prisma.company.findFirst).toHaveBeenCalledWith({
+      where: { id: 'company-1', isActive: true },
+      select: { id: true }
+    });
+    expect(tank).toMatchObject({ id: 'tank-101', name: 'TK101', state: 'VACIO' });
+    expect(tank).not.toHaveProperty('companyId');
+    expect(tank).not.toHaveProperty('scaleKey');
+    expect(tank).not.toHaveProperty('version');
+  });
+
   it('uses Buenos Aires day boundaries as UTC instants', () => {
-    const service = new PlantService(prisma, config);
+    const service = new PlantService(prisma, config, notifications);
     const bounds = (service as any).plantDayBounds('2026-09-03');
     expect(bounds.start.toISOString()).toBe('2026-09-03T03:00:00.000Z');
     expect(bounds.end.toISOString()).toBe('2026-09-04T03:00:00.000Z');

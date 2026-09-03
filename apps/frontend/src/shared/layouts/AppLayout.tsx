@@ -1,14 +1,14 @@
 import { PropsWithChildren, useEffect, useState } from 'react';
-import { BarChart3, Beaker, Boxes, Factory, History, LogOut, Maximize2, Menu, Minimize2, Monitor, Settings, Users, X } from 'lucide-react';
+import { BarChart3, Beaker, Boxes, Factory, History, LogOut, Maximize2, Menu, Minimize2, Settings, Users, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { clearSessionAndRedirect, getSessionUser } from '../../features/auth/session';
+import { NotificationBell } from '../components/NotificationBell';
 
 const items = [
   { to: '/fabricacion', label: 'Fabricación', icon: Factory, roles: ['FABRICACION', 'ADMIN'] },
   { to: '/laboratorio', label: 'Laboratorio', icon: Beaker, roles: ['LABORATORIO', 'ADMIN'] },
   { to: '/envasado', label: 'Envasado', icon: Boxes, roles: ['ENVASADO', 'ADMIN'] },
   { to: '/jefatura', label: 'Resumen diario', icon: BarChart3, roles: ['JEFATURA', 'ADMIN'] },
-  { to: '/monitoreo', label: 'Monitoreo', icon: Monitor, roles: ['MONITOREO', 'JEFATURA', 'ADMIN'] },
   { to: '/historial', label: 'Historial', icon: History, roles: ['MONITOREO', 'JEFATURA', 'ADMIN'] },
   { to: '/usuarios', label: 'Usuarios', icon: Users, roles: ['ADMIN'] }
 ];
@@ -59,6 +59,7 @@ export function AppLayout({ children }: PropsWithChildren) {
       <main className="plant-main">
         <div className="plant-screen-controls">
           <button className="plant-menu" onClick={() => setOpen(true)} aria-label="Abrir menú"><Menu size={21}/> Menú</button>
+          {['FABRICACION', 'LABORATORIO', 'ENVASADO', 'ADMIN'].includes(user?.role ?? '') ? <NotificationBell/> : null}
           <button className="plant-fullscreen" onClick={toggleFullscreen} aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Ver en pantalla completa'} title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}>
             {isFullscreen ? <Minimize2 size={21}/> : <Maximize2 size={21}/>}
           </button>

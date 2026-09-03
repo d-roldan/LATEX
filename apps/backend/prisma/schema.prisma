@@ -66,6 +66,7 @@ enum NotificationType {
   STAGE_COMPLETED
   QUALITY_CONTROL_PENDING
   QUALITY_CONTROL_REJECTED
+  TANK_ACTION_REQUIRED
 }
 
 enum AiMessageRole {
@@ -673,6 +674,8 @@ model Notification {
   message      String
   orderId      String?
   orderStageId String?
+  tankId       String?
+  targetSector String?
   readAt       DateTime?
   createdAt    DateTime         @default(now())
   company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -680,6 +683,7 @@ model Notification {
 
   @@index([companyId, userId, createdAt])
   @@index([userId, readAt])
+  @@index([companyId, targetSector, createdAt])
 }
 
 model AiConversation {
