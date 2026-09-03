@@ -1,5 +1,5 @@
 import { PropsWithChildren, useEffect, useState } from 'react';
-import { Beaker, Boxes, Factory, History, LogOut, Maximize2, Menu, Minimize2, Monitor, Settings, Users, X } from 'lucide-react';
+import { BarChart3, Beaker, Boxes, Factory, History, LogOut, Maximize2, Menu, Minimize2, Monitor, Settings, Users, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { clearSessionAndRedirect, getSessionUser } from '../../features/auth/session';
 
@@ -7,14 +7,15 @@ const items = [
   { to: '/fabricacion', label: 'Fabricación', icon: Factory, roles: ['FABRICACION', 'ADMIN'] },
   { to: '/laboratorio', label: 'Laboratorio', icon: Beaker, roles: ['LABORATORIO', 'ADMIN'] },
   { to: '/envasado', label: 'Envasado', icon: Boxes, roles: ['ENVASADO', 'ADMIN'] },
-  { to: '/monitoreo', label: 'Monitoreo', icon: Monitor, roles: ['MONITOREO', 'ADMIN'] },
-  { to: '/historial', label: 'Historial', icon: History, roles: ['MONITOREO', 'ADMIN'] },
+  { to: '/jefatura', label: 'Resumen diario', icon: BarChart3, roles: ['JEFATURA', 'ADMIN'] },
+  { to: '/monitoreo', label: 'Monitoreo', icon: Monitor, roles: ['MONITOREO', 'JEFATURA', 'ADMIN'] },
+  { to: '/historial', label: 'Historial', icon: History, roles: ['MONITOREO', 'JEFATURA', 'ADMIN'] },
   { to: '/usuarios', label: 'Usuarios', icon: Users, roles: ['ADMIN'] }
 ];
 
 const roleLabels: Record<string, string> = {
   FABRICACION: 'Fabricación', LABORATORIO: 'Laboratorio', ENVASADO: 'Envasado',
-  MONITOREO: 'Monitoreo', ADMIN: 'Administrador'
+  MONITOREO: 'Monitoreo', JEFATURA: 'Jefatura', ADMIN: 'Administrador'
 };
 
 export function AppLayout({ children }: PropsWithChildren) {

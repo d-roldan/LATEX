@@ -3,6 +3,7 @@ import { LoginPage } from '../../features/auth/LoginPage';
 import { ProtectedRoute } from '../../features/auth/ProtectedRoute';
 import { PlantBoardPage } from '../../features/plant/PlantBoardPage';
 import { PlantHistoryPage } from '../../features/plant/PlantHistoryPage';
+import { PlantManagementPage } from '../../features/plant/PlantManagementPage';
 import { UsersPage } from '../../features/users/UsersPage';
 import { AppLayout } from '../../shared/layouts/AppLayout';
 
@@ -18,9 +19,12 @@ export function AppRouter() {
         <Route element={<ProtectedRoute allowedRoles={['FABRICACION', 'ADMIN']} />}><Route path="/fabricacion" element={page('fabricacion')} /></Route>
         <Route element={<ProtectedRoute allowedRoles={['LABORATORIO', 'ADMIN']} />}><Route path="/laboratorio" element={page('laboratorio')} /></Route>
         <Route element={<ProtectedRoute allowedRoles={['ENVASADO', 'ADMIN']} />}><Route path="/envasado" element={page('envasado')} /></Route>
-        <Route element={<ProtectedRoute allowedRoles={['MONITOREO', 'ADMIN']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['MONITOREO', 'JEFATURA', 'ADMIN']} />}>
           <Route path="/monitoreo" element={page('monitoreo')} />
           <Route path="/historial" element={<AppLayout><PlantHistoryPage /></AppLayout>} />
+        </Route>
+        <Route element={<ProtectedRoute allowedRoles={['JEFATURA', 'ADMIN']} />}>
+          <Route path="/jefatura" element={<AppLayout><PlantManagementPage /></AppLayout>} />
         </Route>
         <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
           <Route path="/admin" element={<Navigate to="/fabricacion" replace />} />

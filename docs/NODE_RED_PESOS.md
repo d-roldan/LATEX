@@ -75,3 +75,15 @@ return msg;
 ```
 
 Conectar este nodo a un HTTP Request `POST` dirigido al endpoint anterior. Este proyecto sólo recibe pesos; no expone comandos TARA ni CERO.
+
+## Simulador incluido en Docker Compose
+
+El servicio `disal-node-red` carga el flujo `infra/node-red/data/flows.json` y abre el editor únicamente en la PC local:
+
+```text
+http://localhost:1880
+```
+
+El nodo **Enviar cada 2 segundos** comienza automáticamente después de desplegar el contenedor. Genera valores variables para TK101–TK109 y los envía a `http://disal-nginx/api/plant/telemetry/weights`. La clave se obtiene de la variable `NODE_RED_API_KEY` inyectada por Compose.
+
+Para probar una sola muestra, deshabilitar el inyector periódico, desplegar el cambio y presionar **Enviar una vez**. Las respuestas de la API se observan en la pestaña **Depuración**.

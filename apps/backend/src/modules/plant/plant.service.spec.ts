@@ -3,11 +3,12 @@ import { PlantService } from './plant.service';
 
 describe('PlantService telemetry', () => {
   const prisma = {
+    company: { findUnique: jest.fn().mockResolvedValue({ settings: {} }) },
     tank: {
       findMany: jest.fn().mockResolvedValue([
         {
           id: 'tank-101', companyId: 'company-1', number: 101, name: 'TK101', capacityKg: null,
-          scaleKey: 'TK101', state: 'VACIO', version: 0, activeLot: null
+          scaleKey: 'TK101', state: 'VACIO', version: 0, activeLot: null, stateHistory: []
         }
       ])
     }
@@ -33,5 +34,12 @@ describe('PlantService telemetry', () => {
     expect(() => service.ingestWeights('wrong-key', 'company-1', {
       readings: [{ scaleKey: 'TK101', grossKg: 100 }]
     })).toThrow(UnauthorizedException);
+  });
+
+  it('uses Buenos Aires day boundaries as UTC instants', () => {
+    const service = new PlantService(prisma, config);
+    const bounds = (service as any).plantDayBounds('2026-09-03');
+    expect(bounds.start.toISOString()).toBe('2026-09-03T03:00:00.000Z');
+    expect(bounds.end.toISOString()).toBe('2026-09-04T03:00:00.000Z');
   });
 });

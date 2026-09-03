@@ -121,7 +121,7 @@ export class UsersService {
   }
 
   async create(companyId: string, dto: CreateUserDto, actorUserId?: string) {
-    if (!['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'ADMIN'].includes(dto.role)) {
+    if (!['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(dto.role)) {
       throw new BadRequestException('Rol no habilitado para la planta');
     }
     const username = this.normalizeUsername(dto.username);
@@ -225,8 +225,8 @@ export class UsersService {
 
     this.assertCanManageTarget(user, actor);
 
-    if (!['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'ADMIN'].includes(role)) {
-      throw new BadRequestException('Solo se permiten perfiles FABRICACION, LABORATORIO, ENVASADO, MONITOREO o ADMIN');
+    if (!['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(role)) {
+      throw new BadRequestException('Solo se permiten perfiles FABRICACION, LABORATORIO, ENVASADO, MONITOREO, JEFATURA o ADMIN');
     }
 
     const updated = await this.prisma.user.update({

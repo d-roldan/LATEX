@@ -18,6 +18,7 @@ Dentro de `psql`:
 \d "QualityDecision"
 \d "PackagingOrder"
 \d "PlantAuditLog"
+\d "DailyPlantClosure"
 ```
 
 Los identificadores llevan comillas dobles porque Prisma crea nombres con mayúsculas y minúsculas.
@@ -32,9 +33,10 @@ Los identificadores llevan comillas dobles porque Prisma crea nombres con mayús
 | `QualityDecision` | Aprobación, ajuste o rechazo, legajo, motivo y peso específico |
 | `PackagingOrder` | OE, línea, formato, inicio, fin y duración |
 | `PlantAuditLog` | Correcciones, transiciones, valores anteriores/nuevos y comandos sensibles |
+| `DailyPlantClosure` | Fotografía inmutable del resumen diario y observaciones de Jefatura |
 | `User` | Usuario autenticado y rol |
 
-No hay tabla de pesos: por decisión funcional, la telemetría de balanzas no se persiste.
+No hay tabla de muestras de peso: la telemetría continua no se persiste. `TankStateHistory.weightKg` conserva únicamente el último peso disponible al ingresar en una etapa.
 
 ## Estado actual de los 9 tanques
 
@@ -50,7 +52,8 @@ ORDER BY t.number;
 
 ```sql
 SELECT t.number AS tanque, l."manufacturingOrder" AS of, h.state,
-       h.description, h."startedAt", h."endedAt", u."fullName" AS responsable
+       h.description, h."startedAt", h."endedAt", h."durationSeconds",
+       h."weightKg", h."targetSeconds", u."fullName" AS responsable
 FROM "TankStateHistory" h
 JOIN "Tank" t ON t.id = h."tankId"
 LEFT JOIN "ProductionLot" l ON l.id = h."lotId"
@@ -90,12 +93,22 @@ LIMIT 200;
 SELECT t.number AS tanque, l."manufacturingOrder" AS of,
        p."packagingOrder" AS oe, p.line, p.format,
        p."startedAt", p."finishedAt", p."durationSeconds",
+       p."producedKg", p."wasteKg", p."producedUnits",
        ROUND(p."durationSeconds" / 60.0, 1) AS minutos
 FROM "PackagingOrder" p
 JOIN "Tank" t ON t.id = p."tankId"
 JOIN "ProductionLot" l ON l.id = p."lotId"
 ORDER BY p."startedAt" DESC
 LIMIT 200;
+```
+
+## Cierres diarios de Jefatura
+
+```sql
+SELECT date, notes, "createdAt", u."fullName" AS responsable, snapshot
+FROM "DailyPlantClosure" c
+JOIN "User" u ON u.id = c."createdByUserId"
+ORDER BY date DESC;
 ```
 
 ## Correcciones y comandos sensibles

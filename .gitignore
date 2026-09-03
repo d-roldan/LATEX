@@ -33,6 +33,8 @@ e2e/e2e/
 
 # Generated verification artifacts
 tmp/
+backups/
+output/
 
 # Local TLS material and private keys
 infra/nginx/certs/

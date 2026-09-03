@@ -113,6 +113,24 @@ services:
     volumes:
       - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
 
+  disal-node-red:
+    image: nodered/node-red:4.0.9
+    container_name: disal-node-red
+    restart: unless-stopped
+    mem_limit: ${NODE_RED_MEMORY_LIMIT:-256m}
+    cpus: ${NODE_RED_CPU_LIMIT:-0.5}
+    pids_limit: 150
+    depends_on:
+      disal-nginx:
+        condition: service_started
+    environment:
+      TZ: ${TZ}
+      NODE_RED_API_KEY: ${NODE_RED_API_KEY}
+    ports:
+      - "127.0.0.1:${NODE_RED_PORT:-1880}:1880"
+    volumes:
+      - ./infra/node-red/data:/data
+
 volumes:
   postgres_data:
   uploads_data:

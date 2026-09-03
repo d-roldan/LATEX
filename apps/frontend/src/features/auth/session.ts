@@ -9,7 +9,7 @@ function getStoredSession(): string | null {
 function normalizeRole(role: string): LegacyUserRole {
   if (role === 'OWNER') return 'DUENO';
   if (role === 'OPERATOR') return 'OPERARIO';
-  if (['DUENO', 'SUPERVISOR', 'OPERARIO', 'FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'ADMIN'].includes(role)) return role as LegacyUserRole;
+  if (['DUENO', 'SUPERVISOR', 'OPERARIO', 'FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(role)) return role as LegacyUserRole;
   return 'OPERARIO';
 }
 

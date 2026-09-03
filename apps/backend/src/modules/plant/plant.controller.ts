@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { JwtUser } from '../../common/auth/jwt-user.interface';
 import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
-import { CorrectLotDto, CorrectPackagingDto, PackagingDto, QualityDecisionDto, ServiceDto, StartManufacturingDto, VersionedActionDto, WeightBatchDto } from './dto/plant.dto';
+import { CorrectLotDto, CorrectPackagingDto, DailyClosureDto, FinishPackagingDto, PackagingDto, QualityDecisionDto, ServiceDto, StageTargetsDto, StartManufacturingDto, VersionedActionDto, WeightBatchDto } from './dto/plant.dto';
 import { PlantService } from './plant.service';
 
 @Controller('plant')
@@ -22,10 +23,10 @@ export class PlantController {
 export class PlantProtectedController {
   constructor(private readonly service: PlantService) {}
 
-  @Get('config') @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'ADMIN')
+  @Get('config') @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
   config(@CurrentUser() user: JwtUser) { return this.service.getConfig(user.companyId); }
 
-  @Get('tanks') @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'ADMIN')
+  @Get('tanks') @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
   tanks(@CurrentUser() user: JwtUser) { return this.service.tanks(user.companyId); }
 
   @Post('tanks/:id/manufacturing') @Roles('FABRICACION', 'ADMIN')
@@ -47,7 +48,7 @@ export class PlantProtectedController {
   correctOrder(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: CorrectPackagingDto) { return this.service.correctPackaging(user.companyId, id, user, dto); }
 
   @Post('tanks/:id/packaging/finish') @Roles('ENVASADO', 'ADMIN')
-  finish(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: VersionedActionDto) { return this.service.finishPackaging(user.companyId, id, user, dto); }
+  finish(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: FinishPackagingDto) { return this.service.finishPackaging(user.companyId, id, user, dto); }
 
   @Post('tanks/:id/empty-rejected') @Roles('FABRICACION', 'ADMIN')
   emptyRejected(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: VersionedActionDto) { return this.service.emptyRejected(user.companyId, id, user, dto); }
@@ -61,11 +62,35 @@ export class PlantProtectedController {
   @Patch('tanks/:id/lot') @Roles('FABRICACION', 'ADMIN')
   correctLot(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: CorrectLotDto) { return this.service.correctLot(user.companyId, id, user, dto); }
 
-  @Get('history/states') @Roles('MONITOREO', 'ADMIN')
+  @Get('history/states') @Roles('MONITOREO', 'JEFATURA', 'ADMIN')
   history(@CurrentUser() user: JwtUser, @Query('tankId') tankId?: string, @Query('state') state?: string, @Query('from') from?: string, @Query('to') to?: string) {
     return this.service.history(user.companyId, tankId, state, from, to);
   }
 
   @Get('history/audit') @Roles('ADMIN')
   audit(@CurrentUser() user: JwtUser, @Query('tankId') tankId?: string) { return this.service.auditHistory(user.companyId, tankId); }
+
+  @Get('management/daily') @Roles('JEFATURA', 'ADMIN')
+  daily(@CurrentUser() user: JwtUser, @Query('date') date: string) { return this.service.dailyManagement(user.companyId, date); }
+
+  @Get('management/lots/:id/timeline') @Roles('MONITOREO', 'JEFATURA', 'ADMIN')
+  timeline(@CurrentUser() user: JwtUser, @Param('id') id: string) { return this.service.lotTimeline(user.companyId, id); }
+
+  @Post('management/closures') @Roles('JEFATURA', 'ADMIN')
+  closeDay(@CurrentUser() user: JwtUser, @Body() dto: DailyClosureDto) { return this.service.closeDay(user.companyId, user, dto); }
+
+  @Get('management/closures') @Roles('JEFATURA', 'ADMIN')
+  closures(@CurrentUser() user: JwtUser) { return this.service.closures(user.companyId); }
+
+  @Patch('management/targets') @Roles('ADMIN')
+  targets(@CurrentUser() user: JwtUser, @Body() dto: StageTargetsDto) { return this.service.updateTargets(user.companyId, dto); }
+
+  @Get('management/export') @Roles('JEFATURA', 'ADMIN')
+  async export(@CurrentUser() user: JwtUser, @Query('date') date: string, @Query('format') format: string, @Res() response: Response) {
+    if (format !== 'pdf' && format !== 'xls') throw new BadRequestException('Formato no soportado');
+    const file = await this.service.managementExport(user.companyId, date, format);
+    response.setHeader('Content-Type', file.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    response.send(file.body);
+  }
 }

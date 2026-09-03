@@ -14,7 +14,8 @@ const companySettings = {
   defaultWorkOrderPriority: 3,
   packagingLines: ['Línea 1', 'Línea 20', 'Línea 3'],
   packagingFormats: ['0,25 L', '0,50 L', '1 L', '4 L', '10 L'],
-  adjustmentReasons: ['Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad', 'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante', 'Cambio de almacenamiento de producción']
+  adjustmentReasons: ['Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad', 'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante', 'Cambio de almacenamiento de producción'],
+  plantStageTargetsMinutes: { FABRICANDO: 480, LABORATORIO: 30, AJUSTE: 60, RECHAZADO: 60, APROBADO: 120, ENVASANDO: 360, FUERA_DE_SERVICIO: 480 }
 };
 
 const tankNumbers = [101, 102, 103, 104, 105, 106, 107, 108, 109];
@@ -137,14 +138,18 @@ async function main() {
   const removed = await removeKnownDemoData();
 
   for (const number of tankNumbers) {
+    const capacityKg = number <= 102 ? 60_000
+      : number <= 104 ? 45_000
+        : number <= 107 ? 30_000
+          : 10_500;
     const tank = await prisma.tank.upsert({
       where: { companyId_number: { companyId: COMPANY_ID, number } },
-      update: { name: `TK${number}`, capacityKg: null, scaleKey: `TK${number}` },
+      update: { name: `TK${number}`, capacityKg, scaleKey: `TK${number}` },
       create: {
         companyId: COMPANY_ID,
         number,
         name: `TK${number}`,
-        capacityKg: null,
+        capacityKg,
         scaleKey: `TK${number}`
       }
     });

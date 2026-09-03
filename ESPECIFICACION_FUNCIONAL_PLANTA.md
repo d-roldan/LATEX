@@ -19,17 +19,19 @@ Quedan fuera del alcance actual:
 
 La instalación contiene exactamente nueve tanques:
 
-| Orden | Nombre | `scaleKey` | Capacidad actual |
-|---:|---|---|---|
-| 1 | TK101 | `TK101` | Pendiente |
-| 2 | TK102 | `TK102` | Pendiente |
-| 3 | TK103 | `TK103` | Pendiente |
-| 4 | TK104 | `TK104` | Pendiente |
-| 5 | TK105 | `TK105` | Pendiente |
-| 6 | TK106 | `TK106` | Pendiente |
-| 7 | TK107 | `TK107` | Pendiente |
-| 8 | TK108 | `TK108` | Pendiente |
-| 9 | TK109 | `TK109` | Pendiente |
+| Orden | Nombre | `scaleKey` | Capacidad nominal | Máximo en pantalla |
+|---:|---|---|---:|---:|
+| 1 | TK101 | `TK101` | 40.000 L | 60.000 kg |
+| 2 | TK102 | `TK102` | 40.000 L | 60.000 kg |
+| 3 | TK103 | `TK103` | 30.000 L | 45.000 kg |
+| 4 | TK104 | `TK104` | 30.000 L | 45.000 kg |
+| 5 | TK105 | `TK105` | 20.000 L | 30.000 kg |
+| 6 | TK106 | `TK106` | 20.000 L | 30.000 kg |
+| 7 | TK107 | `TK107` | 20.000 L | 30.000 kg |
+| 8 | TK108 | `TK108` | 7.000 L | 10.500 kg |
+| 9 | TK109 | `TK109` | 7.000 L | 10.500 kg |
+
+La capacidad máxima en kilogramos se calcula con el factor conservador `1,5 kg/L` indicado para el peso específico del producto.
 
 Cada tanque posee identificador interno, empresa, número, nombre, `scaleKey`, capacidad opcional, estado, versión de concurrencia, lote activo y fechas de creación/actualización.
 
@@ -41,6 +43,7 @@ Cada tanque posee identificador interno, empresa, número, nombre, `scaleKey`, c
 | `LABORATORIO` | Laboratorio | Decisiones de calidad |
 | `ENVASADO` | Envasado | Órdenes y cierre de envasado |
 | `MONITOREO` | Monitoreo | Consulta de planta e historial |
+| `JEFATURA` | Resumen diario | Reunión diaria, monitoreo, trazabilidad, cierres y exportaciones |
 | `ADMIN` | Administración | Acceso a todas las pantallas y usuarios |
 
 Las rutas y botones respetan el rol, pero la autorización definitiva se realiza en cada endpoint del backend. Una petición directa sin permiso debe responder `403`.
@@ -181,7 +184,15 @@ Reglas:
 | `PlantAuditLog` | Correcciones y cambios auditables |
 | `User` | Usuarios, roles y estado de acceso |
 
-No existe una tabla de muestras de peso en esta versión.
+No existe una tabla de muestras continuas de peso. `TankStateHistory` conserva únicamente una fotografía del peso recibida al confirmar cada cambio de etapa.
+
+## 12.1 Información para Jefatura
+
+El sistema calcula el tiempo actual y el histórico de permanencia en cada estado. Los períodos que atraviesan el inicio o fin de una jornada se prorratean dentro de sus límites. Las fechas se almacenan con zona horaria y se muestran en `America/Argentina/Buenos_Aires`.
+
+Jefatura dispone de un resumen diario con estado actual, OF, material, antigüedad, semáforos, lotes finalizados, incidencias de calidad, kilogramos envasados, merma y balanzas sin señal. Puede abrir la línea temporal completa de una OF, exportar PDF/Excel y guardar el cierre de jornada con observaciones.
+
+Los tiempos objetivo se configuran por estado en minutos. El 80 % del objetivo genera advertencia y el 100 % una alerta crítica.
 
 ## 13. Interfaz
 
@@ -195,6 +206,8 @@ No existe una tabla de muestras de peso en esta versión.
 - Acciones visibles sólo en el panel responsable.
 - Botones TARA y CERO ausentes.
 - Confirmación interna antes de toda operación de estado.
+- Duración visible del estado actual y semáforo por tiempo objetivo.
+- Pantalla de Jefatura preparada para reunión diaria, con exportación y cierre reproducible.
 
 ## 14. Seguridad
 

@@ -1,0 +1,148 @@
+[
+    {
+        "id": "disal-weight-simulator",
+        "type": "tab",
+        "label": "Simulador de pesos DISAL",
+        "disabled": false,
+        "info": "Envía pesos simulados de TK101 a TK109 a la API cada dos segundos."
+    },
+    {
+        "id": "automatic-inject",
+        "type": "inject",
+        "z": "disal-weight-simulator",
+        "name": "Enviar cada 2 segundos",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "2",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 170,
+        "y": 140,
+        "wires": [
+            [
+                "build-weight-batch"
+            ]
+        ]
+    },
+    {
+        "id": "manual-inject",
+        "type": "inject",
+        "z": "disal-weight-simulator",
+        "name": "Enviar una vez",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 200,
+        "wires": [
+            [
+                "build-weight-batch"
+            ]
+        ]
+    },
+    {
+        "id": "build-weight-batch",
+        "type": "function",
+        "z": "disal-weight-simulator",
+        "name": "Construir lote TK101-TK109",
+        "func": "const tanks = [\n  [\"TK101\", 58970],\n  [\"TK102\", 38950],\n  [\"TK103\", 40130],\n  [\"TK104\", 5355],\n  [\"TK105\", 5425],\n  [\"TK106\", 8780],\n  [\"TK107\", 9545],\n  [\"TK108\", 8665],\n  [\"TK109\", 8085]\n];\n\nconst measuredAt = new Date().toISOString();\nconst phase = Date.now() / 12000;\n\nmsg.headers = {\n  \"content-type\": \"application/json\",\n  \"x-node-red-key\": env.get(\"NODE_RED_API_KEY\")\n};\nmsg.payload = {\n  readings: tanks.map(([scaleKey, base], index) => ({\n    scaleKey,\n    grossKg: Math.round(Math.max(0, base + Math.sin(phase + index) * (18 + index * 2))),\n    measuredAt\n  }))\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 1,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 170,
+        "wires": [
+            [
+                "post-weights",
+                "debug-request"
+            ]
+        ]
+    },
+    {
+        "id": "post-weights",
+        "type": "http request",
+        "z": "disal-weight-simulator",
+        "name": "POST pesos a DISAL",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://disal-nginx/api/plant/telemetry/weights",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 740,
+        "y": 150,
+        "wires": [
+            [
+                "debug-response"
+            ]
+        ]
+    },
+    {
+        "id": "debug-request",
+        "type": "debug",
+        "z": "disal-weight-simulator",
+        "name": "Lote enviado",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 730,
+        "y": 210,
+        "wires": []
+    },
+    {
+        "id": "debug-response",
+        "type": "debug",
+        "z": "disal-weight-simulator",
+        "name": "Respuesta de la API",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "statusCode",
+        "statusType": "msg",
+        "x": 990,
+        "y": 150,
+        "wires": []
+    },
+    {
+        "id": "instructions",
+        "type": "comment",
+        "z": "disal-weight-simulator",
+        "name": "Transmisión automática activa: deshabilitá el inyector y desplegá para detenerla",
+        "info": "La clave se lee desde NODE_RED_API_KEY. Los pesos no se guardan en PostgreSQL.",
+        "x": 410,
+        "y": 80,
+        "wires": []
+    }
+]

@@ -18,6 +18,7 @@ enum UserRole {
   LABORATORIO
   ENVASADO
   MONITOREO
+  JEFATURA
   ADMIN // Administrador tecnico
 }
 
@@ -167,6 +168,7 @@ model Company {
   qualityDecisions QualityDecision[]
   packagingOrders  PackagingOrder[]
   plantAuditLogs   PlantAuditLog[]
+  dailyPlantClosures DailyPlantClosure[]
 
   @@index([name])
 }
@@ -207,6 +209,7 @@ model User {
   packagingOrdersFinished PackagingOrder[]      @relation("PackagingFinishedBy")
   plantAuditLogs          PlantAuditLog[]
   productionLotsCreated   ProductionLot[]
+  dailyPlantClosures      DailyPlantClosure[]
 
   @@unique([companyId, email])
   @@unique([companyId, username])
@@ -724,8 +727,8 @@ model Tank {
   serviceReason   String?
   serviceNotes    String?
   activeLotId     String?            @unique
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
   company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   activeLot       ProductionLot?     @relation("ActiveTankLot", fields: [activeLotId], references: [id], onDelete: SetNull)
   lots            ProductionLot[]    @relation("TankLots")
@@ -746,11 +749,15 @@ model ProductionLot {
   materialCode       String
   description        String
   specificWeight     Decimal?           @db.Decimal(8, 3)
-  startedAt          DateTime           @default(now())
-  finishedAt         DateTime?
+  plannedQuantityKg  Decimal?           @db.Decimal(12, 3)
+  priority           String             @default("NORMAL")
+  shift              String?
+  scheduledAt        DateTime?          @db.Timestamptz(3)
+  startedAt          DateTime           @default(now()) @db.Timestamptz(3)
+  finishedAt         DateTime?          @db.Timestamptz(3)
   createdByUserId    String
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
   company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   tank               Tank               @relation("TankLots", fields: [tankId], references: [id], onDelete: Restrict)
   activeForTank      Tank?              @relation("ActiveTankLot")
@@ -771,9 +778,12 @@ model TankStateHistory {
   lotId       String?
   state       TankState
   description String?
+  weightKg    Decimal?       @db.Decimal(12, 3)
+  targetSeconds Int?
+  durationSeconds Int?
   userId      String?
-  startedAt   DateTime       @default(now())
-  endedAt     DateTime?
+  startedAt   DateTime       @default(now()) @db.Timestamptz(3)
+  endedAt     DateTime?      @db.Timestamptz(3)
   company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   tank        Tank           @relation(fields: [tankId], references: [id], onDelete: Cascade)
   lot         ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
@@ -793,7 +803,7 @@ model QualityDecision {
   reason         String?
   recoveryAction String?
   userId         String
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
   company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   lot            ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
   user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -815,8 +825,11 @@ model PackagingOrder {
   startedAt        DateTime      @default(now())
   finishedAt       DateTime?
   durationSeconds  Int?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  producedKg       Decimal?      @db.Decimal(12, 3)
+  wasteKg          Decimal?      @db.Decimal(12, 3)
+  producedUnits    Int?
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
   company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   tank             Tank          @relation(fields: [tankId], references: [id], onDelete: Restrict)
   lot              ProductionLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
@@ -839,7 +852,7 @@ model PlantAuditLog {
   reason     String?
   before     Json?
   after      Json?
-  createdAt  DateTime       @default(now())
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
   company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   tank       Tank?          @relation(fields: [tankId], references: [id], onDelete: SetNull)
   lot        ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
@@ -847,4 +860,20 @@ model PlantAuditLog {
 
   @@index([companyId, createdAt])
   @@index([companyId, entityType, entityId])
+}
+
+model DailyPlantClosure {
+  id              String   @id @default(cuid())
+  companyId       String
+  date            DateTime @db.Date
+  snapshot        Json
+  notes           String?
+  createdByUserId String
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, date])
+  @@index([companyId, date])
 }

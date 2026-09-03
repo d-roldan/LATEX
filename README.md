@@ -4,7 +4,7 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 
 ## Funcionalidad principal
 
-- Paneles independientes para Fabricación, Laboratorio, Envasado y Monitoreo.
+- Paneles independientes para Fabricación, Laboratorio, Envasado, Monitoreo y Jefatura.
 - Acceso por usuario y rol, con autorización validada también en el backend.
 - Administrador con acceso integral, historial y gestión de usuarios.
 - Máquina de estados transaccional con control de concurrencia por versión.
@@ -14,6 +14,10 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 - Pesos conservados sólo en memoria: las muestras de balanza no se escriben en PostgreSQL.
 - Interfaz responsive, menú lateral desplegable, confirmaciones internas y modo pantalla completa.
 - Vista Full HD de nueve tanques y reloj sin desplazamiento vertical.
+- Duración visible por estado, semáforos configurables y línea temporal completa por OF.
+- Resumen diario para reunión, cierre persistido y exportación PDF/Excel.
+- Registro de cantidad planificada, turno, prioridad, kilogramos envasados, unidades y merma.
+- Fotografías puntuales del peso en cada transición, sin persistir la telemetría continua.
 
 ## Tanques
 
@@ -29,7 +33,7 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 | TK108 | `TK108` |
 | TK109 | `TK109` |
 
-Las capacidades permanecen sin definir hasta disponer de las dimensiones reales.
+Las capacidades se calculan con una densidad máxima de diseño de `1,5 kg/L`: TK101–TK102 (40.000 L) admiten 60.000 kg; TK103–TK104 (30.000 L), 45.000 kg; TK105–TK107 (20.000 L), 30.000 kg; y TK108–TK109 (7.000 L), 10.500 kg.
 
 ## Flujo operativo
 
@@ -48,6 +52,7 @@ VACÍO ↔ FUERA DE SERVICIO
 | `LABORATORIO` | Aprobar, solicitar ajuste o rechazar |
 | `ENVASADO` | Iniciar/cambiar OE y finalizar el proceso |
 | `MONITOREO` | Consultar planta e históricos sin modificar el proceso |
+| `JEFATURA` | Resumen diario, monitoreo, historial, cierres y exportaciones sin operar tanques |
 | `ADMIN` | Acceso completo y administración de usuarios |
 
 ## Tecnología
@@ -82,6 +87,7 @@ Servicios resultantes:
 - `disal-backend`
 - `disal-frontend`
 - `disal-nginx`
+- `disal-node-red`
 
 ## Integración de pesos
 
@@ -106,8 +112,11 @@ Ejemplo mínimo:
 
 El endpoint admite entre 1 y 100 lecturas por solicitud. Una balanza se marca sin señal después de 10 segundos sin nuevas lecturas.
 
+El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **Simulador de pesos DISAL** comienza a transmitir automáticamente los nueve tanques cada dos segundos. Desde el editor se puede deshabilitar el inyector periódico, modificar los valores o usar el inyector manual.
+
 ## Documentación
 
+- [Contexto y alcance integral](CONTEXTO_Y_ALCANCE_PROYECTO.md)
 - [Especificación funcional](ESPECIFICACION_FUNCIONAL_PLANTA.md)
 - [Instructivo de integración y base de datos](docs/INSTRUCTIVO_INTEGRACION_Y_BASE_DE_DATOS.md)
 - [Contrato detallado de Node-RED](docs/NODE_RED_PESOS.md)
@@ -129,7 +138,7 @@ Estado verificado de esta versión:
 
 - Backend compilado.
 - Frontend compilado para producción.
-- 22 pruebas automatizadas aprobadas.
+- 23 pruebas automatizadas aprobadas.
 - Stack Docker operativo y API saludable.
 
 ## Seguridad y respaldo

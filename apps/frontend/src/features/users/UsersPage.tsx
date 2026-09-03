@@ -21,6 +21,7 @@ const ROLES = [
   { value: 'LABORATORIO', label: 'Laboratorio' },
   { value: 'ENVASADO', label: 'Envasado' },
   { value: 'MONITOREO', label: 'Monitoreo' },
+  { value: 'JEFATURA', label: 'Jefatura' },
   { value: 'ADMIN', label: 'Administrador' }
 ];
 
@@ -29,6 +30,7 @@ const ROLE_LABELS: Record<string, string> = {
   LABORATORIO: 'Laboratorio',
   ENVASADO: 'Envasado',
   MONITOREO: 'Monitoreo',
+  JEFATURA: 'Jefatura',
   ADMIN: 'Admin'
 };
 
@@ -37,6 +39,7 @@ const ROLE_COLORS: Record<string, 'default' | 'primary' | 'warning' | 'success'>
   LABORATORIO: 'warning',
   ENVASADO: 'success',
   MONITOREO: 'default',
+  JEFATURA: 'primary',
   ADMIN: 'success'
 };
 
@@ -239,7 +242,7 @@ export function UsersPage() {
     updatePasswordMutation.isPending;
 
   return (
-    <div className="stack-lg page-enter">
+    <div className="users-page stack-lg page-enter">
 
       {/* ── HERO ─────────────────────────────────────────── */}
       <header className="page-hero panel stagger-1">
@@ -433,9 +436,11 @@ export function UsersPage() {
             </div>
             {form.role && (
               <div style={{ marginTop: '0.8rem', padding: '0.7rem', background: 'color-mix(in srgb, var(--primary) 8%, transparent)', borderRadius: '0.5rem', fontSize: '0.82rem', color: 'var(--ink-soft)' }}>
-                {form.role === 'OPERARIO' && '👷 El operario puede ver y gestionar solo sus OTs asignadas.'}
-                {form.role === 'SUPERVISOR' && '🔭 El supervisor puede gestionar todas las OTs y asignar recursos, sin gestión de usuarios.'}
-                {form.role === 'DUENO' && '🏭 El dueño tiene acceso completo: usuarios, reportes, auditoría y toda la gestión.'}
+                {form.role === 'FABRICACION' && '🏭 Opera el inicio de fabricación, ajustes y envío a laboratorio.'}
+                {form.role === 'LABORATORIO' && '🧪 Registra aprobaciones, ajustes y rechazos de calidad.'}
+                {form.role === 'ENVASADO' && '📦 Opera las órdenes y el cierre de envasado.'}
+                {form.role === 'MONITOREO' && '📺 Consulta la planta y su historial sin realizar operaciones.'}
+                {form.role === 'JEFATURA' && '📊 Consulta el resumen diario, monitoreo, trazabilidad y cierres de jornada.'}
                 {form.role === 'ADMIN' && '⚙️ El administrador técnico tiene acceso completo al sistema.'}
               </div>
             )}

@@ -31,7 +31,7 @@ export function LoginPage() {
       setSession(response.data);
       const home: Record<string, string> = {
         FABRICACION: '/fabricacion', LABORATORIO: '/laboratorio', ENVASADO: '/envasado',
-        MONITOREO: '/monitoreo', ADMIN: '/admin'
+        MONITOREO: '/monitoreo', JEFATURA: '/jefatura', ADMIN: '/admin'
       };
       navigate(home[response.data.user.role] ?? '/monitoreo');
     } catch (requestError) {

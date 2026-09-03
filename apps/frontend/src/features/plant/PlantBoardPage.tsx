@@ -14,6 +14,7 @@ type PendingRequest = { path: string; method: 'post' | 'patch'; payload: Record<
 interface Tank {
   id: string; number: number; name: string; capacityKg: number | null; scaleKey: string; state: TankState; version: number;
   serviceReason?: string | null;
+  stateStartedAt: string; stateElapsedSeconds: number | null; stateTargetSeconds: number | null; stateAttention: 'OK' | 'WARNING' | 'CRITICAL';
   telemetry: { grossKg: number | null; netKg: number | null; measuredAt: string | null; online: boolean };
   activeLot: null | {
     id: string; manufacturingOrder: string; materialCode: string; description: string; specificWeight: number | null;
@@ -34,7 +35,8 @@ const titles: Record<Sector, string> = {
 
 const emptyForm = {
   manufacturingOrder: '', materialCode: '', description: '', employeeNumber: '', specificWeight: '',
-  qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', notes: ''
+  qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', notes: '',
+  plannedQuantityKg: '', priority: 'NORMAL', shift: '', scheduledAt: '', producedKg: '', wasteKg: '', producedUnits: ''
 };
 
 export function PlantBoardPage({ sector }: { sector: Sector }) {
@@ -105,13 +107,13 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
     const { tank, action } = selection;
     const version = tank.version;
     const map: Record<Action, { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> }> = {
-      start: { path: `/plant/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description } },
+      start: { path: `/plant/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined, priority: form.priority, shift: form.shift || undefined, scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined } },
       sendLab: { path: `/plant/tanks/${tank.id}/send-to-lab`, method: 'post', payload: { version, reason: form.reason || undefined } },
       quality: { path: `/plant/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.reason || undefined, recoveryAction: form.recoveryAction || undefined } },
       packaging: { path: `/plant/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format } },
       newOrder: { path: `/plant/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason || undefined } },
       correctOrder: { path: `/plant/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason } },
-      finish: { path: `/plant/tanks/${tank.id}/packaging/finish`, method: 'post', payload: { version, reason: form.reason || undefined } },
+      finish: { path: `/plant/tanks/${tank.id}/packaging/finish`, method: 'post', payload: { version, producedKg: Number(form.producedKg), wasteKg: form.wasteKg ? Number(form.wasteKg) : undefined, producedUnits: form.producedUnits ? Number(form.producedUnits) : undefined, reason: form.reason || undefined } },
       emptyRejected: { path: `/plant/tanks/${tank.id}/empty-rejected`, method: 'post', payload: { version, reason: form.reason } },
       serviceOut: { path: `/plant/tanks/${tank.id}/service-out`, method: 'post', payload: { version, reason: form.reason, notes: form.notes || undefined } },
       serviceIn: { path: `/plant/tanks/${tank.id}/service-in`, method: 'post', payload: { version, reason: form.reason || undefined } },
@@ -130,9 +132,9 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
   };
 
   return (
-    <div className="plant-page">
+    <div className={`plant-page plant-page--${sector}`}>
       <header className="plant-page-head">
-        <div><p>CONTROL DE PROCESO · TIEMPO REAL</p><h1>{titles[sector]}</h1></div>
+        <div><h1>{titles[sector]}</h1></div>
         <div className="plant-health"><Radio size={16}/><span>{onlineCount}/{tanks.data?.length ?? 9} balanzas en línea</span><button onClick={() => tanks.refetch()}><RefreshCw size={16}/></button></div>
       </header>
       {tanks.isError ? <div className="plant-error"><AlertTriangle/> No se pudo leer el estado de la planta.</div> : null}
@@ -141,13 +143,14 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
           const weight = tank.telemetry.grossKg;
           const fill = tank.capacityKg ? Math.max(0, Math.min(100, ((weight ?? 0) / tank.capacityKg) * 100)) : 0;
           const order = tank.activeLot?.packagingOrders[0];
-          return <article className={`tank-card state-${tank.state.toLowerCase()}`} key={tank.id}>
+          return <article className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}`} key={tank.id}>
             <div className="tank-card__content">
               <div className="tank-card__title"><h2>{tank.name}</h2>{!tank.telemetry.online ? <span className="tank-offline"><WifiOff size={13}/> Sin señal</span> : null}</div>
               <span className="tank-state">{stateLabel[tank.state]}</span>
-              <strong className="tank-weight">{weight === null ? '—' : weight.toLocaleString('es-AR', { maximumFractionDigits: 3 })}</strong>
+              <strong className="tank-weight">{weight === null ? '—' : Math.round(weight).toLocaleString('es-AR')}</strong>
               <small>Kg (bruto)</small>
               <dl>
+                <div className="tank-elapsed"><dt>En estado</dt><dd>{formatDuration(tank.stateElapsedSeconds)}</dd></div>
                 {tank.activeLot ? <><div><dt>OF</dt><dd>{tank.activeLot.manufacturingOrder}</dd></div><div><dt>Material</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Descripción</dt><dd>{tank.activeLot.description}</dd></div></> : null}
                 {tank.activeLot?.specificWeight ? <div><dt>P. específico</dt><dd>{tank.activeLot.specificWeight}</dd></div> : null}
                 {order ? <><div><dt>OE</dt><dd>{order.packagingOrder}</dd></div><div><dt>Línea / Formato</dt><dd>{order.line} · {order.format}</dd></div></> : null}
@@ -155,8 +158,13 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
               </dl>
               <div className="tank-actions">{actionsFor(tank).map(([label, action, variant]) => <Button key={action} size="sm" variant={variant as 'primary'} onClick={() => openAction(tank, action)}>{label}</Button>)}</div>
             </div>
-            <div className={`tank-gauge${tank.capacityKg ? '' : ' is-pending'}`} aria-label={tank.capacityKg ? `${fill.toFixed(0)}% de capacidad` : 'Capacidad pendiente'}><div style={{ height: `${fill}%` }}/></div>
-            <div className="tank-capacity"><b>MAX:</b> {tank.capacityKg ? `${tank.capacityKg.toLocaleString('es-AR')} kg` : 'Pendiente'}<br/><b>MIN:</b> 0</div>
+            <div className={`tank-gauge${tank.capacityKg ? '' : ' is-pending'}`} aria-label={tank.capacityKg ? `${fill.toFixed(0)}% de capacidad` : 'Capacidad pendiente'}>
+              <div style={{ height: `${fill}%` }}/>
+            </div>
+            <div className="tank-capacity">
+              <span><b>MAX:</b> {tank.capacityKg ? `${tank.capacityKg.toLocaleString('es-AR')} kg` : 'Pendiente'}</span>
+              <span><b>MIN:</b> 0</span>
+            </div>
           </article>;
         })}
         <article className="plant-clock">
@@ -205,12 +213,25 @@ function actionTitle(action: Action) {
   return ({ start: 'Nueva fabricación', sendLab: 'Enviar a Laboratorio', quality: 'Decisión de calidad', packaging: 'Iniciar envasado', newOrder: 'Ingresar nueva OE', correctOrder: 'Corregir OE activa', finish: 'Finalizar envasado', emptyRejected: 'Vaciar rechazado', serviceOut: 'Sacar de servicio', serviceIn: 'Volver a servicio', correctLot: 'Corregir lote' } as Record<Action, string>)[action];
 }
 
+function formatDuration(seconds: number | null) {
+  if (seconds === null) return '—';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
+}
+
 function renderFields(action: Action, form: typeof emptyForm, setForm: (value: typeof emptyForm) => void, config?: Config) {
   const field = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
   if (action === 'start' || action === 'correctLot') return <>
     <label>Orden de fabricación (8 dígitos)<Input value={form.manufacturingOrder} onChange={(e) => field('manufacturingOrder', e.target.value)} pattern="\d{8}" required/></label>
     <label>Material (6 dígitos)<Input value={form.materialCode} onChange={(e) => field('materialCode', e.target.value)} pattern="\d{6}" required/></label>
     <label>Descripción<Input value={form.description} onChange={(e) => field('description', e.target.value)} required maxLength={180}/></label>
+    {action === 'start' ? <>
+      <label>Cantidad planificada (kg)<Input type="number" min="0.001" step="0.001" value={form.plannedQuantityKg} onChange={(e) => field('plannedQuantityKg', e.target.value)}/></label>
+      <label>Prioridad<select value={form.priority} onChange={(e) => field('priority', e.target.value)}><option value="BAJA">Baja</option><option value="NORMAL">Normal</option><option value="ALTA">Alta</option><option value="URGENTE">Urgente</option></select></label>
+      <label>Turno<Input value={form.shift} onChange={(e) => field('shift', e.target.value)} placeholder="Ej: Mañana" maxLength={40}/></label>
+      <label>Inicio planificado<Input type="datetime-local" value={form.scheduledAt} onChange={(e) => field('scheduledAt', e.target.value)}/></label>
+    </> : null}
     {action === 'correctLot' ? <label>Motivo de la corrección<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required/></label> : null}
   </>;
   if (action === 'quality') return <>
@@ -227,5 +248,11 @@ function renderFields(action: Action, form: typeof emptyForm, setForm: (value: t
     {action === 'newOrder' || action === 'correctOrder' ? <label>Motivo / observación<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required={action === 'correctOrder'}/></label> : null}
   </>;
   if (action === 'serviceOut') return <><label>Motivo<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required/></label><label>Observaciones<textarea value={form.notes} onChange={(e) => field('notes', e.target.value)}/></label></>;
+  if (action === 'finish') return <>
+    <label>Kilogramos envasados<Input type="number" min="0" step="0.001" value={form.producedKg} onChange={(e) => field('producedKg', e.target.value)} required/></label>
+    <label>Merma (kg)<Input type="number" min="0" step="0.001" value={form.wasteKg} onChange={(e) => field('wasteKg', e.target.value)}/></label>
+    <label>Unidades producidas<Input type="number" min="0" step="1" value={form.producedUnits} onChange={(e) => field('producedUnits', e.target.value)}/></label>
+    <label>Observación<Input value={form.reason} onChange={(e) => field('reason', e.target.value)}/></label>
+  </>;
   return <label>Motivo / observación<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required={action === 'emptyRejected'}/></label>;
 }

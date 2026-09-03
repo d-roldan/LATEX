@@ -1,103 +1,36 @@
-# Modelo de datos actual
+# Modelo de datos de Planta de Látex DISAL
 
-Fuente de verdad: `apps/backend/prisma/schema.prisma`.
+La fuente de verdad es `apps/backend/prisma/schema.prisma`.
 
-## Núcleo multiempresa
+## Entidades productivas
 
-- `Company`: empresa propietaria de usuarios, clientes, modelos y producción.
-- `User`: usuario con rol `DUENO`, `SUPERVISOR`, `OPERARIO` o `ADMIN`.
-- `Client` y `ClientContact`: cliente comercial y sus contactos.
-- Todas las consultas operativas se aíslan por `companyId`.
+- `Tank`: configuración, capacidad, balanza, estado y lote activo de TK101–TK109.
+- `ProductionLot`: OF, material, producto, planificación, prioridad, turno e inicio/fin del lote.
+- `TankStateHistory`: períodos de permanencia por estado, duración, objetivo, responsable, descripción y fotografía puntual del peso.
+- `QualityDecision`: aprobación, ajuste o rechazo, legajo, peso específico, motivo y recuperación.
+- `PackagingOrder`: OE, línea, formato, inicio/fin, duración, kilogramos, unidades y merma.
+- `PlantAuditLog`: cambios auditables con valores anterior/nuevo y motivo.
+- `DailyPlantClosure`: fotografía JSON del resumen de una jornada, observaciones y responsable del cierre.
 
-## Catálogo de casillas
-
-### CabinModel
-
-Modelo comercial de casilla, por ejemplo RC4400, RC4900 o RC6000. Guarda código, nombre, descripción, dimensiones y vigencia.
-
-### CabinModelRevision
-
-Versión inmutable de fabricación de un modelo. Permite cambiar el proceso futuro sin alterar casillas ya creadas.
-
-### CabinStageTemplate
-
-Plantilla de etapa: código, nombre, sector, posición, tiempo previsto, peso en el avance y obligatoriedad.
-
-### CabinStageDependency
-
-Arista del grafo productivo. Indica qué plantilla debe completarse antes de habilitar otra.
-
-## Orden de Producción
-
-`Order` sigue siendo la entidad central: puede comenzar como presupuesto o como casilla de producción directa.
-
-Además de los campos comerciales y logísticos, una casilla guarda:
-
-- `cabinModelRevisionId`;
-- `serialNumber`;
-- `progressPct`;
-- estado productivo global derivado;
-- fechas planificada y de compromiso;
-- costos, consumos, adjuntos y entrega.
-
-### OrderStage
-
-Snapshot de una etapa para una casilla concreta. Conserva nombre, sector, peso, tiempos, estado, avance, observaciones e hitos reales.
-
-Estados:
+## Relaciones principales
 
 ```text
-BLOQUEADA | DISPONIBLE | EN_PROCESO | PAUSADA |
-COMPLETADA | RETRABAJO | CANCELADA
+Company
+ ├─ Tank ── ProductionLot
+ │   └─ TankStateHistory
+ │
+ ├─ QualityDecision
+ ├─ PackagingOrder
+ ├─ PlantAuditLog
+ └─ DailyPlantClosure
 ```
 
-### OrderStageDependency
+## Tiempo y duración
 
-Snapshot de las dependencias. La habilitación no depende de la posición visual: depende de que todos los prerrequisitos estén `COMPLETADA`.
+Las fechas productivas usan `TIMESTAMPTZ(3)`. La base conserva instantes absolutos y el frontend presenta `America/Argentina/Buenos_Aires`.
 
-### OrderAssignment
+La duración cerrada se conserva en segundos. Para estados en curso se calcula contra el instante actual. Los informes diarios incluyen cualquier período que se superponga con la jornada y recortan su duración a los límites del día.
 
-Une orden, etapa opcional, recurso y usuario. Guarda `assignedByUserId`, fecha de asignación y eventual desasignación, por lo que se conserva quién asignó cada trabajo. Una etapa admite varios operarios y un operario puede participar en varias etapas, aunque solo puede tener un cronómetro activo.
+## Telemetría
 
-La relación con la etapa se gestiona mediante `orderStageId`. Las asignaciones activas pueden crearse y modificarse, mientras que al quitarlas se completa `unassignedAt` para conservar el historial en lugar de borrar el registro.
-
-### StageWorkSession
-
-Sesión de trabajo real por etapa y operario. Guarda inicio, fin y observación. Es la base para tiempos reales y productividad.
-
-`OperationLog`, `MaterialConsumption` y `OrderAttachment` también pueden referenciar una etapa específica.
-
-Cada inicio, pausa, reanudación, finalización o cambio de estado de etapa genera un `OperationLog` con usuario, fecha y etapa. El Centro de Control combina estos eventos con asignaciones, sesiones y consumos para construir el seguimiento histórico de una casilla.
-
-## Grafo productivo vigente
-
-```text
-CHASIS ──────────────────────────────────────────────────┐
-PISO ────────────────────────────────────────────────────┤
-PAREDES ─┬─ PINTURA ────────────────────────────────────┤
-TECHO ───┼─ ELECTRICA ──────────────────────────────────┤
-         ├─ SANITARIA ──────────────────────────────────┤
-ABERTURAS┘                                               │
-                                                         v
-                                                     ARMADO
-                                                        |
-                                                TERMINACIONES
-                                                        |
-                                                     CALIDAD
-                                                        |
-                                                     ENTREGA
-```
-
-`ARMADO` es una barrera de sincronización: requiere CHASIS, PISO, PAREDES, TECHO, ABERTURAS, ELECTRICA, SANITARIA y PINTURA completas.
-
-La planificación, las fechas y la asignación inicial se administran en `Order`; no se contabilizan como una etapa productiva ni afectan `progressPct`.
-
-## Reglas derivadas
-
-- El código de orden es único por empresa y usa `DISAL-AAAA-NNNN`.
-- Crear una casilla copia una revisión completa y sus dependencias.
-- Completar una etapa libera automáticamente sus sucesoras cuando corresponde.
-- `progressPct` es el promedio ponderado de las etapas.
-- El estado global de `Order` se recalcula desde las etapas; no reemplaza su estado individual.
-- `Resource.linkedUserId` mantiene una correspondencia única entre operario y recurso humano.
-- Los consumos conservan costo histórico y actualizan inventario.
+Las lecturas cada dos segundos viven únicamente en memoria. No existe una tabla de muestras. Al cambiar de estado se copia el último peso disponible a `TankStateHistory.weightKg`, generando pocos hitos auditables por lote.
