@@ -49,3 +49,41 @@ WHERE id = 'seed_company_disal';
 ```
 
 Reiniciar el backend no cambia ningún estado productivo ni cierra una OE. Sólo se pierden las lecturas efímeras de peso, que se reconstruyen con el próximo envío de Node-RED.
+
+## Significado de “tiempo real”
+
+La versión actual ofrece actualización visual cercana al tiempo real:
+
+- La pantalla consulta tanques y pesos cada 2 segundos.
+- Una balanza se muestra sin señal después de 10 segundos sin recepción.
+- Las notificaciones se consultan cada 3 segundos.
+
+Esto no equivale todavía a una reproducción completa de eventos del PLC. El estado operativo de la aplicación y el último peso recibido deben presentarse como datos relacionados pero independientes. Una futura integración debe incluir timestamp de origen, secuencia, calidad, idempotencia, buffer y diagnóstico de cada componente.
+
+## Comunicación entre sectores
+
+Actualmente cada transición relevante crea avisos para los usuarios activos del sector receptor. El aviso identifica el tanque y permite navegar hasta él. Marcarlo como leído sólo confirma visualización.
+
+La evolución recomendada es incorporar una entrega operativa independiente de la notificación:
+
+```text
+PENDIENTE → RECIBIDA → EN_PROCESO → RESUELTA
+     │           │
+     ├─→ DEVUELTA
+     └─→ CANCELADA
+```
+
+La entrega debe conservar sector emisor/receptor, responsables, turno, timestamps, observaciones, vencimiento y motivo de devolución. Resolver una entrega no debe modificar por sí solo el estado del tanque: las transiciones productivas continuarán pasando por sus reglas y permisos específicos.
+
+## Controles operativos recomendados
+
+- Al declarar un tanque vacío, comparar el último peso confiable con una tolerancia configurable. Permitir excepción sólo con motivo y auditoría.
+- Mostrar la antigüedad de la lectura y su calidad además de “en línea”.
+- Exigir motivo en toda corrección, devolución, rechazo o excepción.
+- Evitar avanzar con datos almacenados en caché cuando la API no esté disponible.
+- Definir responsables y escalamiento para esperas que superen los tiempos objetivo.
+- Mantener una bitácora de turno con entregas pendientes y condiciones anormales.
+
+## Contingencia
+
+Si el sistema no está disponible, el PLC/SCADA conserva el control seguro del proceso. La planta debe acordar un procedimiento externo para registrar temporalmente OF, tanque, horarios, decisiones de Laboratorio y OE. Al recuperar DISAL, la carga o reconciliación debe identificar que se trata de información retrospectiva, el responsable y la evidencia utilizada; nunca debe simularse que fue capturada automáticamente.

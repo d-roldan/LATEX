@@ -118,12 +118,15 @@ El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **
 
 ## Documentación
 
+- [Índice de documentación](docs/README.md)
 - [Contexto y alcance integral](CONTEXTO_Y_ALCANCE_PROYECTO.md)
 - [Especificación funcional](ESPECIFICACION_FUNCIONAL_PLANTA.md)
+- [Requisitos funcionales y evolución recomendada](docs/REQUIREMENTS.md)
 - [Instructivo de integración y base de datos](docs/INSTRUCTIVO_INTEGRACION_Y_BASE_DE_DATOS.md)
 - [Contrato detallado de Node-RED](docs/NODE_RED_PESOS.md)
 - [Consultas históricas PostgreSQL](docs/CONSULTAS_HISTORICAS.md)
 - [API y transiciones operativas](docs/OPERACION_PLANTA.md)
+- [Notas de versión V0.0.17](docs/RELEASE_NOTES_V0.0.17.md)
 
 ## Verificación
 
