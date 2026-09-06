@@ -82,11 +82,15 @@ body { background: var(--plant-bg); }
 .plant-health svg:first-child { color: #45d997; }
 .plant-health button { display: grid; place-items: center; border: 0; background: transparent; color: #68c8ff; cursor: pointer; }
 .users-page .page-hero { min-height: 7rem; }
-@media (min-width: 761px) {
-  .users-page .page-hero { padding-left: 11.5rem; }
+@media (min-width: 1101px) {
+  .users-page .page-hero { display: grid; grid-template-columns: minmax(15rem,1fr) minmax(0,40rem) minmax(15rem,1fr); align-items: center; padding: 1rem; }
+  .users-page .page-hero__left { grid-column: 2; justify-items: center; text-align: center; }
+  .users-page .page-hero__actions { grid-column: 3; justify-self: end; }
 }
-@media (max-width: 760px) {
-  .users-page .page-hero { padding-top: 4.25rem; }
+@media (max-width: 1100px) {
+  .users-page .page-hero { display: grid; justify-items: center; padding: 4.25rem 1rem 1rem; text-align: center; }
+  .users-page .page-hero__left { justify-items: center; }
+  .users-page .page-hero__actions { justify-content: center; }
 }
 .plant-error, .plant-form-error { display: flex; gap: .6rem; align-items: center; margin-bottom: 1rem; padding: .8rem; border: 1px solid #d94141; border-radius: .6rem; background: #5d161644; color: #ff9999; }
 .tank-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: .55rem; }
@@ -265,6 +269,7 @@ body { background: var(--plant-bg); }
    del viewport, sin scroll vertical ni tarjetas recortadas. */
 @media (min-width: 1451px) and (min-height: 800px) {
   .plant-main { height: 100dvh; overflow: hidden; }
+  .management-page { height: calc(100dvh - 2rem); min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-color: #39749a #111a23; scrollbar-width: thin; }
   .plant-page:not(.history-page):not(.management-page) { display: flex; height: calc(100dvh - 2rem); min-height: 0; flex-direction: column; overflow: hidden; }
   .plant-page:not(.history-page):not(.management-page) .plant-page-head { flex: 0 0 auto; margin-bottom: .6rem; }
   .plant-page:not(.history-page):not(.management-page) .tank-grid { min-height: 0; flex: 1 1 auto; grid-template-columns: repeat(5,minmax(0,1fr)); grid-template-rows: repeat(2,minmax(0,1fr)); }

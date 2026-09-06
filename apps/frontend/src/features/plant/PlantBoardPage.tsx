@@ -38,7 +38,7 @@ const titles: Record<Sector, string> = {
 const emptyForm = {
   manufacturingOrder: '', materialCode: '', description: '', employeeNumber: '', specificWeight: '',
   qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', notes: '',
-  plannedQuantityKg: '', priority: 'NORMAL', shift: '', scheduledAt: '', producedKg: '', wasteKg: '', producedUnits: ''
+  plannedQuantityKg: '', producedKg: '', wasteKg: '', producedUnits: ''
 };
 
 export function PlantBoardPage({ sector }: { sector: Sector }) {
@@ -116,7 +116,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
     const { tank, action } = selection;
     const version = tank.version;
     const map: Record<Action, { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> }> = {
-      start: { path: `/plant/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined, priority: form.priority, shift: form.shift || undefined, scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined } },
+      start: { path: `/plant/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined } },
       sendLab: { path: `/plant/tanks/${tank.id}/send-to-lab`, method: 'post', payload: { version, reason: form.reason || undefined } },
       quality: { path: `/plant/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.reason || undefined, recoveryAction: form.recoveryAction || undefined } },
       packaging: { path: `/plant/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format } },
@@ -237,9 +237,6 @@ function renderFields(action: Action, form: typeof emptyForm, setForm: (value: t
     <label>Descripción<Input value={form.description} onChange={(e) => field('description', e.target.value)} required maxLength={180}/></label>
     {action === 'start' ? <>
       <label>Cantidad planificada (kg)<Input type="number" min="0.001" step="0.001" value={form.plannedQuantityKg} onChange={(e) => field('plannedQuantityKg', e.target.value)}/></label>
-      <label>Prioridad<select value={form.priority} onChange={(e) => field('priority', e.target.value)}><option value="BAJA">Baja</option><option value="NORMAL">Normal</option><option value="ALTA">Alta</option><option value="URGENTE">Urgente</option></select></label>
-      <label>Turno<Input value={form.shift} onChange={(e) => field('shift', e.target.value)} placeholder="Ej: Mañana" maxLength={40}/></label>
-      <label>Inicio planificado<Input type="datetime-local" value={form.scheduledAt} onChange={(e) => field('scheduledAt', e.target.value)}/></label>
     </> : null}
     {action === 'correctLot' ? <label>Motivo de la corrección<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required/></label> : null}
   </>;
