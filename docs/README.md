@@ -16,6 +16,7 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 
 Los documentos maestros que describen el producto completo permanecen en la raíz del proyecto:
 
+- [Contexto real de la planta](../CONTEXTO_PLANTA_LATEX.md).
 - [Contexto y alcance integral](../CONTEXTO_Y_ALCANCE_PROYECTO.md).
 - [Especificación funcional](../ESPECIFICACION_FUNCIONAL_PLANTA.md).
 

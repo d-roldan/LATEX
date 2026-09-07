@@ -119,6 +119,7 @@ El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **
 ## Documentación
 
 - [Índice de documentación](docs/README.md)
+- [Contexto real de la planta](CONTEXTO_PLANTA_LATEX.md)
 - [Contexto y alcance integral](CONTEXTO_Y_ALCANCE_PROYECTO.md)
 - [Especificación funcional](ESPECIFICACION_FUNCIONAL_PLANTA.md)
 - [Requisitos funcionales y evolución recomendada](docs/REQUIREMENTS.md)
