@@ -5,10 +5,12 @@ import { api } from '../../shared/api/http';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { getSessionUser } from '../auth/session';
+import { useActivePlant } from './useActivePlant';
 
 type Attention = 'OK' | 'WARNING' | 'CRITICAL';
 interface ManagementTank {
   id: string; name: string; state: string; stateStartedAt: string; stateElapsedSeconds: number; stateTargetSeconds: number | null; stateAttention: Attention;
+  telemetryMode: 'AUTOMATIC' | 'NOT_INSTALLED' | 'PENDING';
   activeLot: null | { id: string; manufacturingOrder: string; materialCode: string; description: string; priority: string; plannedQuantityKg: number | null };
   telemetry: { grossKg: number | null; online: boolean };
 }
@@ -26,7 +28,7 @@ interface Timeline {
 
 const stateLabel: Record<string, string> = {
   VACIO: 'Vacío', FABRICANDO: 'Fabricando', LABORATORIO: 'Laboratorio', AJUSTE: 'Ajuste', RECHAZADO: 'Rechazado',
-  APROBADO: 'Aprobado', ENVASANDO: 'Envasando', FUERA_DE_SERVICIO: 'Fuera de servicio'
+  APROBADO: 'Aprobado', ENVASANDO: 'Envasando', TRASVASANDO: 'Trasvase', FUERA_DE_SERVICIO: 'Fuera de servicio'
 };
 
 const previousPlantDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() - 86_400_000));
@@ -39,6 +41,8 @@ const duration = (seconds?: number | null) => {
 const localTime = (value: string) => new Date(value).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit' });
 
 export function PlantManagementPage() {
+  const { active } = useActivePlant();
+  const base = `/plants/${active?.code ?? 'LATEX'}`;
   const client = useQueryClient();
   const user = getSessionUser();
   const [date, setDate] = useState(previousPlantDay);
@@ -47,21 +51,21 @@ export function PlantManagementPage() {
   const [notes, setNotes] = useState('');
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [targets, setTargets] = useState({ fabricando: 480, laboratorio: 30, ajuste: 60, rechazado: 60, aprobado: 120, envasando: 360, fueraDeServicio: 480 });
-  const config = useQuery({ queryKey: ['plant-config-management'], queryFn: async () => (await api.get<{ stageTargetsMinutes: Record<string, number> }>('/plant/config')).data });
+  const config = useQuery({ queryKey: ['plant-config-management', active?.code], enabled: Boolean(active), queryFn: async () => (await api.get<{ stageTargetsMinutes: Record<string, number> }>(`${base}/config`)).data });
   const report = useQuery({
-    queryKey: ['plant-management', date],
-    queryFn: async () => api.get<DailyReport>('/plant/management/daily', { params: { date } }).then((response) => response.data),
+    queryKey: ['plant-management', active?.code, date], enabled: Boolean(active),
+    queryFn: async () => api.get<DailyReport>(`${base}/management/daily`, { params: { date } }).then((response) => response.data),
     refetchInterval: 30_000
   });
   const timeline = useQuery({
-    queryKey: ['plant-lot-timeline', selectedLotId], enabled: Boolean(selectedLotId),
-    queryFn: () => api.get<Timeline>(`/plant/management/lots/${selectedLotId}/timeline`).then((response) => response.data)
+    queryKey: ['plant-lot-timeline', active?.code, selectedLotId], enabled: Boolean(active && selectedLotId),
+    queryFn: () => api.get<Timeline>(`${base}/management/lots/${selectedLotId}/timeline`).then((response) => response.data)
   });
   const closure = useMutation({
-    mutationFn: () => api.post('/plant/management/closures', { date, notes: notes.trim() || undefined }),
+    mutationFn: () => api.post(`${base}/management/closures`, { date, notes: notes.trim() || undefined }),
     onSuccess: async () => { await client.invalidateQueries({ queryKey: ['plant-management', date] }); setClosureOpen(false); }
   });
-  const saveTargets = useMutation({ mutationFn: () => api.patch('/plant/management/targets', targets), onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ['plant-management'] }), client.invalidateQueries({ queryKey: ['plant-config-management'] })]); setTargetsOpen(false); } });
+  const saveTargets = useMutation({ mutationFn: () => api.patch(`${base}/management/targets`, targets), onSuccess: async () => { await Promise.all([client.invalidateQueries({ queryKey: ['plant-management'] }), client.invalidateQueries({ queryKey: ['plant-config-management'] })]); setTargetsOpen(false); } });
   const data = report.data;
   const qualityIncidents = (data?.quality.AJUSTE ?? 0) + (data?.quality.RECHAZADO_RECUPERAR ?? 0) + (data?.quality.RECHAZADO_DESTRUIR ?? 0);
   const kpis = useMemo(() => data ? [
@@ -74,7 +78,7 @@ export function PlantManagementPage() {
   ] : [], [data]);
 
   const download = async (format: 'pdf' | 'xls') => {
-    const response = await api.get('/plant/management/export', { params: { date, format }, responseType: 'blob' });
+    const response = await api.get(`${base}/management/export`, { params: { date, format }, responseType: 'blob' });
     const href = URL.createObjectURL(response.data);
     const link = document.createElement('a'); link.href = href; link.download = `DISAL-resumen-${date}.${format}`; link.click();
     URL.revokeObjectURL(href);
@@ -97,7 +101,7 @@ export function PlantManagementPage() {
     {data ? <>
       <section className="management-kpis">{kpis.map((kpi) => <article className={`management-kpi tone-${kpi.tone}`} key={kpi.label}><span>{kpi.icon}{kpi.label}</span><strong>{kpi.value}</strong></article>)}</section>
       <section className="management-summary">
-        {data.isLive ? <span><Radio size={16}/><b>{data.onlineScales}/9</b> balanzas en línea</span> : <span><Clock3 size={16}/><b>Cierre del día</b> seleccionado</span>}
+        {data.isLive ? data.tanks.some(t => t.telemetryMode === 'AUTOMATIC') ? <span><Radio size={16}/><b>{data.onlineScales}/{data.tanks.filter(t => t.telemetryMode === 'AUTOMATIC').length}</b> balanzas en línea</span> : <span><Radio size={16}/><b>{data.tanks.some(t => t.telemetryMode === 'PENDING') ? 'Mapeo pendiente' : 'Sin medición de peso'}</b></span> : <span><Clock3 size={16}/><b>Cierre del día</b> seleccionado</span>}
         <span><b>{qualityIncidents}</b> ajustes/rechazos</span>
         <span><b>{Math.round(data.packaging.wasteKg).toLocaleString('es-AR')} kg</b> de merma</span>
         {data.closure ? <span className="is-closed"><CheckCircle2 size={16}/> Jornada cerrada por {data.closure.createdBy.fullName}</span> : <span>{data.isLive ? 'Informe en vivo' : 'Reconstrucción histórica'}</span>}

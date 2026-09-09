@@ -10,8 +10,8 @@ export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Get()
-  list(@CurrentUser() user: JwtUser, @Query('limit') limit?: string) {
-    return this.notifications.list(user, Number(limit ?? 30));
+  list(@CurrentUser() user: JwtUser, @Query('limit') limit?: string, @Query('plant') plant?: string) {
+    return this.notifications.list(user, Number(limit ?? 30), plant);
   }
 
   @Patch(':id/read')
@@ -20,7 +20,7 @@ export class NotificationsController {
   }
 
   @Patch('read-all')
-  markAllRead(@CurrentUser() user: JwtUser) {
-    return this.notifications.markAllRead(user);
+  markAllRead(@CurrentUser() user: JwtUser, @Query('plant') plant?: string) {
+    return this.notifications.markAllRead(user, plant);
   }
 }

@@ -90,6 +90,7 @@ export class WeightReadingDto {
 }
 
 export class WeightBatchDto {
+  @IsOptional() @IsString() @MaxLength(80) source?: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
   @ValidateNested({ each: true }) @Type(() => WeightReadingDto)
   readings!: WeightReadingDto[];

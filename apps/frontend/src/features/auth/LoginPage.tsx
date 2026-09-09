@@ -67,7 +67,7 @@ export function LoginPage() {
       <div className="login-shell">
         <div className="login-brand">
           <div className="login-brand__plate">
-            <div className="latex-login-mark">PL</div>
+            <img className="latex-login-logo" src="/brand/grupo-disal-logo.png" alt="Grupo DISAL" />
           </div>
           <p className="login-brand__copy">
             Control de fabricación, calidad, envasado y trazabilidad de la planta de látex.

@@ -3,6 +3,7 @@ import { BarChart3, Beaker, Boxes, Factory, History, LogOut, Maximize2, Menu, Mi
 import { NavLink } from 'react-router-dom';
 import { clearSessionAndRedirect, getSessionUser } from '../../features/auth/session';
 import { NotificationBell } from '../components/NotificationBell';
+import { useActivePlant } from '../../features/plant/useActivePlant';
 
 const items = [
   { to: '/fabricacion', label: 'Fabricación', icon: Factory, roles: ['FABRICACION', 'ADMIN'] },
@@ -23,6 +24,8 @@ export function AppLayout({ children }: PropsWithChildren) {
   const [open, setOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const allowed = items.filter((item) => item.roles.includes(user?.role ?? ''));
+  const { plants, active, select } = useActivePlant();
+  const plantQuery = active ? `?plant=${active.code}` : '';
 
   useEffect(() => {
     const updateFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -43,12 +46,12 @@ export function AppLayout({ children }: PropsWithChildren) {
     <div className="plant-shell">
       <aside className={`plant-sidebar ${open ? 'is-open' : ''}`}>
         <header className="plant-brand">
-          <span className="plant-brand__mark">PL</span>
-          <div><strong>PLANTA LÁTEX</strong><small>Control industrial</small></div>
+          <img className="plant-brand__logo" src="/brand/grupo-disal-logo.png" alt="Grupo DISAL" />
+          <div className="plant-selector"><select aria-label="Planta activa" value={active?.code ?? ''} onChange={(e) => void select(e.target.value)}>{plants.map((plant) => <option key={plant.id} value={plant.code}>{plant.name}</option>)}</select></div>
           <button onClick={() => setOpen(false)} aria-label="Cerrar menú"><X size={20} /></button>
         </header>
         <nav>
-          {allowed.map((item) => <NavLink key={item.to} to={item.to} onClick={() => setOpen(false)}><item.icon size={19}/><span>{item.label}</span></NavLink>)}
+          {allowed.map((item) => <NavLink key={item.to} to={`${item.to}${plantQuery}`} onClick={() => setOpen(false)}><item.icon size={19}/><span>{item.label}</span></NavLink>)}
         </nav>
         <footer>
           <div className="plant-user"><Settings size={18}/><div><strong>{user?.fullName}</strong><small>{roleLabels[user?.role ?? ''] ?? user?.role}</small></div></div>

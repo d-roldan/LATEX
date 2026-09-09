@@ -1,0 +1,7 @@
+[
+  {"id":"disal-sample-tab","type":"tab","label":"DISAL multiplanta (ejemplo deshabilitado)","disabled":true,"info":"Reemplazar tags y credenciales antes de habilitar."},
+  {"id":"disal-manual","type":"inject","z":"disal-sample-tab","name":"Muestra manual","props":[{"p":"payload"}],"once":false,"payload":"","payloadType":"date","x":150,"y":100,"wires":[["disal-build"]]},
+  {"id":"disal-build","type":"function","z":"disal-sample-tab","name":"Construir lote","func":"const plant=env.get('DISAL_PLANT_CODE');\nmsg.method='POST';\nmsg.url=env.get('DISAL_API_BASE_URL')+'/plants/'+plant+'/telemetry/weights';\nmsg.headers={'content-type':'application/json','x-node-red-key':env.get('DISAL_INTEGRATION_KEY')};\nmsg.payload={source:env.get('DISAL_SOURCE_ID'),readings:[{scaleKey:'REEMPLAZAR_TAG',grossKg:Number(flow.get('REEMPLAZAR_VARIABLE')),measuredAt:new Date().toISOString()}]};\nreturn msg;","outputs":1,"x":360,"y":100,"wires":[["disal-http"]]},
+  {"id":"disal-http","type":"http request","z":"disal-sample-tab","name":"Enviar a DISAL","method":"use","ret":"obj","url":"","x":570,"y":100,"wires":[["disal-debug"]]},
+  {"id":"disal-debug","type":"debug","z":"disal-sample-tab","name":"Resultado por lectura","active":true,"tosidebar":true,"complete":"payload","targetType":"msg","x":800,"y":100,"wires":[]}
+]

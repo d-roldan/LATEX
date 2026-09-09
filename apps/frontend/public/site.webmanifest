@@ -11,9 +11,9 @@
   "theme_color": "#0b8fc7",
   "prefer_related_applications": false,
   "icons": [{
-    "src": "/icons/icon-disal.svg",
-    "sizes": "any",
-    "type": "image/svg+xml",
-    "purpose": "any maskable"
+    "src": "/icons/disal-d-mark-transparent.png",
+    "sizes": "1254x1254",
+    "type": "image/png",
+    "purpose": "any"
   }]
 }

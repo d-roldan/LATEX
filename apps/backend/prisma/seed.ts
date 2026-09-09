@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { createHash } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -136,6 +137,28 @@ async function main() {
   });
 
   const removed = await removeKnownDemoData();
+  const latex = await prisma.plant.upsert({
+    where: { companyId_code: { companyId: COMPANY_ID, code: 'LATEX' } }, update: {},
+    create: { companyId: COMPANY_ID, code: 'LATEX', name: 'Látex', displayOrder: 10, finalOperation: 'PACKAGING', settings: { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } }
+  });
+  const additionalPlants = [
+    { code: 'TERPLAST', name: 'Terplast', displayOrder: 20, finalOperation: 'PACKAGING' as const, count: 4 },
+    { code: 'SLURRY', name: 'Slurry', displayOrder: 30, finalOperation: 'TRANSFER' as const, count: 2 },
+    { code: 'ENDUIDO', name: 'Enduido', displayOrder: 40, finalOperation: 'PACKAGING' as const, count: 2 }
+  ];
+  for (const definition of additionalPlants) {
+    const plant = await prisma.plant.upsert({ where: { companyId_code: { companyId: COMPANY_ID, code: definition.code } }, update: {}, create: { companyId: COMPANY_ID, code: definition.code, name: definition.name, displayOrder: definition.displayOrder, finalOperation: definition.finalOperation } });
+    for (let number = 1; number <= definition.count; number += 1) {
+      const disperser = definition.code === 'SLURRY';
+      const terplast = definition.code === 'TERPLAST';
+      const tank = await prisma.tank.upsert({
+        where: { plantId_number: { plantId: plant.id, number } }, update: {},
+        create: { companyId: COMPANY_ID, plantId: plant.id, number, name: terplast ? `TANQUE ${number + 2}` : disperser ? `Dispersora ${number}` : `Equipo ${number}`, capacityKg: terplast ? (number <= 2 ? 1500 : 8000) : null, equipmentCode: disperser ? `DISP${number}` : `EQ${number}`, equipmentType: disperser ? 'DISPERSER' : 'TANK', telemetryMode: definition.code === 'ENDUIDO' ? 'NOT_INSTALLED' : 'PENDING', scaleKey: null }
+      });
+      const open = await prisma.tankStateHistory.findFirst({ where: { tankId: tank.id, endedAt: null } });
+      if (!open) await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, plantId: plant.id, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });
+    }
+  }
 
   for (const number of tankNumbers) {
     const capacityKg = number <= 102 ? 60_000
@@ -143,11 +166,13 @@ async function main() {
         : number <= 107 ? 30_000
           : 10_500;
     const tank = await prisma.tank.upsert({
-      where: { companyId_number: { companyId: COMPANY_ID, number } },
-      update: { name: `TK${number}`, capacityKg, scaleKey: `TK${number}` },
+      where: { plantId_number: { plantId: latex.id, number } },
+      update: {},
       create: {
         companyId: COMPANY_ID,
+        plantId: latex.id,
         number,
+        equipmentCode: 'TK' + number,
         name: `TK${number}`,
         capacityKg,
         scaleKey: `TK${number}`
@@ -155,13 +180,58 @@ async function main() {
     });
     const openHistory = await prisma.tankStateHistory.findFirst({ where: { tankId: tank.id, endedAt: null } });
     if (!openHistory) {
-      await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });
+      await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, plantId: latex.id, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });
     }
+  }
+
+  if (process.env.DISAL_ENABLE_WEIGHT_SIMULATOR?.trim().toLowerCase() === 'true') {
+    const integrationKey = process.env.NODE_RED_API_KEY?.trim();
+    if (!integrationKey) {
+      throw new Error('NODE_RED_API_KEY es requerida cuando DISAL_ENABLE_WEIGHT_SIMULATOR=true');
+    }
+    const keyHash = createHash('sha256').update(integrationKey).digest('hex');
+    const localTelemetry = [
+      { plantCode: 'LATEX', source: 'NODE_RED_LATEX', scaleKeys: tankNumbers.map((number) => `TK${number}`) },
+      { plantCode: 'TERPLAST', source: 'NODE_RED_TERPLAST_LOCAL', scaleKeys: ['TERP01', 'TERP02', 'TERP03', 'TERP04'] },
+      { plantCode: 'SLURRY', source: 'NODE_RED_SLURRY_LOCAL', scaleKeys: ['SLURRY01', 'SLURRY02'] }
+    ];
+
+    for (const definition of localTelemetry) {
+      const plant = await prisma.plant.findUniqueOrThrow({
+        where: { companyId_code: { companyId: COMPANY_ID, code: definition.plantCode } }
+      });
+      const equipment = await prisma.tank.findMany({
+        where: { plantId: plant.id },
+        orderBy: { number: 'asc' },
+        select: { id: true }
+      });
+      if (equipment.length !== definition.scaleKeys.length) {
+        throw new Error(`Cantidad inesperada de equipos para simulación local en ${definition.plantCode}`);
+      }
+      for (let index = 0; index < equipment.length; index += 1) {
+        await prisma.tank.update({
+          where: { id: equipment[index].id },
+          data: { scaleKey: definition.scaleKeys[index], telemetryMode: 'AUTOMATIC' }
+        });
+      }
+      await prisma.plantIntegration.upsert({
+        where: { plantId_source: { plantId: plant.id, source: definition.source } },
+        update: { keyHash, isActive: true },
+        create: {
+          companyId: COMPANY_ID,
+          plantId: plant.id,
+          source: definition.source,
+          keyHash,
+          isActive: true
+        }
+      });
+    }
+    console.log('Telemetría simulada local habilitada para Látex, Terplast y Slurry.');
   }
 
   // No elimina equipos con producción: sólo configuraciones obsoletas vacías.
   await prisma.tank.deleteMany({
-    where: { companyId: COMPANY_ID, number: { notIn: tankNumbers }, lots: { none: {} } }
+    where: { plantId: latex.id, number: { notIn: tankNumbers }, lots: { none: {} } }
   });
 
   console.log('Inicialización de Planta de Látex completada.');

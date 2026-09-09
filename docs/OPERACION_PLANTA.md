@@ -11,6 +11,8 @@
 | `JEFATURA` | Resumen diario, Monitoreo e Historial | Sólo lectura, cierres y exportaciones |
 | `ADMIN` | Todas | Todas las anteriores, usuarios y auditoría |
 
+Además del rol, cada usuario necesita `UserPlantAccess`. Los usuarios preexistentes conservan solamente Látex; el administrador protegido obtiene las cuatro plantas al ejecutar `security:ensure-system-owner`. Slurry exige además `canTransfer` (ADMIN conserva su facultad administrativa).
+
 Ocultar un botón no constituye seguridad: todos los endpoints operativos usan JWT, roles y validación de estado en backend.
 
 ## Transiciones aceptadas
@@ -23,6 +25,8 @@ VACIO → FABRICANDO → LABORATORIO → APROBADO → ENVASANDO → VACIO
                      RECHAZADO → VACIO
 
 VACIO → FUERA_DE_SERVICIO → VACIO
+
+APROBADO → TRASVASANDO → VACIO   (sólo Slurry; cierra lote, no crea OE)
 ```
 
 Cada escritura incluye `version`. Si otro usuario actuó primero, el backend responde `409 Conflict` y la pantalla se actualiza.
@@ -31,12 +35,12 @@ Cada escritura incluye `version`. Si otro usuario actuó primero, el backend res
 
 - Tanques, lotes, estados, decisiones, OEs, tiempos y auditoría: PostgreSQL.
 - Pesos bruto/neto y última comunicación: memoria del backend, sin tabla de muestras. Cada transición guarda una fotografía puntual en el histórico.
-- La grilla consulta `/api/plant/tanks` cada 2 segundos.
+- La grilla consulta `/api/plants/{plantCode}/tanks` cada 2 segundos. Las rutas `/api/plant/*` se conservan transitoriamente para Látex.
 
 ## Datos configurables
 
 - Los 9 tanques TK101–TK109 y sus `scaleKey` están en `Tank`. `capacityKg` se calcula como capacidad nominal en litros × `1,5 kg/L`: 60.000 kg para TK101–102, 45.000 kg para TK103–104, 30.000 kg para TK105–107 y 10.500 kg para TK108–109.
-- Líneas, formatos y motivos están en el JSON `Company.settings`.
+- Líneas, formatos, motivos y objetivos nuevos están en `Plant.settings`. La lectura de Látex mantiene fallback compatible a los valores anteriores de `Company.settings`.
 - Los tiempos objetivo por etapa están en `Company.settings.plantStageTargetsMinutes` y pueden configurarse desde el Resumen diario usando una cuenta ADMIN.
 - El seed crea los valores iniciales observados en la especificación; pueden modificarse para los equipos reales de la planta.
 

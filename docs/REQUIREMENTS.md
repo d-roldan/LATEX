@@ -149,3 +149,6 @@ Sólo deben incorporarse estados que modifiquen responsabilidad, trazabilidad, s
 5. Muestras, ensayos, ajustes y reanálisis de Laboratorio.
 6. Consumos de envasado, remanentes y relación OF–OE.
 7. Balance de masa, indicadores y optimización.
+# Evolución multiplanta (V0.0.18 candidata)
+
+La aplicación incorpora contexto explícito para Látex, Terplast, Slurry y Enduido. El acceso requiere membresía usuario–planta; los IDs, estados y relaciones históricos de Látex se preservan mediante backfill. Slurry finaliza por trasvase temporizado sin OE, y Enduido opera sin sensor ni valores de peso ficticios. Los nombres físicos, líneas y tags de Terplast/Slurry continúan pendientes y sus integraciones no deben habilitarse hasta confirmarlos. Las rutas anteriores permanecen como compatibilidad exclusiva de Látex.

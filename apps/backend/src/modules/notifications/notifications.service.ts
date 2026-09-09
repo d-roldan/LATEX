@@ -9,10 +9,10 @@ export type PlantSector = 'FABRICACION' | 'LABORATORIO' | 'ENVASADO';
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(user: JwtUser, requestedLimit = 30) {
+  async list(user: JwtUser, requestedLimit = 30, plantCode?: string) {
     const limit = Number.isFinite(requestedLimit) ? requestedLimit : 30;
     const take = Math.min(Math.max(Math.trunc(limit), 1), 50);
-    const where = this.visibleTo(user);
+    const where = await this.visibleTo(user, plantCode);
     const [items, unreadCount] = await this.prisma.$transaction([
       this.prisma.notification.findMany({ where, orderBy: { createdAt: 'desc' }, take }),
       this.prisma.notification.count({ where: { ...where, readAt: null } })
@@ -22,15 +22,16 @@ export class NotificationsService {
 
   async markRead(user: JwtUser, id: string) {
     const result = await this.prisma.notification.updateMany({
-      where: { ...this.visibleTo(user), id, readAt: null },
+      where: { companyId: user.companyId, userId: user.sub, id, readAt: null },
       data: { readAt: new Date() }
     });
     return { updated: result.count };
   }
 
-  async markAllRead(user: JwtUser) {
+  async markAllRead(user: JwtUser, plantCode?: string) {
+    const visible = await this.visibleTo(user, plantCode);
     const result = await this.prisma.notification.updateMany({
-      where: { ...this.visibleTo(user), readAt: null },
+      where: { ...visible, readAt: null },
       data: { readAt: new Date() }
     });
     return { updated: result.count };
@@ -47,12 +48,14 @@ export class NotificationsService {
       message: string;
     }
   ) {
+    const tank = await client.tank.findUniqueOrThrow({ where: { id: input.tankId }, select: { plantId: true } });
     const recipients = await client.user.findMany({
       where: {
         companyId: input.companyId,
         isActive: true,
         id: { not: input.actorUserId },
         role: { in: [input.targetSector as UserRole, UserRole.ADMIN] }
+        ,plantAccesses: { some: { plantId: tank.plantId } }
       },
       select: { id: true }
     });
@@ -66,13 +69,14 @@ export class NotificationsService {
         title: input.title,
         message: input.message,
         tankId: input.tankId,
+        plantId: tank.plantId,
         targetSector: input.targetSector
       }))
     });
     return { created: result.count };
   }
 
-  private visibleTo(user: JwtUser): Prisma.NotificationWhereInput {
+  private async visibleTo(user: JwtUser, plantCode?: string): Promise<Prisma.NotificationWhereInput> {
     const sector = (['FABRICACION', 'LABORATORIO', 'ENVASADO'] as string[]).includes(user.role)
       ? user.role
       : '__NO_SECTOR__';
@@ -80,6 +84,7 @@ export class NotificationsService {
       companyId: user.companyId,
       userId: user.sub,
       type: NotificationType.TANK_ACTION_REQUIRED,
+      plant: plantCode ? { code: plantCode.toUpperCase(), userAccesses: { some: { userId: user.sub } } } : { userAccesses: { some: { userId: user.sub } } },
       ...(user.role === 'ADMIN' ? {} : { targetSector: sector })
     };
   }

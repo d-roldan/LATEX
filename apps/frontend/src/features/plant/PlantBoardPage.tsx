@@ -7,33 +7,36 @@ import { Dialog } from '../../shared/ui/Dialog';
 import { Input } from '../../shared/ui/Input';
 import { useLocation } from 'react-router-dom';
 import { useHighlightTarget } from '../../shared/utils/highlightTarget';
+import { useActivePlant } from './useActivePlant';
 
 type Sector = 'fabricacion' | 'laboratorio' | 'envasado' | 'monitoreo';
-type TankState = 'VACIO' | 'FABRICANDO' | 'LABORATORIO' | 'AJUSTE' | 'RECHAZADO' | 'APROBADO' | 'ENVASANDO' | 'FUERA_DE_SERVICIO';
-type Action = 'start' | 'sendLab' | 'quality' | 'packaging' | 'newOrder' | 'correctOrder' | 'finish' | 'emptyRejected' | 'serviceOut' | 'serviceIn' | 'correctLot';
+type TankState = 'VACIO' | 'FABRICANDO' | 'LABORATORIO' | 'AJUSTE' | 'RECHAZADO' | 'APROBADO' | 'ENVASANDO' | 'TRASVASANDO' | 'FUERA_DE_SERVICIO';
+type Action = 'start' | 'sendLab' | 'quality' | 'packaging' | 'newOrder' | 'correctOrder' | 'finish' | 'startTransfer' | 'finishTransfer' | 'emptyRejected' | 'serviceOut' | 'serviceIn' | 'correctLot';
 type PendingRequest = { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> };
 
 interface Tank {
-  id: string; number: number; name: string; capacityKg: number | null; scaleKey: string; state: TankState; version: number;
+  id: string; number: number; name: string; capacityKg: number | null; scaleKey: string | null; equipmentType: 'TANK' | 'DISPERSER'; telemetryMode: 'AUTOMATIC' | 'NOT_INSTALLED' | 'PENDING'; state: TankState; version: number;
   serviceReason?: string | null;
   stateStartedAt: string; stateElapsedSeconds: number | null; stateTargetSeconds: number | null; stateAttention: 'OK' | 'WARNING' | 'CRITICAL';
-  telemetry: { grossKg: number | null; netKg: number | null; measuredAt: string | null; online: boolean };
+  telemetry: { grossKg: number | null; netKg: number | null; measuredAt: string | null; online: boolean | null; status: string };
   activeLot: null | {
     id: string; manufacturingOrder: string; materialCode: string; description: string; specificWeight: number | null;
     packagingOrders: Array<{ packagingOrder: string; line: string; format: string; startedAt: string }>;
   };
 }
 
-interface Config { lines: string[]; formats: string[]; adjustmentReasons: string[] }
+interface Config { lines: string[]; formats: string[]; adjustmentReasons: string[]; finalOperation: 'PACKAGING' | 'TRANSFER' }
 
 const stateLabel: Record<TankState, string> = {
   VACIO: 'Vacío', FABRICANDO: 'Fabricando', LABORATORIO: 'Laboratorio', AJUSTE: 'Ajuste',
-  RECHAZADO: 'Rechazado', APROBADO: 'Aprobado', ENVASANDO: 'Envasando', FUERA_DE_SERVICIO: 'Fuera de servicio'
+  RECHAZADO: 'Rechazado', APROBADO: 'Aprobado', ENVASANDO: 'Envasando', TRASVASANDO: 'Trasvase', FUERA_DE_SERVICIO: 'Fuera de servicio'
 };
 
 const titles: Record<Sector, string> = {
   fabricacion: 'Panel de Fabricación', laboratorio: 'Panel de Laboratorio', envasado: 'Panel de Envasado', monitoreo: 'Visualización de Planta'
 };
+
+const equipmentCountByPlant: Record<string, number> = { LATEX: 9, TERPLAST: 4, SLURRY: 2, ENDUIDO: 2 };
 
 const emptyForm = {
   manufacturingOrder: '', materialCode: '', description: '', employeeNumber: '', specificWeight: '',
@@ -43,6 +46,9 @@ const emptyForm = {
 
 export function PlantBoardPage({ sector }: { sector: Sector }) {
   const location = useLocation();
+  const { active } = useActivePlant();
+  const plantCode = active?.code ?? new URLSearchParams(location.search).get('plant')?.toUpperCase() ?? 'LATEX';
+  const base = `/plants/${plantCode}`;
   const navigationState = location.state as { highlightTankId?: string; highlightNonce?: number } | null;
   useHighlightTarget(navigationState?.highlightTankId ? `tank-${navigationState.highlightTankId}` : null, `${location.key}:${navigationState?.highlightNonce ?? ''}`);
   const client = useQueryClient();
@@ -51,15 +57,16 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
   const [confirming, setConfirming] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => { setSelection(null); setPendingRequest(null); setConfirming(false); setForm(emptyForm); setError(null); }, [plantCode]);
   const tanks = useQuery({
-    queryKey: [sector === 'monitoreo' ? 'plant-tv-tanks' : 'plant-tanks'],
-    queryFn: async () => (await api.get<Tank[]>(sector === 'monitoreo' ? '/plant/tv' : '/plant/tanks')).data,
+    queryKey: [sector === 'monitoreo' ? 'plant-tv-tanks' : 'plant-tanks', plantCode],
+    queryFn: async () => (await api.get<Tank[]>(sector === 'monitoreo' ? `${base}/tv` : `${base}/tanks`)).data,
     refetchInterval: 2000,
     refetchIntervalInBackground: true
   });
   const config = useQuery({
-    queryKey: ['plant-config'],
-    queryFn: async () => (await api.get<Config>('/plant/config')).data,
+    queryKey: ['plant-config', plantCode],
+    queryFn: async () => (await api.get<Config>(`${base}/config`)).data,
     enabled: sector !== 'monitoreo'
   });
 
@@ -95,6 +102,8 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
     }
     if (sector === 'laboratorio' && tank.state === 'LABORATORIO') return [['Resolver análisis', 'quality', 'warning']] as Array<[string, Action, string]>;
     if (sector === 'envasado') {
+      if (tank.state === 'APROBADO' && config.data?.finalOperation === 'TRANSFER') return [['Iniciar trasvase', 'startTransfer', 'primary']] as Array<[string, Action, string]>;
+      if (tank.state === 'TRASVASANDO') return [['Finalizar trasvase', 'finishTransfer', 'danger']] as Array<[string, Action, string]>;
       if (tank.state === 'APROBADO') return [['Iniciar envasado', 'packaging', 'primary']] as Array<[string, Action, string]>;
       if (tank.state === 'ENVASANDO') return [['Nueva OE', 'newOrder', 'secondary'], ['Corregir OE', 'correctOrder', 'secondary'], ['Finalizar y vaciar', 'finish', 'danger']] as Array<[string, Action, string]>;
     }
@@ -116,17 +125,19 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
     const { tank, action } = selection;
     const version = tank.version;
     const map: Record<Action, { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> }> = {
-      start: { path: `/plant/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined } },
-      sendLab: { path: `/plant/tanks/${tank.id}/send-to-lab`, method: 'post', payload: { version, reason: form.reason || undefined } },
-      quality: { path: `/plant/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.reason || undefined, recoveryAction: form.recoveryAction || undefined } },
-      packaging: { path: `/plant/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format } },
-      newOrder: { path: `/plant/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason || undefined } },
-      correctOrder: { path: `/plant/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason } },
-      finish: { path: `/plant/tanks/${tank.id}/packaging/finish`, method: 'post', payload: { version, producedKg: Number(form.producedKg), wasteKg: form.wasteKg ? Number(form.wasteKg) : undefined, producedUnits: form.producedUnits ? Number(form.producedUnits) : undefined, reason: form.reason || undefined } },
-      emptyRejected: { path: `/plant/tanks/${tank.id}/empty-rejected`, method: 'post', payload: { version, reason: form.reason } },
-      serviceOut: { path: `/plant/tanks/${tank.id}/service-out`, method: 'post', payload: { version, reason: form.reason, notes: form.notes || undefined } },
-      serviceIn: { path: `/plant/tanks/${tank.id}/service-in`, method: 'post', payload: { version, reason: form.reason || undefined } },
-      correctLot: { path: `/plant/tanks/${tank.id}/lot`, method: 'patch', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, reason: form.reason } }
+      start: { path: `${base}/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined } },
+      sendLab: { path: `${base}/tanks/${tank.id}/send-to-lab`, method: 'post', payload: { version, reason: form.reason || undefined } },
+      quality: { path: `${base}/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.reason || undefined, recoveryAction: form.recoveryAction || undefined } },
+      packaging: { path: `${base}/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format } },
+      newOrder: { path: `${base}/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason || undefined } },
+      correctOrder: { path: `${base}/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason } },
+      finish: { path: `${base}/tanks/${tank.id}/packaging/finish`, method: 'post', payload: { version, producedKg: Number(form.producedKg), wasteKg: form.wasteKg ? Number(form.wasteKg) : undefined, producedUnits: form.producedUnits ? Number(form.producedUnits) : undefined, reason: form.reason || undefined } },
+      startTransfer: { path: `${base}/tanks/${tank.id}/transfer`, method: 'post', payload: { version, reason: form.reason || undefined } },
+      finishTransfer: { path: `${base}/tanks/${tank.id}/transfer/finish`, method: 'post', payload: { version, reason: form.reason || undefined } },
+      emptyRejected: { path: `${base}/tanks/${tank.id}/empty-rejected`, method: 'post', payload: { version, reason: form.reason } },
+      serviceOut: { path: `${base}/tanks/${tank.id}/service-out`, method: 'post', payload: { version, reason: form.reason, notes: form.notes || undefined } },
+      serviceIn: { path: `${base}/tanks/${tank.id}/service-in`, method: 'post', payload: { version, reason: form.reason || undefined } },
+      correctLot: { path: `${base}/tanks/${tank.id}/lot`, method: 'patch', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, reason: form.reason } }
     };
     setPendingRequest(map[action]);
     setConfirming(true);
@@ -141,23 +152,22 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
   };
 
   return (
-    <div className={`plant-page plant-page--${sector}`}>
+    <div className={`plant-page plant-page--${sector} plant-page--${plantCode.toLowerCase()}`}>
       <header className="plant-page-head">
         <div><h1>{titles[sector]}</h1></div>
-        <div className="plant-health"><Radio size={16}/><span>{onlineCount}/{tanks.data?.length ?? 9} balanzas en línea</span>{sector !== 'monitoreo' ? <button onClick={() => tanks.refetch()} aria-label="Actualizar estado"><RefreshCw size={16}/></button> : null}</div>
+        <div className="plant-health"><Radio size={16}/><span>{tanks.data?.some(t => t.telemetryMode === 'AUTOMATIC') ? `${onlineCount}/${tanks.data.filter(t => t.telemetryMode === 'AUTOMATIC').length} balanzas en línea` : tanks.data?.some(t => t.telemetryMode === 'PENDING') ? 'Mapeo de peso pendiente' : 'Sin medición de peso'}</span>{sector !== 'monitoreo' ? <button onClick={() => tanks.refetch()} aria-label="Actualizar estado"><RefreshCw size={16}/></button> : null}</div>
       </header>
       {tanks.isError ? <div className="plant-error"><AlertTriangle/> No se pudo leer el estado de la planta.</div> : null}
       <section className="tank-grid">
-        {tanks.isLoading ? Array.from({ length: 9 }, (_, i) => <div className="tank-card skeleton" key={i}/>) : tanks.data?.map((tank) => {
+        {tanks.isLoading ? Array.from({ length: equipmentCountByPlant[plantCode] ?? 9 }, (_, i) => <div className="tank-card skeleton" key={i}/>) : tanks.data?.map((tank) => {
           const weight = tank.telemetry.grossKg;
           const fill = tank.capacityKg ? Math.max(0, Math.min(100, ((weight ?? 0) / tank.capacityKg) * 100)) : 0;
           const order = tank.activeLot?.packagingOrders[0];
           return <article id={`tank-${tank.id}`} className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}`} key={tank.id}>
             <div className="tank-card__content">
-              <div className="tank-card__title"><h2>{tank.name}</h2>{!tank.telemetry.online ? <span className="tank-offline"><WifiOff size={13}/> Sin señal</span> : null}</div>
+              <div className="tank-card__title"><h2>{tank.name}</h2>{tank.telemetryMode === 'AUTOMATIC' && !tank.telemetry.online ? <span className="tank-offline"><WifiOff size={13}/> Sin señal</span> : null}</div>
               <span className="tank-state">{stateLabel[tank.state]}</span>
-              <strong className="tank-weight">{weight === null ? '—' : Math.round(weight).toLocaleString('es-AR')}</strong>
-              <small>Kg (bruto)</small>
+              {tank.telemetryMode !== 'NOT_INSTALLED' ? <><strong className="tank-weight">{weight === null ? '—' : Math.round(weight).toLocaleString('es-AR')}</strong><small>Kg (bruto)</small></> : <small>Sin medición de peso</small>}
               <dl>
                 <div className="tank-elapsed"><dt>En estado</dt><dd>{formatDuration(tank.stateElapsedSeconds)}</dd></div>
                 {tank.activeLot ? <><div><dt>OF</dt><dd>{tank.activeLot.manufacturingOrder}</dd></div><div><dt>Material</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Descripción</dt><dd>{tank.activeLot.description}</dd></div></> : null}
@@ -167,13 +177,13 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
               </dl>
               <div className="tank-actions">{actionsFor(tank).map(([label, action, variant]) => <Button key={action} size="sm" variant={variant as 'primary'} onClick={() => openAction(tank, action)}>{label}</Button>)}</div>
             </div>
-            <div className={`tank-gauge${tank.capacityKg ? '' : ' is-pending'}`} aria-label={tank.capacityKg ? `${fill.toFixed(0)}% de capacidad` : 'Capacidad pendiente'}>
+            {tank.telemetryMode !== 'NOT_INSTALLED' ? <><div className={`tank-gauge${tank.capacityKg ? '' : ' is-pending'}`} aria-label={tank.capacityKg ? `${fill.toFixed(0)}% de capacidad` : 'Capacidad pendiente'}>
               <div style={{ height: `${fill}%` }}/>
             </div>
             <div className="tank-capacity">
               <span><b>MAX:</b> {tank.capacityKg ? `${tank.capacityKg.toLocaleString('es-AR')} kg` : 'Pendiente'}</span>
               {sector !== 'monitoreo' ? <span><b>MIN:</b> 0</span> : null}
-            </div>
+            </div></> : null}
           </article>;
         })}
         <article className="plant-clock">
@@ -189,7 +199,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
         open={Boolean(selection)}
         onOpenChange={(open) => !open && closeDialog()}
         disableClose={mutation.isPending}
-        title={selection ? confirming ? 'Confirmar operación' : `${actionTitle(selection.action)} · ${selection.tank.name}` : ''}
+        title={selection ? confirming ? `Confirmar operación · ${active?.name ?? plantCode}` : `${actionTitle(selection.action)} · ${selection.tank.name} · ${active?.name ?? plantCode}` : ''}
         description={confirming ? 'Esta acción modifica el estado operativo y quedará registrada.' : 'Revisá los datos. El backend volverá a validar rol, estado y versión antes de guardar.'}
       >
         {confirming && selection ? (
@@ -198,6 +208,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
             <div className="plant-confirmation__summary">
               <span>ACCIÓN</span><strong>{actionTitle(selection.action)}</strong>
               <span>EQUIPO</span><strong>{selection.tank.name}</strong>
+              <span>PLANTA</span><strong>{active?.name ?? plantCode}</strong>
               <p>Verificá físicamente el tanque antes de continuar. La operación no se ejecutará hasta presionar “Sí, confirmar”.</p>
             </div>
             {error ? <div className="plant-form-error">{error}</div> : null}
@@ -219,7 +230,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
 }
 
 function actionTitle(action: Action) {
-  return ({ start: 'Nueva fabricación', sendLab: 'Enviar a Laboratorio', quality: 'Decisión de calidad', packaging: 'Iniciar envasado', newOrder: 'Ingresar nueva OE', correctOrder: 'Corregir OE activa', finish: 'Finalizar envasado', emptyRejected: 'Vaciar rechazado', serviceOut: 'Sacar de servicio', serviceIn: 'Volver a servicio', correctLot: 'Corregir lote' } as Record<Action, string>)[action];
+  return ({ start: 'Nueva fabricación', sendLab: 'Enviar a Laboratorio', quality: 'Decisión de calidad', packaging: 'Iniciar envasado', newOrder: 'Ingresar nueva OE', correctOrder: 'Corregir OE activa', finish: 'Finalizar envasado', startTransfer: 'Iniciar trasvase', finishTransfer: 'Finalizar trasvase', emptyRejected: 'Vaciar rechazado', serviceOut: 'Sacar de servicio', serviceIn: 'Volver a servicio', correctLot: 'Corregir lote' } as Record<Action, string>)[action];
 }
 
 function formatDuration(seconds: number | null) {

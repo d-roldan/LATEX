@@ -4,17 +4,19 @@ import { PlantService } from './plant.service';
 describe('PlantService telemetry', () => {
   const prisma = {
     company: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'company-1', plants: [{ id: 'plant-latex' }] }),
       findUnique: jest.fn().mockResolvedValue({ settings: {} })
     },
     tank: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'tank-101' }),
       findMany: jest.fn().mockResolvedValue([
         {
-          id: 'tank-101', companyId: 'company-1', number: 101, name: 'TK101', capacityKg: null,
-          scaleKey: 'TK101', state: 'VACIO', version: 0, activeLot: null, stateHistory: []
+          id: 'tank-101', companyId: 'company-1', plantId: 'plant-latex', number: 101, name: 'TK101', capacityKg: null,
+          scaleKey: 'TK101', telemetryMode: 'AUTOMATIC', state: 'VACIO', version: 0, activeLot: null, stateHistory: []
         }
       ])
-    }
+    },
+    plant: { findFirst: jest.fn().mockResolvedValue({ id: 'plant-latex' }), findFirstOrThrow: jest.fn().mockResolvedValue({ id: 'plant-latex' }), findUnique: jest.fn().mockResolvedValue({ settings: {} }) }
   } as any;
   const config = {
     get: jest.fn((key: string) => key === 'NODE_RED_API_KEY' ? 'integration-secret' : key === 'SYSTEM_OWNER_COMPANY_ID' ? 'company-1' : undefined)
@@ -23,7 +25,7 @@ describe('PlantService telemetry', () => {
 
   it('keeps weight readings in memory and marks the response as non-persistent', async () => {
     const service = new PlantService(prisma, config, notifications);
-    const result = service.ingestWeights('integration-secret', 'company-1', {
+    const result = await service.ingestWeights('integration-secret', 'company-1', {
       readings: [{ scaleKey: 'TK101', grossKg: 5070.125 }]
     });
     const tanks = await service.tanks('company-1');
@@ -33,11 +35,11 @@ describe('PlantService telemetry', () => {
     expect(tanks[0].telemetry.online).toBe(true);
   });
 
-  it('rejects a batch with an invalid integration key', () => {
+  it('rejects a batch with an invalid integration key', async () => {
     const service = new PlantService(prisma, config, notifications);
-    expect(() => service.ingestWeights('wrong-key', 'company-1', {
+    await expect(service.ingestWeights('wrong-key', 'company-1', {
       readings: [{ scaleKey: 'TK101', grossKg: 100 }]
-    })).toThrow(UnauthorizedException);
+    })).rejects.toThrow(UnauthorizedException);
   });
 
   it('publishes only the read-only fields needed by the TV screen', async () => {
@@ -46,7 +48,7 @@ describe('PlantService telemetry', () => {
 
     expect(prisma.company.findFirst).toHaveBeenCalledWith({
       where: { id: 'company-1', isActive: true },
-      select: { id: true }
+      select: { id: true, plants: { where: { code: 'LATEX', isActive: true }, select: { id: true }, take: 1 } }
     });
     expect(tank).toMatchObject({ id: 'tank-101', name: 'TK101', state: 'VACIO' });
     expect(tank).not.toHaveProperty('companyId');

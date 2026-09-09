@@ -24,6 +24,7 @@ describe('NotificationsService', () => {
 
   it('creates one actionable tank notification for every active sector user and administrator except the actor', async () => {
     const client = {
+      tank: { findUniqueOrThrow: jest.fn().mockResolvedValue({ plantId: 'plant-latex' }) },
       user: { findMany: jest.fn().mockResolvedValue([{ id: 'lab-1' }, { id: 'admin-1' }]) },
       notification: { createMany: jest.fn().mockResolvedValue({ count: 2 }) }
     } as any;
@@ -35,16 +36,17 @@ describe('NotificationsService', () => {
     });
 
     expect(client.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ companyId: 'company-1', isActive: true, id: { not: 'fabricacion-1' } })
+      where: expect.objectContaining({ companyId: 'company-1', isActive: true, id: { not: 'fabricacion-1' }, plantAccesses: { some: { plantId: 'plant-latex' } } })
     }));
     expect(client.notification.createMany).toHaveBeenCalledWith({ data: [
-      expect.objectContaining({ userId: 'lab-1', tankId: 'tank-103', targetSector: 'LABORATORIO', type: NotificationType.TANK_ACTION_REQUIRED }),
-      expect.objectContaining({ userId: 'admin-1', tankId: 'tank-103', targetSector: 'LABORATORIO', type: NotificationType.TANK_ACTION_REQUIRED })
+      expect.objectContaining({ userId: 'lab-1', plantId: 'plant-latex', tankId: 'tank-103', targetSector: 'LABORATORIO', type: NotificationType.TANK_ACTION_REQUIRED }),
+      expect.objectContaining({ userId: 'admin-1', plantId: 'plant-latex', tankId: 'tank-103', targetSector: 'LABORATORIO', type: NotificationType.TANK_ACTION_REQUIRED })
     ] });
   });
 
   it('does not create rows when a target sector has no recipients', async () => {
     const client = {
+      tank: { findUniqueOrThrow: jest.fn().mockResolvedValue({ plantId: 'plant-latex' }) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
       notification: { createMany: jest.fn() }
     } as any;

@@ -85,7 +85,7 @@ async function main() {
     throw new Error('SYSTEM_OWNER_PASSWORD es requerido para crear el usuario protegido');
   }
 
-  await prisma.user.upsert({
+  const owner = await prisma.user.upsert({
     where: { companyId_email: { companyId, email } },
     update: {
       username,
@@ -108,6 +108,14 @@ async function main() {
       passwordHash: passwordHash!
     }
   });
+  const plants = await prisma.plant.findMany({ where: { companyId, isActive: true }, select: { id: true, code: true } });
+  for (const plant of plants) {
+    await prisma.userPlantAccess.upsert({
+      where: { userId_plantId: { userId: owner.id, plantId: plant.id } },
+      update: { canTransfer: plant.code === 'SLURRY' },
+      create: { userId: owner.id, plantId: plant.id, canTransfer: plant.code === 'SLURRY' }
+    });
+  }
 
   console.log(`Usuario protegido listo: ${email} (usuario: ${username})`);
 }

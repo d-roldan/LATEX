@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../shared/api/http';
+import { useActivePlant } from './useActivePlant';
 import { Dialog } from '../../shared/ui/Dialog';
 
 interface HistoryRow {
@@ -14,15 +15,17 @@ const duration = (seconds: number) => { const hours = Math.floor(seconds / 3600)
 const dateTime = (value: string) => new Date(value).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 
 export function PlantHistoryPage() {
+  const { active } = useActivePlant();
+  const base = `/plants/${active?.code ?? 'LATEX'}`;
   const [state, setState] = useState('');
   const [tankId, setTankId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
   const [selectedLot, setSelectedLot] = useState<string | null>(null);
-  const query = useQuery({ queryKey: ['plant-history', tankId, state, from, to], queryFn: async () => (await api.get<HistoryRow[]>('/plant/history/states', { params: { tankId: tankId || undefined, state: state || undefined, from: from || undefined, to: to || undefined } })).data });
-  const tanks = useQuery({ queryKey: ['plant-tanks-history-filter'], queryFn: async () => (await api.get<Array<{ id: string; name: string }>>('/plant/tanks')).data });
-  const timeline = useQuery({ queryKey: ['plant-history-timeline', selectedLot], enabled: Boolean(selectedLot), queryFn: async () => (await api.get<Timeline>(`/plant/management/lots/${selectedLot}/timeline`)).data });
+  const query = useQuery({ queryKey: ['plant-history', active?.code, tankId, state, from, to], enabled: Boolean(active), queryFn: async () => (await api.get<HistoryRow[]>(`${base}/history/states`, { params: { tankId: tankId || undefined, state: state || undefined, from: from || undefined, to: to || undefined } })).data });
+  const tanks = useQuery({ queryKey: ['plant-tanks-history-filter', active?.code], enabled: Boolean(active), queryFn: async () => (await api.get<Array<{ id: string; name: string }>>(`${base}/tanks`)).data });
+  const timeline = useQuery({ queryKey: ['plant-history-timeline', active?.code, selectedLot], enabled: Boolean(active && selectedLot), queryFn: async () => (await api.get<Timeline>(`${base}/management/lots/${selectedLot}/timeline`)).data });
   const filteredRows = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es-AR');
     if (!term) return query.data ?? [];

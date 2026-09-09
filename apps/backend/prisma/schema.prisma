@@ -30,7 +30,24 @@ enum TankState {
   RECHAZADO
   APROBADO
   ENVASANDO
+  TRASVASANDO
   FUERA_DE_SERVICIO
+}
+
+enum PlantFinalOperation {
+  PACKAGING
+  TRANSFER
+}
+
+enum EquipmentType {
+  TANK
+  DISPERSER
+}
+
+enum TelemetryMode {
+  AUTOMATIC
+  NOT_INSTALLED
+  PENDING
 }
 
 enum QualityResult {
@@ -170,6 +187,9 @@ model Company {
   packagingOrders  PackagingOrder[]
   plantAuditLogs   PlantAuditLog[]
   dailyPlantClosures DailyPlantClosure[]
+  plants             Plant[]
+  plantIntegrations  PlantIntegration[]
+  transferOperations TransferOperation[]
 
   @@index([name])
 }
@@ -211,6 +231,9 @@ model User {
   plantAuditLogs          PlantAuditLog[]
   productionLotsCreated   ProductionLot[]
   dailyPlantClosures      DailyPlantClosure[]
+  plantAccesses           UserPlantAccess[]
+  transferOperationsStarted  TransferOperation[] @relation("TransferStartedBy")
+  transferOperationsFinished TransferOperation[] @relation("TransferFinishedBy")
 
   @@unique([companyId, email])
   @@unique([companyId, username])
@@ -675,15 +698,86 @@ model Notification {
   orderId      String?
   orderStageId String?
   tankId       String?
+  plantId      String?
   targetSector String?
   readAt       DateTime?
   createdAt    DateTime         @default(now())
   company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plant        Plant?           @relation(fields: [plantId], references: [id], onDelete: Restrict)
 
   @@index([companyId, userId, createdAt])
   @@index([userId, readAt])
   @@index([companyId, targetSector, createdAt])
+  @@index([plantId, userId, createdAt])
+}
+
+model Plant {
+  id             String              @id @default(cuid())
+  companyId      String
+  code           String
+  name           String
+  isActive       Boolean             @default(true)
+  displayOrder   Int                 @default(0)
+  finalOperation PlantFinalOperation
+  settings       Json?
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+  company        Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  userAccesses   UserPlantAccess[]
+  tanks          Tank[]
+  lots           ProductionLot[]
+  stateHistory   TankStateHistory[]
+  qualityDecisions QualityDecision[]
+  packagingOrders PackagingOrder[]
+  transfers      TransferOperation[]
+  auditLogs      PlantAuditLog[]
+  closures       DailyPlantClosure[]
+  notifications  Notification[]
+  integrations   PlantIntegration[]
+  packagingLines PackagingLine[]
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive, displayOrder])
+}
+
+model UserPlantAccess {
+  userId      String
+  plantId     String
+  canTransfer Boolean @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@id([userId, plantId])
+  @@index([plantId])
+}
+
+model PlantIntegration {
+  id          String   @id @default(cuid())
+  companyId   String
+  plantId     String
+  source      String
+  keyHash     String
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@unique([plantId, source])
+  @@index([companyId, isActive])
+}
+
+model PackagingLine {
+  id        String   @id @default(cuid())
+  plantId   String
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Restrict)
+
+  @@unique([plantId, code])
 }
 
 model AiConversation {
@@ -722,10 +816,15 @@ model AiMessage {
 model Tank {
   id              String             @id @default(cuid())
   companyId       String
+  plantId         String
   number          Int
   name            String
+  equipmentCode   String
+  equipmentType   EquipmentType      @default(TANK)
+  telemetryMode   TelemetryMode      @default(AUTOMATIC)
+  isActive        Boolean            @default(true)
   capacityKg      Decimal?           @db.Decimal(12, 3)
-  scaleKey        String
+  scaleKey        String?
   state           TankState          @default(VACIO)
   version         Int                @default(0)
   serviceReason   String?
@@ -734,20 +833,24 @@ model Tank {
   createdAt       DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
   company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant           Plant              @relation(fields: [plantId], references: [id], onDelete: Restrict)
   activeLot       ProductionLot?     @relation("ActiveTankLot", fields: [activeLotId], references: [id], onDelete: SetNull)
   lots            ProductionLot[]    @relation("TankLots")
   stateHistory    TankStateHistory[]
   packagingOrders PackagingOrder[]
   auditLogs       PlantAuditLog[]
+  transferOperations TransferOperation[]
 
-  @@unique([companyId, number])
-  @@unique([companyId, scaleKey])
-  @@index([companyId, state])
+  @@unique([plantId, number])
+  @@unique([plantId, equipmentCode])
+  @@unique([plantId, scaleKey])
+  @@index([plantId, state, isActive])
 }
 
 model ProductionLot {
   id                 String             @id @default(cuid())
   companyId          String
+  plantId            String
   tankId             String
   manufacturingOrder String
   materialCode       String
@@ -763,6 +866,7 @@ model ProductionLot {
   createdAt          DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
   company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant              Plant              @relation(fields: [plantId], references: [id], onDelete: Restrict)
   tank               Tank               @relation("TankLots", fields: [tankId], references: [id], onDelete: Restrict)
   activeForTank      Tank?              @relation("ActiveTankLot")
   createdBy          User               @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -770,6 +874,7 @@ model ProductionLot {
   qualityDecisions   QualityDecision[]
   packagingOrders    PackagingOrder[]
   auditLogs          PlantAuditLog[]
+  transferOperations TransferOperation[]
 
   @@index([companyId, manufacturingOrder])
   @@index([tankId, startedAt])
@@ -778,6 +883,7 @@ model ProductionLot {
 model TankStateHistory {
   id          String         @id @default(cuid())
   companyId   String
+  plantId     String
   tankId      String
   lotId       String?
   state       TankState
@@ -789,6 +895,7 @@ model TankStateHistory {
   startedAt   DateTime       @default(now()) @db.Timestamptz(3)
   endedAt     DateTime?      @db.Timestamptz(3)
   company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant       Plant          @relation(fields: [plantId], references: [id], onDelete: Restrict)
   tank        Tank           @relation(fields: [tankId], references: [id], onDelete: Cascade)
   lot         ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
   user        User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -800,6 +907,7 @@ model TankStateHistory {
 model QualityDecision {
   id             String        @id @default(cuid())
   companyId      String
+  plantId        String
   lotId          String
   result         QualityResult
   employeeNumber String
@@ -809,6 +917,7 @@ model QualityDecision {
   userId         String
   createdAt      DateTime      @default(now()) @db.Timestamptz(3)
   company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant          Plant         @relation(fields: [plantId], references: [id], onDelete: Restrict)
   lot            ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
   user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
 
@@ -819,6 +928,7 @@ model QualityDecision {
 model PackagingOrder {
   id               String        @id @default(cuid())
   companyId        String
+  plantId          String
   tankId           String
   lotId            String
   packagingOrder   String
@@ -826,8 +936,8 @@ model PackagingOrder {
   format           String
   startedByUserId  String
   finishedByUserId String?
-  startedAt        DateTime      @default(now())
-  finishedAt       DateTime?
+  startedAt        DateTime      @default(now()) @db.Timestamptz(3)
+  finishedAt       DateTime?     @db.Timestamptz(3)
   durationSeconds  Int?
   producedKg       Decimal?      @db.Decimal(12, 3)
   wasteKg          Decimal?      @db.Decimal(12, 3)
@@ -835,6 +945,7 @@ model PackagingOrder {
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
   company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant            Plant         @relation(fields: [plantId], references: [id], onDelete: Restrict)
   tank             Tank          @relation(fields: [tankId], references: [id], onDelete: Restrict)
   lot              ProductionLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
   startedBy        User          @relation("PackagingStartedBy", fields: [startedByUserId], references: [id], onDelete: Restrict)
@@ -844,9 +955,33 @@ model PackagingOrder {
   @@index([lotId, startedAt])
 }
 
+model TransferOperation {
+  id               String        @id @default(cuid())
+  companyId        String
+  plantId          String
+  tankId           String
+  lotId            String
+  startedByUserId  String
+  finishedByUserId String?
+  startedAt        DateTime      @default(now()) @db.Timestamptz(3)
+  finishedAt       DateTime?     @db.Timestamptz(3)
+  durationSeconds  Int?
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  plant            Plant         @relation(fields: [plantId], references: [id], onDelete: Restrict)
+  tank             Tank          @relation(fields: [tankId], references: [id], onDelete: Restrict)
+  lot              ProductionLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  startedBy        User          @relation("TransferStartedBy", fields: [startedByUserId], references: [id], onDelete: Restrict)
+  finishedBy       User?         @relation("TransferFinishedBy", fields: [finishedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([plantId, tankId, startedAt])
+  @@index([lotId, startedAt])
+}
+
 model PlantAuditLog {
   id         String         @id @default(cuid())
   companyId  String
+  plantId    String
   tankId     String?
   lotId      String?
   userId     String?
@@ -858,6 +993,7 @@ model PlantAuditLog {
   after      Json?
   createdAt  DateTime       @default(now()) @db.Timestamptz(3)
   company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant      Plant          @relation(fields: [plantId], references: [id], onDelete: Restrict)
   tank       Tank?          @relation(fields: [tankId], references: [id], onDelete: SetNull)
   lot        ProductionLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
   user       User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -869,6 +1005,7 @@ model PlantAuditLog {
 model DailyPlantClosure {
   id              String   @id @default(cuid())
   companyId       String
+  plantId         String
   date            DateTime @db.Date
   snapshot        Json
   notes           String?
@@ -876,8 +1013,9 @@ model DailyPlantClosure {
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant           Plant    @relation(fields: [plantId], references: [id], onDelete: Restrict)
   createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
 
-  @@unique([companyId, date])
-  @@index([companyId, date])
+  @@unique([plantId, date])
+  @@index([companyId, plantId, date])
 }

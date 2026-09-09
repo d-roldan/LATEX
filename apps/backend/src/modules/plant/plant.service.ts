@@ -23,8 +23,12 @@ import {
   WeightBatchDto
 } from './dto/plant.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { createHash, timingSafeEqual } from 'crypto';
 
 type Telemetry = { grossKg: number; netKg?: number; measuredAt: string; receivedAt: string };
+
+// Margen para emisores Node-RED con un pulso de lectura cada 10 segundos.
+const WEIGHT_SIGNAL_TIMEOUT_MS = 30_000;
 
 const LINES = ['Línea 1', 'Línea 20', 'Línea 3'];
 const FORMATS = ['0,25 L', '0,50 L', '1 L', '4 L', '10 L'];
@@ -41,6 +45,7 @@ const DEFAULT_TARGET_SECONDS: Partial<Record<TankState, number>> = {
   RECHAZADO: 60 * 60,
   APROBADO: 2 * 60 * 60,
   ENVASANDO: 6 * 60 * 60,
+  TRASVASANDO: 2 * 60 * 60,
   FUERA_DE_SERVICIO: 8 * 60 * 60
 };
 
@@ -56,23 +61,58 @@ export class PlantService {
     private readonly notifications: NotificationsService
   ) {}
 
+  async authorizedPlants(companyId: string, userId: string) {
+    return this.prisma.plant.findMany({
+      where: { companyId, isActive: true, userAccesses: { some: { userId } } },
+      select: { id: true, code: true, name: true, displayOrder: true, finalOperation: true },
+      orderBy: { displayOrder: 'asc' }
+    });
+  }
+
+  async assertPlantAccess(companyId: string, userId: string, plantCode: string, tankId?: string) {
+    const plant = await this.prisma.plant.findFirst({
+      where: { companyId, code: plantCode.toUpperCase(), isActive: true, userAccesses: { some: { userId } } },
+      include: { userAccesses: { where: { userId }, select: { canTransfer: true } } }
+    });
+    if (!plant) throw new NotFoundException('Planta no encontrada o no autorizada');
+    if (tankId) {
+      const tank = await this.prisma.tank.findFirst({ where: { id: tankId, companyId, plantId: plant.id, isActive: true } });
+      if (!tank) throw new NotFoundException('Equipo no encontrado en la planta solicitada');
+    }
+    return plant;
+  }
+
+  async scopedConfig(companyId: string, userId: string, plantCode: string) {
+    const plant = await this.assertPlantAccess(companyId, userId, plantCode);
+    return this.loadConfig(companyId, plant.id);
+  }
+
+  async scopedTanks(companyId: string, userId: string, plantCode: string) {
+    const plant = await this.assertPlantAccess(companyId, userId, plantCode);
+    return this.tanks(companyId, plant.id);
+  }
+
   async getConfig(companyId: string) {
     return this.loadConfig(companyId);
   }
 
-  async publicTanks() {
+  async publicTanks(plantCode = 'LATEX') {
     const companyId = this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') || 'seed_company_disal';
     const company = await this.prisma.company.findFirst({
       where: { id: companyId, isActive: true },
-      select: { id: true }
+      select: { id: true, plants: { where: { code: plantCode.toUpperCase(), isActive: true }, select: { id: true }, take: 1 } }
     });
     if (!company) throw new NotFoundException('La pantalla de planta no está configurada');
 
-    const tanks = await this.tanks(company.id);
+    const plantId = company.plants[0]?.id;
+    if (!plantId) throw new NotFoundException('La planta solicitada no está configurada');
+    const tanks = await this.tanks(company.id, plantId);
     return tanks.map((tank) => ({
       id: tank.id,
       number: tank.number,
       name: tank.name,
+      equipmentType: tank.equipmentType,
+      telemetryMode: tank.telemetryMode,
       capacityKg: tank.capacityKg,
       state: tank.state,
       serviceReason: tank.serviceReason,
@@ -102,10 +142,12 @@ export class PlantService {
     }));
   }
 
-  async tanks(companyId: string) {
-    const configuredTargets = await this.targetSeconds(companyId);
+  async tanks(companyId: string, plantId?: string) {
+    if (!plantId) plantId = (await this.prisma.plant.findFirst({ where: { companyId, code: 'LATEX' }, select: { id: true } }))?.id;
+    if (!plantId) throw new NotFoundException('Planta Látex no configurada');
+    const configuredTargets = await this.targetSeconds(companyId, undefined, plantId);
     const tanks = await this.prisma.tank.findMany({
-      where: { companyId },
+      where: { companyId, plantId, isActive: true },
       include: {
         stateHistory: { where: { endedAt: null }, orderBy: { startedAt: 'desc' }, take: 1 },
         activeLot: {
@@ -119,7 +161,7 @@ export class PlantService {
     });
 
     return tanks.map((tank) => {
-      const reading = this.weights.get(`${companyId}:${tank.scaleKey}`);
+      const reading = tank.scaleKey ? this.weights.get(`${plantId}:${tank.scaleKey}`) : undefined;
       const age = reading ? Date.now() - new Date(reading.receivedAt).getTime() : Number.POSITIVE_INFINITY;
       const currentPeriod = tank.stateHistory[0];
       const stateElapsedSeconds = currentPeriod ? Math.max(0, Math.floor((Date.now() - currentPeriod.startedAt.getTime()) / 1000)) : null;
@@ -137,19 +179,29 @@ export class PlantService {
         stateAttention: targetSeconds && stateElapsedSeconds !== null
           ? stateElapsedSeconds >= targetSeconds ? 'CRITICAL' : stateElapsedSeconds >= targetSeconds * .8 ? 'WARNING' : 'OK'
           : 'OK',
-        telemetry: reading ? { ...reading, online: age <= 10_000, ageMs: age } : { grossKg: null, netKg: null, measuredAt: null, receivedAt: null, online: false, ageMs: null }
+        telemetry: tank.telemetryMode === 'NOT_INSTALLED'
+          ? { grossKg: null, netKg: null, measuredAt: null, receivedAt: null, online: null, ageMs: null, status: 'NOT_INSTALLED' }
+          : reading ? { ...reading, online: age <= WEIGHT_SIGNAL_TIMEOUT_MS, ageMs: age, status: age <= WEIGHT_SIGNAL_TIMEOUT_MS ? 'ONLINE' : 'NO_COMMUNICATION' }
+            : { grossKg: null, netKg: null, measuredAt: null, receivedAt: null, online: false, ageMs: null, status: tank.telemetryMode === 'PENDING' ? 'PENDING_MAPPING' : 'NO_COMMUNICATION' }
       };
     });
   }
 
-  ingestWeights(apiKey: string | undefined, companyId: string | undefined, dto: WeightBatchDto) {
+  async ingestWeights(apiKey: string | undefined, companyId: string | undefined, dto: WeightBatchDto, plantCode = 'LATEX') {
     const expected = this.config.get<string>('NODE_RED_API_KEY');
     const targetCompany = companyId?.trim() || this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') || 'seed_company_disal';
-    if (!expected || apiKey !== expected) throw new UnauthorizedException('Clave de integración inválida');
+    if (!expected || apiKey !== expected || plantCode.toUpperCase() !== 'LATEX') throw new UnauthorizedException('Clave de integración inválida');
+    const plant = await this.prisma.plant.findFirstOrThrow({ where: { companyId: targetCompany, code: 'LATEX' } });
     const now = new Date().toISOString();
     for (const reading of dto.readings) {
       const measuredAt = reading.measuredAt && !Number.isNaN(Date.parse(reading.measuredAt)) ? new Date(reading.measuredAt).toISOString() : now;
-      this.weights.set(`${targetCompany}:${reading.scaleKey}`, {
+      const equipment = await this.prisma.tank.findFirst({ where: { plantId: plant.id, scaleKey: reading.scaleKey, telemetryMode: 'AUTOMATIC', isActive: true } });
+      if (!equipment) throw new BadRequestException(`Balanza desconocida o no habilitada: ${reading.scaleKey}`);
+      if (reading.measuredAt && Number.isNaN(Date.parse(reading.measuredAt))) throw new BadRequestException(`Timestamp inválido para ${reading.scaleKey}`);
+      const cacheKey = `${plant.id}:${reading.scaleKey}`;
+      const previous = this.weights.get(cacheKey);
+      if (previous && Date.parse(measuredAt) <= Date.parse(previous.measuredAt)) continue;
+      this.weights.set(cacheKey, {
         grossKg: reading.grossKg,
         netKg: reading.netKg,
         measuredAt,
@@ -159,12 +211,42 @@ export class PlantService {
     return { accepted: dto.readings.length, receivedAt: now, persisted: false };
   }
 
+  async ingestPlantWeights(plantCode: string, apiKey: string | undefined, dto: WeightBatchDto) {
+    if (!apiKey) throw new UnauthorizedException('Clave de integración inválida');
+    const plant = await this.prisma.plant.findFirst({ where: { code: plantCode.toUpperCase(), isActive: true }, include: { integrations: { where: { isActive: true } } } });
+    if (!plant) throw new NotFoundException('Planta no encontrada');
+    const supplied = createHash('sha256').update(apiKey).digest();
+    const integration = plant.integrations.find((candidate) => (!dto.source || candidate.source === dto.source) && (() => {
+      const stored = Buffer.from(candidate.keyHash, 'hex');
+      return stored.length === supplied.length && timingSafeEqual(stored, supplied);
+    })());
+    if (!integration) throw new UnauthorizedException('Clave de integración inválida');
+    const now = new Date().toISOString();
+    const results: Array<{ scaleKey: string; status: string; message?: string }> = [];
+    for (const reading of dto.readings) {
+      if (reading.measuredAt && Number.isNaN(Date.parse(reading.measuredAt))) {
+        results.push({ scaleKey: reading.scaleKey, status: 'REJECTED', message: 'timestamp inválido' }); continue;
+      }
+      const equipment = await this.prisma.tank.findFirst({ where: { plantId: plant.id, scaleKey: reading.scaleKey, telemetryMode: 'AUTOMATIC', isActive: true } });
+      if (!equipment) { results.push({ scaleKey: reading.scaleKey, status: 'REJECTED', message: 'equipo desconocido o sin telemetría automática' }); continue; }
+      const measuredAt = reading.measuredAt ? new Date(reading.measuredAt).toISOString() : now;
+      const cacheKey = `${plant.id}:${reading.scaleKey}`;
+      const previous = this.weights.get(cacheKey);
+      if (previous && Date.parse(measuredAt) <= Date.parse(previous.measuredAt)) {
+        results.push({ scaleKey: reading.scaleKey, status: 'IGNORED_OLDER' }); continue;
+      }
+      this.weights.set(cacheKey, { grossKg: reading.grossKg, netKg: reading.netKg, measuredAt, receivedAt: now });
+      results.push({ scaleKey: reading.scaleKey, status: 'ACCEPTED' });
+    }
+    return { accepted: results.filter((r) => r.status === 'ACCEPTED').length, rejected: results.filter((r) => r.status === 'REJECTED').length, ignored: results.filter((r) => r.status === 'IGNORED_OLDER').length, receivedAt: now, persisted: false, results };
+  }
+
   async start(companyId: string, tankId: string, user: JwtUser, dto: StartManufacturingDto) {
     return this.prisma.$transaction(async (tx) => {
       const tank = await this.findTank(tx, companyId, tankId);
       this.assertTank(tank, 'VACIO', dto.version);
       const lot = await tx.productionLot.create({ data: {
-        companyId, tankId, manufacturingOrder: dto.manufacturingOrder,
+        companyId, plantId: tank.plantId, tankId, manufacturingOrder: dto.manufacturingOrder,
         materialCode: dto.materialCode, description: dto.description.trim(), createdByUserId: user.sub,
         plannedQuantityKg: dto.plannedQuantityKg, priority: dto.priority ?? 'NORMAL', shift: dto.shift,
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined
@@ -205,7 +287,7 @@ export class PlantService {
       if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
       const state: TankState = dto.result === 'APROBADO' ? 'APROBADO' : dto.result === 'AJUSTE' ? 'AJUSTE' : 'RECHAZADO';
       const decision = await tx.qualityDecision.create({ data: {
-        companyId, lotId: tank.activeLotId, result: dto.result as QualityResult,
+        companyId, plantId: tank.plantId, lotId: tank.activeLotId, result: dto.result as QualityResult,
         employeeNumber: dto.employeeNumber, specificWeight: dto.specificWeight,
         reason: dto.reason, recoveryAction: dto.recoveryAction, userId: user.sub
       }});
@@ -230,13 +312,14 @@ export class PlantService {
   }
 
   async startPackaging(companyId: string, tankId: string, user: JwtUser, dto: PackagingDto) {
-    await this.validatePackaging(companyId, dto);
     return this.prisma.$transaction(async (tx) => {
       const tank = await this.findTank(tx, companyId, tankId);
+      await this.assertFinalOperation(tx, tank.plantId, 'PACKAGING');
+      await this.validatePackaging(companyId, dto, tank.plantId);
       this.assertTank(tank, 'APROBADO', dto.version);
       if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
       const order = await tx.packagingOrder.create({ data: {
-        companyId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
+        companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
         line: dto.line, format: dto.format, startedByUserId: user.sub
       }});
       await this.move(tx, tank, 'ENVASANDO', user, tank.activeLotId, `OE ${dto.packagingOrder}`);
@@ -246,14 +329,15 @@ export class PlantService {
   }
 
   async newPackagingOrder(companyId: string, tankId: string, user: JwtUser, dto: PackagingDto) {
-    await this.validatePackaging(companyId, dto);
     return this.prisma.$transaction(async (tx) => {
       const tank = await this.findTank(tx, companyId, tankId);
+      await this.assertFinalOperation(tx, tank.plantId, 'PACKAGING');
+      await this.validatePackaging(companyId, dto, tank.plantId);
       this.assertTank(tank, 'ENVASANDO', dto.version);
       if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
       await this.closePackaging(tx, tank.id, user.sub);
       const order = await tx.packagingOrder.create({ data: {
-        companyId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
+        companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
         line: dto.line, format: dto.format, startedByUserId: user.sub
       }});
       const changed = await tx.tank.updateMany({ where: { id: tank.id, version: tank.version, state: tank.state }, data: { version: { increment: 1 } } });
@@ -264,9 +348,10 @@ export class PlantService {
   }
 
   async correctPackaging(companyId: string, tankId: string, user: JwtUser, dto: CorrectPackagingDto) {
-    await this.validatePackaging(companyId, dto);
     return this.prisma.$transaction(async (tx) => {
       const tank = await this.findTank(tx, companyId, tankId);
+      await this.assertFinalOperation(tx, tank.plantId, 'PACKAGING');
+      await this.validatePackaging(companyId, dto, tank.plantId);
       this.assertTank(tank, 'ENVASANDO', dto.version);
       const current = await tx.packagingOrder.findFirst({ where: { tankId, finishedAt: null }, orderBy: { startedAt: 'desc' } });
       if (!current) throw new ConflictException('No existe una OE abierta');
@@ -283,6 +368,7 @@ export class PlantService {
   async finishPackaging(companyId: string, tankId: string, user: JwtUser, dto: FinishPackagingDto) {
     return this.prisma.$transaction(async (tx) => {
       const tank = await this.findTank(tx, companyId, tankId);
+      await this.assertFinalOperation(tx, tank.plantId, 'PACKAGING');
       this.assertTank(tank, 'ENVASANDO', dto.version);
       await this.closePackaging(tx, tank.id, user.sub, dto);
       if (tank.activeLotId) await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { finishedAt: new Date() } });
@@ -303,6 +389,39 @@ export class PlantService {
       this.assertTank(tank, 'RECHAZADO', dto.version);
       if (tank.activeLotId) await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { finishedAt: new Date() } });
       await this.move(tx, tank, 'VACIO', user, tank.activeLotId, dto.reason ?? 'Vaciado de lote rechazado');
+      await tx.tank.update({ where: { id: tank.id }, data: { activeLotId: null } });
+      return { ok: true };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async startTransfer(companyId: string, tankId: string, user: JwtUser, dto: VersionedActionDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const tank = await this.findTank(tx, companyId, tankId);
+      this.assertTank(tank, 'APROBADO', dto.version);
+      await this.assertFinalOperation(tx, tank.plantId, 'TRANSFER');
+      const access = await tx.userPlantAccess.findUnique({ where: { userId_plantId: { userId: user.sub, plantId: tank.plantId } } });
+      if (!access?.canTransfer && user.role !== 'ADMIN') throw new UnauthorizedException('El usuario no tiene permiso explícito de trasvase');
+      if (!tank.activeLotId) throw new ConflictException('El equipo no tiene un lote activo');
+      const operation = await tx.transferOperation.create({ data: { companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, startedByUserId: user.sub } });
+      await this.move(tx, tank, 'TRASVASANDO', user, tank.activeLotId, dto.reason ?? 'Inicio de trasvase');
+      await this.audit(tx, companyId, user, tank.id, tank.activeLotId, 'CREATE', 'TransferOperation', operation.id, null, dto, dto.reason);
+      return { ok: true, transferOperationId: operation.id };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async finishTransfer(companyId: string, tankId: string, user: JwtUser, dto: VersionedActionDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const tank = await this.findTank(tx, companyId, tankId);
+      this.assertTank(tank, 'TRASVASANDO', dto.version);
+      await this.assertFinalOperation(tx, tank.plantId, 'TRANSFER');
+      const access = await tx.userPlantAccess.findUnique({ where: { userId_plantId: { userId: user.sub, plantId: tank.plantId } } });
+      if (!access?.canTransfer && user.role !== 'ADMIN') throw new UnauthorizedException('El usuario no tiene permiso explícito de trasvase');
+      const operation = await tx.transferOperation.findFirst({ where: { tankId, finishedAt: null }, orderBy: { startedAt: 'desc' } });
+      if (!operation) throw new ConflictException('No existe un trasvase abierto');
+      const finishedAt = new Date();
+      await tx.transferOperation.update({ where: { id: operation.id }, data: { finishedAt, finishedByUserId: user.sub, durationSeconds: Math.max(0, Math.floor((finishedAt.getTime() - operation.startedAt.getTime()) / 1000)) } });
+      if (tank.activeLotId) await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { finishedAt } });
+      await this.move(tx, tank, 'VACIO', user, tank.activeLotId, dto.reason ?? 'Fin de trasvase');
       await tx.tank.update({ where: { id: tank.id }, data: { activeLotId: null } });
       return { ok: true };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -343,12 +462,13 @@ export class PlantService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
-  async history(companyId: string, tankId?: string, state?: string, from?: string, to?: string) {
+  async history(companyId: string, tankId?: string, state?: string, from?: string, to?: string, plantId?: string) {
     const fromDate = from ? this.plantDayBounds(from).start : undefined;
     const toDate = to ? this.plantDayBounds(to).end : undefined;
     const rows = await this.prisma.tankStateHistory.findMany({
       where: {
         companyId,
+        plantId,
         tankId: tankId || undefined,
         state: state && Object.values(TankState).includes(state as TankState) ? state as TankState : undefined,
         startedAt: { lt: toDate },
@@ -364,14 +484,15 @@ export class PlantService {
     }));
   }
 
-  async lotTimeline(companyId: string, lotId: string) {
+  async lotTimeline(companyId: string, lotId: string, plantId?: string) {
     const lot = await this.prisma.productionLot.findFirst({
-      where: { id: lotId, companyId },
+      where: { id: lotId, companyId, plantId },
       include: {
         tank: { select: { name: true, number: true } },
         stateHistory: { include: { user: { select: { fullName: true, username: true } } }, orderBy: { startedAt: 'asc' } },
         qualityDecisions: { include: { user: { select: { fullName: true } } }, orderBy: { createdAt: 'asc' } },
-        packagingOrders: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } }
+        packagingOrders: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } },
+        transferOperations: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } }
       }
     });
     if (!lot) throw new NotFoundException('Orden de fabricación no encontrada');
@@ -394,22 +515,24 @@ export class PlantService {
     };
   }
 
-  async dailyManagement(companyId: string, date: string) {
+  async dailyManagement(companyId: string, date: string, plantId?: string) {
+    if (!plantId) plantId = (await this.prisma.plant.findFirstOrThrow({ where: { companyId, code: 'LATEX' }, select: { id: true } })).id;
+    const plant = await this.prisma.plant.findUniqueOrThrow({ where: { id: plantId }, select: { code: true, name: true, finalOperation: true } });
     const { start, end } = this.plantDayBounds(date);
     const now = new Date();
     const isLive = now >= start && now < end;
     const reportAt = isLive ? now : new Date(end.getTime() - 1);
     const [liveTanks, periods, completedLots, quality, packaging, closure] = await Promise.all([
-      this.tanks(companyId),
+      this.tanks(companyId, plantId),
       this.prisma.tankStateHistory.findMany({
-        where: { companyId, startedAt: { lt: end }, OR: [{ endedAt: null }, { endedAt: { gte: start } }] },
+        where: { companyId, plantId, startedAt: { lt: end }, OR: [{ endedAt: null }, { endedAt: { gte: start } }] },
         include: { tank: { select: { name: true, number: true } }, lot: { select: { id: true, manufacturingOrder: true, materialCode: true, description: true, priority: true, plannedQuantityKg: true } } },
         orderBy: { startedAt: 'asc' }
       }),
-      this.prisma.productionLot.findMany({ where: { companyId, finishedAt: { gte: start, lt: end } }, select: { id: true, manufacturingOrder: true, materialCode: true, description: true, startedAt: true, finishedAt: true } }),
-      this.prisma.qualityDecision.findMany({ where: { companyId, createdAt: { gte: start, lt: end } }, select: { result: true } }),
-      this.prisma.packagingOrder.findMany({ where: { companyId, finishedAt: { gte: start, lt: end } }, select: { producedKg: true, wasteKg: true, producedUnits: true, durationSeconds: true } }),
-      this.prisma.dailyPlantClosure.findUnique({ where: { companyId_date: { companyId, date: start } }, include: { createdBy: { select: { fullName: true } } } })
+      this.prisma.productionLot.findMany({ where: { companyId, plantId, finishedAt: { gte: start, lt: end } }, select: { id: true, manufacturingOrder: true, materialCode: true, description: true, startedAt: true, finishedAt: true } }),
+      this.prisma.qualityDecision.findMany({ where: { companyId, plantId, createdAt: { gte: start, lt: end } }, select: { result: true } }),
+      this.prisma.packagingOrder.findMany({ where: { companyId, plantId, finishedAt: { gte: start, lt: end } }, select: { producedKg: true, wasteKg: true, producedUnits: true, durationSeconds: true } }),
+      this.prisma.dailyPlantClosure.findUnique({ where: { plantId_date: { plantId, date: start } }, include: { createdBy: { select: { fullName: true } } } })
     ]);
     const durationByState: Record<string, number> = {};
     for (const period of periods) {
@@ -446,6 +569,7 @@ export class PlantService {
       return acc;
     }, {});
     return {
+      plant,
       date,
       generatedAt: new Date().toISOString(),
       isLive,
@@ -457,28 +581,29 @@ export class PlantService {
       packaging: { ...totals, completedOrders: packaging.length },
       durationByState,
       tanks,
-      attention: tanks.filter((tank) => tank.stateAttention !== 'OK' || (isLive && !tank.telemetry.online)),
+      attention: tanks.filter((tank) => tank.stateAttention !== 'OK' || (isLive && tank.telemetry.online === false && tank.telemetryMode === 'AUTOMATIC')),
       closure
     };
   }
 
-  async closeDay(companyId: string, user: JwtUser, dto: DailyClosureDto) {
-    const snapshot = await this.dailyManagement(companyId, dto.date);
+  async closeDay(companyId: string, user: JwtUser, dto: DailyClosureDto, plantId?: string) {
+    if (!plantId) plantId = (await this.prisma.plant.findFirstOrThrow({ where: { companyId, code: 'LATEX' }, select: { id: true } })).id;
+    const snapshot = await this.dailyManagement(companyId, dto.date, plantId);
     const { start } = this.plantDayBounds(dto.date);
-    const existing = await this.prisma.dailyPlantClosure.findUnique({ where: { companyId_date: { companyId, date: start } } });
+    const existing = await this.prisma.dailyPlantClosure.findUnique({ where: { plantId_date: { plantId, date: start } } });
     if (existing) throw new ConflictException('La jornada ya fue cerrada y su fotografía no puede modificarse');
     const serializableSnapshot = JSON.parse(JSON.stringify({ ...snapshot, closure: null })) as Prisma.InputJsonValue;
     return this.prisma.dailyPlantClosure.create({
-      data: { companyId, date: start, snapshot: serializableSnapshot, notes: dto.notes, createdByUserId: user.sub },
+      data: { companyId, plantId, date: start, snapshot: serializableSnapshot, notes: dto.notes, createdByUserId: user.sub },
       include: { createdBy: { select: { fullName: true } } }
     });
   }
 
-  closures(companyId: string) {
-    return this.prisma.dailyPlantClosure.findMany({ where: { companyId }, include: { createdBy: { select: { fullName: true } } }, orderBy: { date: 'desc' }, take: 90 });
+  closures(companyId: string, plantId?: string) {
+    return this.prisma.dailyPlantClosure.findMany({ where: { companyId, plantId }, include: { createdBy: { select: { fullName: true } } }, orderBy: { date: 'desc' }, take: 90 });
   }
 
-  async updateTargets(companyId: string, dto: StageTargetsDto) {
+  async updateTargets(companyId: string, dto: StageTargetsDto, plantId?: string) {
     const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } });
     if (!company) throw new NotFoundException('Empresa no encontrada');
     const settings = (company.settings ?? {}) as Record<string, unknown>;
@@ -487,12 +612,15 @@ export class PlantService {
       RECHAZADO: dto.rechazado, APROBADO: dto.aprobado, ENVASANDO: dto.envasando,
       FUERA_DE_SERVICIO: dto.fueraDeServicio
     };
-    await this.prisma.company.update({ where: { id: companyId }, data: { settings: { ...settings, plantStageTargetsMinutes } as Prisma.InputJsonValue } });
+    if (plantId) {
+      const plant = await this.prisma.plant.findUniqueOrThrow({ where: { id: plantId }, select: { settings: true } });
+      await this.prisma.plant.update({ where: { id: plantId }, data: { settings: { ...((plant.settings ?? {}) as object), stageTargetsMinutes: plantStageTargetsMinutes } as Prisma.InputJsonValue } });
+    } else await this.prisma.company.update({ where: { id: companyId }, data: { settings: { ...settings, plantStageTargetsMinutes } as Prisma.InputJsonValue } });
     return { stageTargetsMinutes: plantStageTargetsMinutes };
   }
 
-  async managementExport(companyId: string, date: string, format: 'pdf' | 'xls') {
-    const liveReport = await this.dailyManagement(companyId, date);
+  async managementExport(companyId: string, date: string, format: 'pdf' | 'xls', plantId?: string) {
+    const liveReport = await this.dailyManagement(companyId, date, plantId);
     const report = liveReport.closure?.snapshot
       ? { ...(liveReport.closure.snapshot as unknown as Omit<typeof liveReport, 'closure'>), isLive: false }
       : liveReport;
@@ -505,9 +633,9 @@ export class PlantService {
         tank.state,
         tank.stateStartedAt ? new Date(tank.stateStartedAt).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }) : '',
         tank.stateElapsedSeconds ?? 0,
-        tank.telemetry.online ? 'En línea' : 'Sin señal'
+        tank.telemetryMode === 'NOT_INSTALLED' ? 'No aplica' : tank.telemetryMode === 'PENDING' ? 'Mapeo pendiente' : tank.telemetry.online ? 'En línea' : 'Sin señal'
       ]);
-      const xmlRows = [['Tanque', 'OF', 'Material', 'Descripción', 'Estado', 'Desde', 'Duración (seg)', 'Balanza'], ...rows]
+      const xmlRows = [['Equipo', 'OF', 'Material', 'Descripción', 'Estado', 'Desde', 'Duración (seg)', 'Balanza'], ...rows]
         .map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="${typeof cell === 'number' ? 'Number' : 'String'}">${this.escapeXml(String(cell))}</Data></Cell>`).join('')}</Row>`)
         .join('');
       const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Resumen diario"><Table>${xmlRows}</Table></Worksheet></Workbook>`;
@@ -516,29 +644,31 @@ export class PlantService {
     return { body: this.managementPdf(report, date), contentType: 'application/pdf', filename: `DISAL-resumen-${date}.pdf` };
   }
 
-  auditHistory(companyId: string, tankId?: string) {
+  auditHistory(companyId: string, tankId?: string, plantId?: string) {
     return this.prisma.plantAuditLog.findMany({
-      where: { companyId, tankId: tankId || undefined },
+      where: { companyId, plantId, tankId: tankId || undefined },
       include: { tank: { select: { number: true, name: true } }, user: { select: { fullName: true, username: true } } },
       orderBy: { createdAt: 'desc' }, take: 1000
     });
   }
 
-  private async validatePackaging(companyId: string, dto: PackagingDto) {
-    const config = await this.loadConfig(companyId);
+  private async validatePackaging(companyId: string, dto: PackagingDto, plantId?: string) {
+    const config = await this.loadConfig(companyId, plantId);
     if (!config.lines.includes(dto.line)) throw new BadRequestException('Línea no configurada');
     if (!config.formats.includes(dto.format)) throw new BadRequestException('Formato no configurado');
   }
 
-  private async loadConfig(companyId: string) {
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } });
-    const settings = (company?.settings ?? {}) as Record<string, unknown>;
-    const configuredTargets = settings.plantStageTargetsMinutes as Record<string, unknown> | undefined;
+  private async loadConfig(companyId: string, plantId?: string) {
+    const source = plantId ? await this.prisma.plant.findUnique({ where: { id: plantId }, select: { settings: true, finalOperation: true, code: true } }) : await this.prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } });
+    const settings = (source?.settings ?? {}) as Record<string, unknown>;
+    const configuredTargets = (settings.stageTargetsMinutes ?? settings.plantStageTargetsMinutes) as Record<string, unknown> | undefined;
+    const isLatex = !plantId || (source as { code?: string } | null)?.code === 'LATEX';
     return {
-      lines: Array.isArray(settings.packagingLines) ? settings.packagingLines.filter((v): v is string => typeof v === 'string') : LINES,
-      formats: Array.isArray(settings.packagingFormats) ? settings.packagingFormats.filter((v): v is string => typeof v === 'string') : FORMATS,
+      lines: Array.isArray(settings.packagingLines) ? settings.packagingLines.filter((v): v is string => typeof v === 'string') : isLatex ? LINES : [],
+      formats: Array.isArray(settings.packagingFormats) ? settings.packagingFormats.filter((v): v is string => typeof v === 'string') : isLatex ? FORMATS : [],
       adjustmentReasons: Array.isArray(settings.adjustmentReasons) ? settings.adjustmentReasons.filter((v): v is string => typeof v === 'string') : ADJUSTMENT_REASONS,
-      stageTargetsMinutes: Object.fromEntries(Object.entries(DEFAULT_TARGET_SECONDS).map(([state, seconds]) => [state, Number(configuredTargets?.[state]) || Math.round(seconds / 60)]))
+      stageTargetsMinutes: Object.fromEntries(Object.entries(DEFAULT_TARGET_SECONDS).map(([state, seconds]) => [state, Number(configuredTargets?.[state]) || Math.round(seconds / 60)])),
+      finalOperation: (source as { finalOperation?: 'PACKAGING' | 'TRANSFER' } | null)?.finalOperation ?? 'PACKAGING'
     };
   }
 
@@ -566,7 +696,7 @@ export class PlantService {
 
   private async move(
     tx: Prisma.TransactionClient,
-    tank: { id: string; companyId: string; state: TankState; version: number; scaleKey?: string },
+    tank: { id: string; companyId: string; plantId: string; state: TankState; version: number; scaleKey?: string | null },
     state: TankState,
     user: JwtUser,
     lotId: string | null,
@@ -586,10 +716,10 @@ export class PlantService {
         durationSeconds: Math.max(0, Math.floor((changedAt.getTime() - openPeriod.startedAt.getTime()) / 1000))
       }});
     }
-    const weight = tank.scaleKey ? this.weights.get(`${tank.companyId}:${tank.scaleKey}`)?.grossKg : undefined;
-    const configuredTargets = await this.targetSeconds(tank.companyId, tx);
+    const weight = tank.scaleKey ? this.weights.get(`${tank.plantId}:${tank.scaleKey}`)?.grossKg : undefined;
+    const configuredTargets = await this.targetSeconds(tank.companyId, tx, tank.plantId);
     await tx.tankStateHistory.create({ data: {
-      companyId: tank.companyId, tankId: tank.id, lotId, state, description, userId: user.sub,
+      companyId: tank.companyId, plantId: tank.plantId, tankId: tank.id, lotId, state, description, userId: user.sub,
       weightKg: weight, targetSeconds: configuredTargets[state]
     } });
     await this.audit(tx, tank.companyId, user, tank.id, lotId, 'STATUS_CHANGE', 'Tank', tank.id, { state: tank.state }, { state }, description);
@@ -613,13 +743,16 @@ export class PlantService {
     }});
   }
 
-  private audit(
+  private async audit(
     tx: Prisma.TransactionClient, companyId: string, user: JwtUser, tankId: string | null,
     lotId: string | null, action: string, entityType: string, entityId: string,
     before: unknown, after: unknown, reason: string | null | undefined
   ) {
+    const plantId = tankId ? (await tx.tank.findUniqueOrThrow({ where: { id: tankId }, select: { plantId: true } })).plantId
+      : lotId ? (await tx.productionLot.findUniqueOrThrow({ where: { id: lotId }, select: { plantId: true } })).plantId
+        : (await tx.plant.findFirstOrThrow({ where: { companyId, code: 'LATEX' }, select: { id: true } })).id;
     return tx.plantAuditLog.create({ data: {
-      companyId, userId: user.sub, tankId, lotId, action, entityType, entityId, reason,
+      companyId, plantId, userId: user.sub, tankId, lotId, action, entityType, entityId, reason,
       before: before === null ? Prisma.JsonNull : before as Prisma.InputJsonValue,
       after: after === null ? Prisma.JsonNull : after as Prisma.InputJsonValue
     }});
@@ -634,9 +767,11 @@ export class PlantService {
     return { start, end };
   }
 
-  private async targetSeconds(companyId: string, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
-    const company = await tx.company.findUnique({ where: { id: companyId }, select: { settings: true } });
-    const settings = (company?.settings ?? {}) as Record<string, unknown>;
+  private async targetSeconds(companyId: string, tx: Prisma.TransactionClient | PrismaService = this.prisma, plantId?: string) {
+    const record = plantId
+      ? await tx.plant.findUnique({ where: { id: plantId }, select: { settings: true } })
+      : await tx.company.findUnique({ where: { id: companyId }, select: { settings: true } });
+    const settings = (record?.settings ?? {}) as Record<string, unknown>;
     const configured = settings.plantStageTargetsMinutes as Record<string, unknown> | undefined;
     return Object.fromEntries(Object.entries(DEFAULT_TARGET_SECONDS).map(([state, fallback]) => {
       const minutes = Number(configured?.[state]);
@@ -644,11 +779,17 @@ export class PlantService {
     })) as Partial<Record<TankState, number>>;
   }
 
+  private async assertFinalOperation(tx: Prisma.TransactionClient, plantId: string, expected: 'PACKAGING' | 'TRANSFER') {
+    const plant = await tx.plant.findUniqueOrThrow({ where: { id: plantId }, select: { finalOperation: true } });
+    if (plant.finalOperation !== expected) throw new ConflictException(expected === 'TRANSFER' ? 'Sólo Slurry admite trasvase' : 'La planta no admite órdenes de envasado');
+  }
+
   private escapeXml(value: string) {
     return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
   }
 
   private managementPdf(report: {
+    plant?: { code: string; name: string; finalOperation: string };
     generatedAt: string;
     isLive?: boolean;
     snapshotAt?: string;
@@ -659,7 +800,7 @@ export class PlantService {
     tanks: Array<{
       name: string; state: string; stateElapsedSeconds: number | null;
       activeLot: null | { manufacturingOrder: string; materialCode: string; description: string };
-      telemetry: { grossKg: number | null; online: boolean };
+      telemetry: { grossKg: number | null; online: boolean | null };
     }>;
     attention: unknown[];
   }, date: string) {
@@ -681,7 +822,7 @@ export class PlantService {
     fill(0, 520, 842, 75, '0.035 0.086 0.125');
     fill(0, 516, 842, 4, '0.020 0.620 0.850');
     text('DISAL', 36, 559, 23, true, '1 1 1');
-    text('PLANTA DE LATEX', 37, 543, 8, true, '0.36 0.80 0.97');
+    text(`PLANTA ${report.plant?.name ?? 'LATEX'}`.toUpperCase(), 37, 543, 8, true, '0.36 0.80 0.97');
     text('RESUMEN DIARIO DE PRODUCCION', 220, 560, 18, true, '1 1 1');
     text(localDate.toUpperCase(), 220, 541, 10, false, '0.75 0.83 0.89');
     text(report.isLive ? 'ESTADO EN VIVO' : 'CIERRE DEL DIA SELECCIONADO', 665, 552, 8, true, report.isLive ? '0.25 0.84 0.48' : '0.98 0.72 0.20');
@@ -701,7 +842,7 @@ export class PlantService {
 
     fill(36, 407, 770, 25, '0.08 0.16 0.22');
     const columns = [42, 102, 176, 258, 436, 532, 626, 724];
-    ['TANQUE', 'OF', 'MATERIAL', 'PRODUCTO', 'ESTADO', 'DESDE', 'DURACION', 'PESO'].forEach((header, index) => text(header, columns[index], 416, 7, true, '0.72 0.88 0.96'));
+    ['EQUIPO', 'OF', 'MATERIAL', 'PRODUCTO', 'ESTADO', 'DESDE', 'DURACION', 'PESO'].forEach((header, index) => text(header, columns[index], 416, 7, true, '0.72 0.88 0.96'));
     report.tanks.slice(0, 9).forEach((tank, index) => {
       const y = 378 - index * 33;
       fill(36, y - 9, 770, 32, index % 2 ? '0.945 0.960 0.970' : '1 1 1');

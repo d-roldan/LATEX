@@ -5,6 +5,7 @@ import { Beaker, Bell, Boxes, Check, CheckCheck, Factory, Music2, Play, Volume2,
 import { api } from '../api/http';
 import { NotificationSound, notificationSoundOptions, playNotificationSound, previewNotificationSound, unlockNotificationSound } from '../utils/notificationSound';
 import { getSessionUser } from '../../features/auth/session';
+import { useActivePlant } from '../../features/plant/useActivePlant';
 
 type PlantSector = 'FABRICACION' | 'LABORATORIO' | 'ENVASADO';
 type SectorFilter = PlantSector | 'TODOS';
@@ -43,6 +44,7 @@ function relativeDate(value: string) {
 }
 
 export function NotificationBell() {
+  const { active } = useActivePlant();
   const user = getSessionUser();
   const isAdmin = user?.role === 'ADMIN';
   const userSector = (['FABRICACION', 'LABORATORIO', 'ENVASADO'] as const).find(sector => sector === user?.role);
@@ -60,8 +62,9 @@ export function NotificationBell() {
   });
 
   const notifications = useQuery({
-    queryKey: ['plant-notifications'],
-    queryFn: async () => (await api.get<NotificationResponse>('/notifications', { params: { limit: 50 } })).data,
+    queryKey: ['plant-notifications', active?.code],
+    enabled: Boolean(active),
+    queryFn: async () => (await api.get<NotificationResponse>('/notifications', { params: { limit: 50, plant: active?.code } })).data,
     refetchInterval: 3000,
     refetchIntervalInBackground: true
   });
@@ -79,7 +82,7 @@ export function NotificationBell() {
   });
 
   const markAllRead = useMutation({
-    mutationFn: async () => api.patch('/notifications/read-all'),
+    mutationFn: async () => api.patch('/notifications/read-all', undefined, { params: { plant: active?.code } }),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['plant-notifications'] });
       queryClient.setQueryData<NotificationResponse>(['plant-notifications'], current => current ? {
@@ -143,7 +146,7 @@ export function NotificationBell() {
   const openNotification = (item: NotificationItem) => {
     if (!item.readAt) markRead.mutate(item.id);
     setOpen(false);
-    navigate(sectorMeta[item.targetSector].route, {
+    navigate(`${sectorMeta[item.targetSector].route}?plant=${active?.code ?? 'LATEX'}`, {
       state: { highlightTankId: item.tankId, notificationId: item.id, highlightNonce: Date.now() }
     });
   };
