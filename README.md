@@ -21,6 +21,14 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 - Registro de cantidad planificada, turno, prioridad, kilogramos envasados, unidades y merma.
 - Fotografías puntuales del peso en cada transición, sin persistir la telemetría continua.
 
+# Panel de control
+![image](https://github.grupodisal.com.ar/user-attachments/assets/197821bb-6200-45f8-8d8b-57e4de2fc424)
+
+Seguimiento histórico
+![image](https://github.grupodisal.com.ar/user-attachments/assets/9f2a7ea8-4e5b-4093-b729-5a5b2bfd7607)
+
+
+
 ## Tanques
 
 | Tanque | Identificador de balanza |
