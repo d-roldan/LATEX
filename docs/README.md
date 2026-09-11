@@ -15,6 +15,7 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [PWA](PWA.md): instalación y comportamiento sin conexión.
 - [HTTPS local](HTTPS_LOCAL.md): configuración de acceso seguro en la red interna.
 - [Ejemplo de accesos](accesses.example.md): plantilla sin credenciales reales.
+- [Agentes de Codex](AGENTES_CODEX.md): roles en español para planificación, generación y diagnóstico de pruebas, revisión de planta y telemetría.
 
 Los documentos maestros que describen el producto completo permanecen en la raíz del proyecto:
 

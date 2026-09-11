@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buenas prácticas de Playwright"
+  short_description: "Diseña y depura pruebas de navegador fiables"
+  default_prompt: "Usá $playwright-best-practices para diseñar pruebas del flujo de tanques de LATEX."

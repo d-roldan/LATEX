@@ -1,0 +1,4 @@
+interface:
+  display_name: "Validación de base de datos"
+  short_description: "Revisa Prisma y las migraciones de LATEX"
+  default_prompt: "Usá $db-check para revisar el esquema y las migraciones de LATEX."

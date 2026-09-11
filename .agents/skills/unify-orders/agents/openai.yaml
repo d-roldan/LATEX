@@ -1,0 +1,4 @@
+interface:
+  display_name: "Órdenes y presupuestos"
+  short_description: "Consulta el módulo comercial heredado de LATEX"
+  default_prompt: "Usá $unify-orders para revisar el módulo comercial de órdenes de LATEX."

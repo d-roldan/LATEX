@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buenas prácticas de NestJS"
+  short_description: "Mejora módulos, contratos y servicios del backend"
+  default_prompt: "Usá $nestjs-best-practices para revisar los cambios del backend NestJS de LATEX."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buenas prácticas de React"
+  short_description: "Optimiza consultas, carga y renderizados de React"
+  default_prompt: "Usá $vercel-react-best-practices para revisar el rendimiento del frontend de LATEX."

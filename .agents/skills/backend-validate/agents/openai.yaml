@@ -1,0 +1,4 @@
+interface:
+  display_name: "Validación del backend"
+  short_description: "Comprueba código, formato, pruebas y compilación"
+  default_prompt: "Usá $backend-validate para validar los cambios del backend de LATEX."

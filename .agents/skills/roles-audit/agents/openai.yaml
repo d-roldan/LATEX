@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revisión de roles y permisos"
+  short_description: "Revisa autorización y acceso por planta"
+  default_prompt: "Usá $roles-audit para revisar los permisos del área modificada."

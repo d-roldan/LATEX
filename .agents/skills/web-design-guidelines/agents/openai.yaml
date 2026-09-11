@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revisión de interfaces"
+  short_description: "Revisa accesibilidad y pantallas operativas"
+  default_prompt: "Usá $web-design-guidelines para revisar la interfaz operativa de LATEX."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Entorno Docker"
+  short_description: "Gestiona y diagnostica los servicios de LATEX"
+  default_prompt: "Usá $docker-stack para diagnosticar el entorno Docker de LATEX."

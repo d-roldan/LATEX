@@ -22,8 +22,8 @@ docs/accesses.encrypted.*.md
 
 .vscode/
 
-# Claude Code local settings
-.claude/settings.local.json
+# Codex local configuration
+.codex/config.toml
 
 # Debug scripts
 debug-*.mjs

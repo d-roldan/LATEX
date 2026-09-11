@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buenas prácticas de seguridad"
+  short_description: "Revisa la seguridad del frontend y backend"
+  default_prompt: "Usá $security-best-practices para realizar una revisión de seguridad de LATEX."

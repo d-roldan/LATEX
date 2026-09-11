@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buenas prácticas de PostgreSQL"
+  short_description: "Revisa consultas, índices, bloqueos y esquema"
+  default_prompt: "Usá $supabase-postgres-best-practices para revisar las consultas y los índices de LATEX."

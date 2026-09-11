@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pruebas de flujos completos"
+  short_description: "Valida recorridos operativos de la aplicación"
+  default_prompt: "Usá $e2e-test para validar el flujo operativo afectado en LATEX."

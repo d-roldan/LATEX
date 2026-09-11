@@ -1,0 +1,4 @@
+interface:
+  display_name: "Validación del frontend"
+  short_description: "Comprueba formato, tipos y compilación de React"
+  default_prompt: "Usá $frontend-validate para validar los cambios del frontend de LATEX."
