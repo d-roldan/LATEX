@@ -742,7 +742,7 @@ button:disabled {
   line-height: 1.48;
 }
 
-.ds-button.theme-toggle {
+.theme-toggle {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--ink-muted) 4%, var(--panel));
   color: var(--ink);
@@ -765,11 +765,11 @@ button:disabled {
     box-shadow 150ms ease;
 }
 
-.ds-button.theme-toggle::before {
+.theme-toggle::before {
   display: none;
 }
 
-.ds-button.theme-toggle:hover:not(:disabled) {
+.theme-toggle:hover:not(:disabled) {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--ink-muted) 24%, var(--border));
   background: color-mix(in srgb, var(--ink-muted) 7%, var(--panel));
@@ -781,7 +781,7 @@ button:disabled {
   transform: translateY(-2px) scale(1);
 }
 
-.ds-button.theme-toggle:active:not(:disabled) {
+.theme-toggle:active:not(:disabled) {
   color: var(--ink);
   border-color: color-mix(in srgb, var(--ink-muted) 36%, var(--border));
   background: color-mix(in srgb, var(--ink-muted) 15%, var(--panel));
@@ -3499,6 +3499,76 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.users-plants-cell {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  min-width: 10rem;
+}
+
+.users-plant-selector {
+  margin: 1rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.users-plant-selector legend {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.users-plant-selector > p {
+  margin: 0.2rem 0 0.65rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.users-plant-selector__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.users-plant-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.users-plant-option:has(input:checked) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+}
+
+.users-plant-option input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--primary);
+}
+
+.users-plant-option span {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.users-plant-option small,
+.users-plant-selector__status {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .users-plant-selector__options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .empty-state {

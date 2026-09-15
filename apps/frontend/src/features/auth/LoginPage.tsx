@@ -8,6 +8,7 @@ import { Input } from '../../shared/ui/Input';
 import { setSession } from './session';
 import { SessionData } from './types';
 import axios from 'axios';
+import { ThemeToggle } from '../../shared/components/ThemeToggle';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -20,7 +21,8 @@ export function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
-    const requestedFullscreen = !document.fullscreenElement && Boolean(document.documentElement.requestFullscreen);
+    const requestedFullscreen =
+      !document.fullscreenElement && Boolean(document.documentElement.requestFullscreen);
 
     if (requestedFullscreen) {
       await document.documentElement.requestFullscreen().catch(() => undefined);
@@ -30,8 +32,12 @@ export function LoginPage() {
       const response = await api.post<SessionData>('/auth/login', { identifier, password });
       setSession(response.data);
       const home: Record<string, string> = {
-        FABRICACION: '/fabricacion', LABORATORIO: '/laboratorio', ENVASADO: '/envasado',
-        MONITOREO: '/historial', JEFATURA: '/jefatura', ADMIN: '/admin'
+        FABRICACION: '/fabricacion',
+        LABORATORIO: '/laboratorio',
+        ENVASADO: '/envasado',
+        MONITOREO: '/historial',
+        JEFATURA: '/jefatura',
+        ADMIN: '/admin'
       };
       navigate(home[response.data.user.role] ?? '/tv');
     } catch (requestError) {
@@ -39,18 +45,22 @@ export function LoginPage() {
         await document.exitFullscreen().catch(() => undefined);
       }
       if (
-        axios.isAxiosError(requestError)
-        && (requestError.response?.status === 503 || !window.navigator.onLine)
+        axios.isAxiosError(requestError) &&
+        (requestError.response?.status === 503 || !window.navigator.onLine)
       ) {
         const message = requestError.response?.data?.message;
-        setError(typeof message === 'string'
-          ? message
-          : 'Sin conexión con el servidor de planta. Revisá la red local e intentá nuevamente.');
+        setError(
+          typeof message === 'string'
+            ? message
+            : 'Sin conexión con el servidor de planta. Revisá la red local e intentá nuevamente.'
+        );
       } else if (axios.isAxiosError(requestError) && requestError.response?.status === 429) {
         const message = requestError.response.data?.message;
-        setError(typeof message === 'string'
-          ? message
-          : 'Demasiados intentos seguidos. Esperá un momento antes de volver a intentar.');
+        setError(
+          typeof message === 'string'
+            ? message
+            : 'Demasiados intentos seguidos. Esperá un momento antes de volver a intentar.'
+        );
       } else {
         setError('Credenciales inválidas. Verificá el correo, nombre y contraseña.');
       }
@@ -63,6 +73,7 @@ export function LoginPage() {
     <div className="login-page page-enter">
       <div className="login-page__background" />
       <div className="login-page__scrim" />
+      <ThemeToggle className="login-theme-toggle" showLabel />
 
       <div className="login-shell">
         <div className="login-brand">
@@ -87,19 +98,39 @@ export function LoginPage() {
 
           <label>
             <span>Correo o nombre</span>
-            <Input id="login-identifier" type="text" value={identifier} onChange={(event) => setIdentifier(event.target.value)}
-              placeholder="Nombre Apellido o correo@empresa.com" autoComplete="username" required />
+            <Input
+              id="login-identifier"
+              type="text"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+              placeholder="Nombre Apellido o correo@empresa.com"
+              autoComplete="username"
+              required
+            />
           </label>
 
           <label>
             <span>Contraseña de acceso</span>
-            <Input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••••••" autoComplete="current-password" required />
+            <Input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••••••"
+              autoComplete="current-password"
+              required
+            />
           </label>
 
           {error ? <Alert variant="danger">{error}</Alert> : null}
 
-          <Button id="login-submit" type="submit" disabled={loading} size="lg" className="login-form__submit">
+          <Button
+            id="login-submit"
+            type="submit"
+            disabled={loading}
+            size="lg"
+            className="login-form__submit"
+          >
             {loading ? 'Autenticando…' : 'Iniciar sesión'}
           </Button>
 

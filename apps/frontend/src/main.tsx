@@ -11,7 +11,7 @@ import './shared/styles/plant.css';
 import { installNotificationSoundUnlock } from './shared/utils/notificationSound';
 
 const savedTheme = localStorage.getItem('disal.ui.theme');
-const initialTheme = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
+const initialTheme = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'light';
 document.documentElement.setAttribute('data-theme', initialTheme);
 localStorage.setItem('disal.ui.theme', initialTheme);
 installNotificationSoundUnlock();

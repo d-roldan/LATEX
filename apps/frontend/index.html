@@ -1,26 +1,25 @@
 <!doctype html>
-<html lang="es" data-theme="dark">
+<html lang="es" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/icons/disal-d-mark-transparent.png" />
     <link rel="apple-touch-icon" href="/icons/disal-d-mark-transparent.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#0b8fc7" />
+    <meta name="theme-color" content="#f7f9fc" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Planta Látex" />
-    <meta
-      name="description"
-      content="Control productivo y trazabilidad de la planta de látex."
-    />
+    <meta name="description" content="Control productivo y trazabilidad de la planta de látex." />
     <title>Planta de Látex</title>
     <script>
-      const theme = localStorage.getItem('disal.ui.theme');
-      if (theme === 'light' || theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', theme);
-      }
+      const savedTheme = localStorage.getItem('disal.ui.theme');
+      const theme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      document
+        .querySelector('meta[name="theme-color"]')
+        .setAttribute('content', theme === 'light' ? '#f7f9fc' : '#080d13');
     </script>
   </head>
   <body>

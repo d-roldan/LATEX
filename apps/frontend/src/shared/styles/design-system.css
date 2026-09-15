@@ -632,10 +632,52 @@ button.panel:hover,
 .login-form__submit { width: 100%; margin-top: var(--spacing-sm); }
 .login-form__legal { display: grid; gap: 0.25rem; margin-top: var(--spacing-sm); color: color-mix(in srgb, var(--color-on-status) 44%, transparent); font-size: var(--font-size-xs); line-height: var(--line-height-relaxed); text-align: center; }
 
+.login-theme-toggle {
+  position: fixed;
+  z-index: 2;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+}
+
+:root[data-theme='light'] .login-page__background {
+  background: radial-gradient(circle at 18% 14%, #b9e5f4 0, transparent 34%), radial-gradient(circle at 78% 82%, #c7d9ea 0, transparent 42%), #eef4f8;
+}
+
+:root[data-theme='light'] .login-page__scrim {
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.34), rgba(239, 246, 251, 0.5) 48%, rgba(230, 0, 18, 0.08));
+}
+
+:root[data-theme='light'] .login-shell {
+  border-color: var(--color-border-strong);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+:root[data-theme='light'] .login-brand__copy,
+:root[data-theme='light'] .login-form h2,
+:root[data-theme='light'] .login-form > div > p,
+:root[data-theme='light'] .login-form label > span,
+:root[data-theme='light'] .login-form__legal {
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .login-form {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme='light'] .login-form .ds-input {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 @media (max-width: 760px) {
   .login-shell { grid-template-columns: 1fr; padding: var(--spacing-xl); }
   .login-brand { display: none; }
   .login-form { padding: var(--spacing-xl); }
+  .login-theme-toggle span { display: none; }
+  .login-theme-toggle { width: 2.75rem; padding-inline: 0; }
 }
 
 .toast-viewport {

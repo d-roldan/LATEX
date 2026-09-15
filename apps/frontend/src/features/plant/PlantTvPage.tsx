@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { PlantBoardPage } from './PlantBoardPage';
+import { ThemeToggle } from '../../shared/components/ThemeToggle';
 
 export function PlantTvPage() {
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
@@ -22,15 +23,18 @@ export function PlantTvPage() {
 
   return (
     <main className="plant-main plant-tv">
-      <button
-        className="plant-fullscreen plant-tv__fullscreen"
-        onClick={toggleFullscreen}
-        aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Ver en pantalla completa'}
-        title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-      >
-        {isFullscreen ? <Minimize2 size={20}/> : <Maximize2 size={20}/>}
-        <span>{isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}</span>
-      </button>
+      <div className="plant-tv__controls">
+        <button
+          className="plant-fullscreen plant-tv__fullscreen"
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Ver en pantalla completa'}
+          title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+        >
+          {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+          <span>{isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}</span>
+        </button>
+        <ThemeToggle className="plant-theme-toggle plant-tv__theme-toggle" />
+      </div>
       <PlantBoardPage sector="monitoreo" />
     </main>
   );
