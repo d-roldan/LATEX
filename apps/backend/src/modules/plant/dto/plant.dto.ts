@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -40,9 +40,14 @@ export class QualityDecisionDto extends VersionedActionDto {
 }
 
 export class PackagingDto extends VersionedActionDto {
-  @Matches(/^\d{8}$/) packagingOrder!: string;
+  @Matches(/^\d{6}$/, { message: 'La orden de envasado debe tener exactamente 6 dígitos' })
+  packagingOrder!: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.replace(/\s+/g, '') : value)
+  @Matches(/^\d{4}$/, { message: 'El material de envasado debe tener exactamente 4 dígitos' })
+  materialCode!: string;
   @IsString() @MaxLength(80) line!: string;
   @IsString() @MaxLength(40) format!: string;
+  @IsString() @MaxLength(180) description!: string;
 }
 
 export class FinishPackagingDto extends VersionedActionDto {

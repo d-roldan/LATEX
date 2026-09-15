@@ -6,10 +6,11 @@ import { Dialog } from '../../shared/ui/Dialog';
 
 interface HistoryRow {
   id: string; state: string; description?: string; startedAt: string; endedAt?: string; durationSeconds: number;
-  tank: { number: number; name: string }; lot?: { id: string; manufacturingOrder: string; materialCode: string; description: string };
+  tank: { number: number; name: string }; lot?: { id: string; manufacturingOrder: string; materialCode: string; description: string; packagingOrders: PackagingOrderSummary[] };
   user?: { fullName: string; username: string };
 }
-interface Timeline { manufacturingOrder: string; materialCode: string; description: string; totalDurationSeconds: number; stateHistory: Array<{ id: string; state: string; description?: string; startedAt: string; endedAt?: string; durationSeconds: number; weightKg?: number; user?: { fullName: string } }> }
+interface PackagingOrderSummary { id: string; packagingOrder: string; materialCode: string | null; line: string; format: string; description: string; startedAt: string; finishedAt?: string; producedKg?: number | null; wasteKg?: number | null; producedUnits?: number | null; startedBy?: { fullName: string }; finishedBy?: { fullName: string } }
+interface Timeline { manufacturingOrder: string; materialCode: string; description: string; totalDurationSeconds: number; packagingOrders: PackagingOrderSummary[]; stateHistory: Array<{ id: string; state: string; description?: string; startedAt: string; endedAt?: string; durationSeconds: number; weightKg?: number; user?: { fullName: string } }> }
 const states = ['VACIO','FABRICANDO','LABORATORIO','AJUSTE','RECHAZADO','APROBADO','ENVASANDO','FUERA_DE_SERVICIO'];
 const duration = (seconds: number) => { const hours = Math.floor(seconds / 3600); const minutes = Math.floor((seconds % 3600) / 60); return hours ? `${hours} h ${minutes} min` : `${minutes} min`; };
 const dateTime = (value: string) => new Date(value).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
@@ -31,7 +32,8 @@ export function PlantHistoryPage() {
     if (!term) return query.data ?? [];
     return (query.data ?? []).filter((row) => [
       row.tank.name, String(row.tank.number), row.lot?.manufacturingOrder, row.lot?.materialCode,
-      row.lot?.description, row.description, row.user?.fullName, row.user?.username
+      row.lot?.description, row.description, row.user?.fullName, row.user?.username,
+      ...(row.lot?.packagingOrders.flatMap((order) => [order.packagingOrder, order.materialCode, order.description, order.line, order.format]) ?? [])
     ].some((value) => value?.toLocaleLowerCase('es-AR').includes(term)));
   }, [query.data, search]);
   return <div className="plant-page history-page">
@@ -43,8 +45,9 @@ export function PlantHistoryPage() {
       <label>Desde<input type="date" value={from} onChange={(e) => setFrom(e.target.value)}/></label>
       <label>Hasta<input type="date" value={to} onChange={(e) => setTo(e.target.value)}/></label>
     </div>
-    <div className="history-table"><table><thead><tr><th>Tanque</th><th>Estado</th><th>OF / Material</th><th>Descripción</th><th>Responsable</th><th>Inicio</th><th>Fin</th><th>Duración</th></tr></thead><tbody>{filteredRows.map((row) => <tr key={row.id}><td>{row.tank.name}</td><td><span className={`history-state state-${row.state.toLowerCase()}`}>{row.state.replaceAll('_',' ')}</span></td><td>{row.lot ? <button className="history-lot-link" onClick={() => setSelectedLot(row.lot!.id)}>{row.lot.manufacturingOrder} / {row.lot.materialCode}</button> : '—'}</td><td>{row.description ?? row.lot?.description ?? '—'}</td><td>{row.user?.fullName ?? 'Sistema'}</td><td>{dateTime(row.startedAt)}</td><td>{row.endedAt ? dateTime(row.endedAt) : 'En curso'}</td><td><strong>{duration(row.durationSeconds)}</strong></td></tr>)}</tbody></table></div>
+    <div className="history-table"><table><thead><tr><th>Tanque</th><th>Estado</th><th>Orden / Material</th><th>Descripción</th><th>Responsable</th><th>Inicio</th><th>Fin</th><th>Duración</th></tr></thead><tbody>{filteredRows.map((row) => { const packaging = row.state === 'ENVASANDO' ? row.lot?.packagingOrders[0] : undefined; return <tr key={row.id}><td>{row.tank.name}</td><td><span className={`history-state state-${row.state.toLowerCase()}`}>{row.state.replaceAll('_',' ')}</span></td><td>{row.lot ? <button className="history-lot-link" onClick={() => setSelectedLot(row.lot!.id)}>{packaging ? `OE ${packaging.packagingOrder} / ${packaging.materialCode ?? 'Sin material'}` : `${row.lot.manufacturingOrder} / ${row.lot.materialCode}`}</button> : '—'}</td><td>{packaging?.description ?? row.description ?? row.lot?.description ?? '—'}</td><td>{row.user?.fullName ?? 'Sistema'}</td><td>{dateTime(row.startedAt)}</td><td>{row.endedAt ? dateTime(row.endedAt) : 'En curso'}</td><td><strong>{duration(row.durationSeconds)}</strong></td></tr>; })}</tbody></table></div>
     <Dialog open={Boolean(selectedLot)} onOpenChange={(open) => !open && setSelectedLot(null)} title={timeline.data ? `OF ${timeline.data.manufacturingOrder}` : 'Trazabilidad de la OF'} description={timeline.data ? `${timeline.data.materialCode} · ${timeline.data.description} · Duración total ${duration(timeline.data.totalDurationSeconds)}` : 'Cargando etapas…'}>
+      {timeline.data?.packagingOrders.length ? <section className="lot-packaging-summary"><h3>Órdenes de envasado</h3>{timeline.data.packagingOrders.map((order) => <article key={order.id}><header><strong>OE {order.packagingOrder}</strong><span>{order.finishedAt ? 'Finalizada' : 'En curso'}</span></header><dl><div><dt>Material</dt><dd>{order.materialCode ?? 'No informado'}</dd></div><div><dt>Descripción</dt><dd>{order.description}</dd></div><div><dt>Celda / Formato</dt><dd>{order.line} · {order.format}</dd></div><div><dt>Inicio</dt><dd>{dateTime(order.startedAt)}</dd></div><div><dt>Fin</dt><dd>{order.finishedAt ? dateTime(order.finishedAt) : 'En curso'}</dd></div><div><dt>Responsable</dt><dd>{order.startedBy?.fullName ?? '—'}</dd></div><div><dt>Kg / Merma</dt><dd>{order.producedKg ?? '—'} / {order.wasteKg ?? '—'}</dd></div><div><dt>Unidades</dt><dd>{order.producedUnits ?? '—'}</dd></div></dl></article>)}</section> : null}
       <div className="lot-timeline">{timeline.data?.stateHistory.map((period) => <article key={period.id}><span className={`timeline-dot state-${period.state.toLowerCase()}`}/><div><strong>{period.state.replaceAll('_',' ')}</strong><small>{dateTime(period.startedAt)} — {period.endedAt ? dateTime(period.endedAt) : 'En curso'} · {duration(period.durationSeconds)}</small>{period.description ? <p>{period.description}</p> : null}{period.weightKg !== null && period.weightKg !== undefined ? <em>{Math.round(period.weightKg).toLocaleString('es-AR')} kg al ingresar</em> : null}</div></article>)}</div>
     </Dialog>
   </div>;

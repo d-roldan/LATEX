@@ -21,7 +21,7 @@ interface Tank {
   telemetry: { grossKg: number | null; netKg: number | null; measuredAt: string | null; online: boolean | null; status: string };
   activeLot: null | {
     id: string; manufacturingOrder: string; materialCode: string; description: string; specificWeight: number | null;
-    packagingOrders: Array<{ packagingOrder: string; line: string; format: string; startedAt: string }>;
+    packagingOrders: Array<{ packagingOrder: string; materialCode: string | null; line: string; format: string; description: string; startedAt: string }>;
   };
 }
 
@@ -39,7 +39,7 @@ const titles: Record<Sector, string> = {
 const equipmentCountByPlant: Record<string, number> = { LATEX: 9, TERPLAST: 4, SLURRY: 2, ENDUIDO: 2 };
 
 const emptyForm = {
-  manufacturingOrder: '', materialCode: '', description: '', employeeNumber: '', specificWeight: '',
+  manufacturingOrder: '', materialCode: '', packagingMaterialCode: '', description: '', employeeNumber: '', specificWeight: '',
   qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', notes: '',
   plannedQuantityKg: '', producedKg: '', wasteKg: '', producedUnits: ''
 };
@@ -85,7 +85,8 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
     const currentOrder = tank.activeLot?.packagingOrders[0];
     setForm({ ...emptyForm,
       manufacturingOrder: tank.activeLot?.manufacturingOrder ?? '', materialCode: tank.activeLot?.materialCode ?? '',
-      description: tank.activeLot?.description ?? '', packagingOrder: action === 'correctOrder' ? currentOrder?.packagingOrder ?? '' : '',
+      packagingMaterialCode: action === 'correctOrder' ? currentOrder?.materialCode ?? '' : '',
+      description: action === 'correctOrder' ? currentOrder?.description ?? '' : action === 'correctLot' ? tank.activeLot?.description ?? '' : '', packagingOrder: action === 'correctOrder' ? currentOrder?.packagingOrder ?? '' : '',
       line: action === 'correctOrder' ? currentOrder?.line ?? '' : config.data?.lines[0] ?? '',
       format: action === 'correctOrder' ? currentOrder?.format ?? '' : config.data?.formats[0] ?? ''
     });
@@ -128,9 +129,9 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
       start: { path: `${base}/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined } },
       sendLab: { path: `${base}/tanks/${tank.id}/send-to-lab`, method: 'post', payload: { version, reason: form.reason || undefined } },
       quality: { path: `${base}/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.reason || undefined, recoveryAction: form.recoveryAction || undefined } },
-      packaging: { path: `${base}/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format } },
-      newOrder: { path: `${base}/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason || undefined } },
-      correctOrder: { path: `${base}/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, line: form.line, format: form.format, reason: form.reason } },
+      packaging: { path: `${base}/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description } },
+      newOrder: { path: `${base}/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description, reason: form.reason || undefined } },
+      correctOrder: { path: `${base}/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description, reason: form.reason } },
       finish: { path: `${base}/tanks/${tank.id}/packaging/finish`, method: 'post', payload: { version, producedKg: Number(form.producedKg), wasteKg: form.wasteKg ? Number(form.wasteKg) : undefined, producedUnits: form.producedUnits ? Number(form.producedUnits) : undefined, reason: form.reason || undefined } },
       startTransfer: { path: `${base}/tanks/${tank.id}/transfer`, method: 'post', payload: { version, reason: form.reason || undefined } },
       finishTransfer: { path: `${base}/tanks/${tank.id}/transfer/finish`, method: 'post', payload: { version, reason: form.reason || undefined } },
@@ -170,9 +171,9 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
               {tank.telemetryMode !== 'NOT_INSTALLED' ? <><strong className="tank-weight">{weight === null ? '—' : Math.round(weight).toLocaleString('es-AR')}</strong><small>Kg (bruto)</small></> : <small>Sin medición de peso</small>}
               <dl>
                 <div className="tank-elapsed"><dt>En estado</dt><dd>{formatDuration(tank.stateElapsedSeconds)}</dd></div>
-                {tank.activeLot ? <><div><dt>OF</dt><dd>{tank.activeLot.manufacturingOrder}</dd></div><div><dt>Material</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Descripción</dt><dd>{tank.activeLot.description}</dd></div></> : null}
+                {tank.activeLot ? tank.state === 'ENVASANDO' && order ? <><div><dt>Material</dt><dd>{order.materialCode ?? 'Sin informar'}</dd></div><div><dt>Descripción</dt><dd>{order.description}</dd></div></> : <><div><dt>OF</dt><dd>{tank.activeLot.manufacturingOrder}</dd></div><div><dt>Material</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Descripción</dt><dd>{tank.activeLot.description}</dd></div></> : null}
                 {tank.activeLot?.specificWeight ? <div><dt>P. específico</dt><dd>{tank.activeLot.specificWeight}</dd></div> : null}
-                {order ? <><div><dt>OE</dt><dd>{order.packagingOrder}</dd></div><div><dt>Línea / Formato</dt><dd>{order.line} · {order.format}</dd></div></> : null}
+                {order ? <><div><dt>OE</dt><dd>{order.packagingOrder}</dd></div><div><dt>Celda / Formato</dt><dd>{order.line} · {order.format}</dd></div></> : null}
                 {tank.serviceReason ? <div><dt>Motivo</dt><dd>{tank.serviceReason}</dd></div> : null}
               </dl>
               <div className="tank-actions">{actionsFor(tank).map(([label, action, variant]) => <Button key={action} size="sm" variant={variant as 'primary'} onClick={() => openAction(tank, action)}>{label}</Button>)}</div>
@@ -259,9 +260,11 @@ function renderFields(action: Action, form: typeof emptyForm, setForm: (value: t
     {form.qualityResult === 'RECHAZADO_RECUPERAR' ? <label>Destino<select value={form.recoveryAction} onChange={(e) => field('recoveryAction', e.target.value)} required><option value="">Seleccionar…</option><option>Recuperar en el mismo tanque</option><option>Bajar producto para futuras fabricaciones</option></select></label> : null}
   </>;
   if (action === 'packaging' || action === 'newOrder' || action === 'correctOrder') return <>
-    <label>Orden de envasado (8 dígitos)<Input value={form.packagingOrder} onChange={(e) => field('packagingOrder', e.target.value)} pattern="\d{8}" required/></label>
-    <label>Línea<select value={form.line} onChange={(e) => field('line', e.target.value)} required>{config?.lines.map((line) => <option key={line}>{line}</option>)}</select></label>
+    <label>Orden de envasado (6 dígitos)<Input value={form.packagingOrder} onChange={(e) => field('packagingOrder', e.target.value)} pattern="\d{6}" inputMode="numeric" maxLength={6} required/></label>
+    <label>Material de envasado (4 dígitos)<Input value={form.packagingMaterialCode} onChange={(e) => field('packagingMaterialCode', e.target.value.replace(/\D/g, '').slice(0, 4))} pattern="\d{4}" inputMode="numeric" maxLength={4} required/></label>
+    <label>Celda<select value={form.line} onChange={(e) => field('line', e.target.value)} required>{config?.lines.map((line) => <option key={line}>{line}</option>)}</select></label>
     <label>Formato<select value={form.format} onChange={(e) => field('format', e.target.value)} required>{config?.formats.map((format) => <option key={format}>{format}</option>)}</select></label>
+    <label>Descripción de envasado<Input value={form.description} onChange={(e) => field('description', e.target.value)} required maxLength={180}/></label>
     {action === 'newOrder' || action === 'correctOrder' ? <label>Motivo / observación<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required={action === 'correctOrder'}/></label> : null}
   </>;
   if (action === 'serviceOut') return <><label>Motivo<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required/></label><label>Observaciones<textarea value={form.notes} onChange={(e) => field('notes', e.target.value)}/></label></>;

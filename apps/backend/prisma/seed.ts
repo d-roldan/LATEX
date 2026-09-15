@@ -13,8 +13,8 @@ const companySettings = {
   requireDeliveryChecklist: true,
   workOrderCodePrefix: 'DISAL',
   defaultWorkOrderPriority: 3,
-  packagingLines: ['Línea 1', 'Línea 20', 'Línea 3'],
-  packagingFormats: ['0,25 L', '0,50 L', '1 L', '4 L', '10 L'],
+  packagingLines: ['A', 'B'],
+  packagingFormats: ['1 L', '4 L', '10 L', '20 L'],
   adjustmentReasons: ['Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad', 'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante', 'Cambio de almacenamiento de producción'],
   plantStageTargetsMinutes: { FABRICANDO: 480, LABORATORIO: 30, AJUSTE: 60, RECHAZADO: 60, APROBADO: 120, ENVASANDO: 360, FUERA_DE_SERVICIO: 480 }
 };

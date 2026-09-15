@@ -16,7 +16,7 @@ describe('PlantService telemetry', () => {
         }
       ])
     },
-    plant: { findFirst: jest.fn().mockResolvedValue({ id: 'plant-latex' }), findFirstOrThrow: jest.fn().mockResolvedValue({ id: 'plant-latex' }), findUnique: jest.fn().mockResolvedValue({ settings: {} }) }
+    plant: { findFirst: jest.fn().mockResolvedValue({ id: 'plant-latex' }), findFirstOrThrow: jest.fn().mockResolvedValue({ id: 'plant-latex' }), findUnique: jest.fn().mockResolvedValue({ settings: {}, code: 'LATEX', finalOperation: 'PACKAGING' }) }
   } as any;
   const config = {
     get: jest.fn((key: string) => key === 'NODE_RED_API_KEY' ? 'integration-secret' : key === 'SYSTEM_OWNER_COMPANY_ID' ? 'company-1' : undefined)
@@ -61,5 +61,13 @@ describe('PlantService telemetry', () => {
     const bounds = (service as any).plantDayBounds('2026-09-03');
     expect(bounds.start.toISOString()).toBe('2026-09-03T03:00:00.000Z');
     expect(bounds.end.toISOString()).toBe('2026-09-04T03:00:00.000Z');
+  });
+
+  it('usa las celdas y formatos vigentes como configuración de Látex', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const result = await (service as any).loadConfig('company-1', 'plant-latex');
+
+    expect(result.lines).toEqual(['A', 'B']);
+    expect(result.formats).toEqual(['1 L', '4 L', '10 L', '20 L']);
   });
 });

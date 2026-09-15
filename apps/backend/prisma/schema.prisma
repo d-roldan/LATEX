@@ -932,8 +932,10 @@ model PackagingOrder {
   tankId           String
   lotId            String
   packagingOrder   String
+  materialCode     String?
   line             String
   format           String
+  description      String
   startedByUserId  String
   finishedByUserId String?
   startedAt        DateTime      @default(now()) @db.Timestamptz(3)

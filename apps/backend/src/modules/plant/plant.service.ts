@@ -30,8 +30,8 @@ type Telemetry = { grossKg: number; netKg?: number; measuredAt: string; received
 // Margen para emisores Node-RED con un pulso de lectura cada 10 segundos.
 const WEIGHT_SIGNAL_TIMEOUT_MS = 30_000;
 
-const LINES = ['Línea 1', 'Línea 20', 'Línea 3'];
-const FORMATS = ['0,25 L', '0,50 L', '1 L', '4 L', '10 L'];
+const LINES = ['A', 'B'];
+const FORMATS = ['1 L', '4 L', '10 L', '20 L'];
 const ADJUSTMENT_REASONS = [
   'Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad',
   'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante',
@@ -134,8 +134,10 @@ export class PlantService {
         specificWeight: tank.activeLot.specificWeight,
         packagingOrders: tank.activeLot.packagingOrders.map((order) => ({
           packagingOrder: order.packagingOrder,
+          materialCode: order.materialCode,
           line: order.line,
           format: order.format,
+          description: order.description,
           startedAt: order.startedAt
         }))
       } : null
@@ -320,7 +322,8 @@ export class PlantService {
       if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
       const order = await tx.packagingOrder.create({ data: {
         companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
-        line: dto.line, format: dto.format, startedByUserId: user.sub
+        materialCode: dto.materialCode, line: dto.line, format: dto.format,
+        description: dto.description.trim(), startedByUserId: user.sub
       }});
       await this.move(tx, tank, 'ENVASANDO', user, tank.activeLotId, `OE ${dto.packagingOrder}`);
       await this.audit(tx, companyId, user, tank.id, tank.activeLotId, 'CREATE', 'PackagingOrder', order.id, null, dto, null);
@@ -338,7 +341,8 @@ export class PlantService {
       await this.closePackaging(tx, tank.id, user.sub);
       const order = await tx.packagingOrder.create({ data: {
         companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
-        line: dto.line, format: dto.format, startedByUserId: user.sub
+        materialCode: dto.materialCode, line: dto.line, format: dto.format,
+        description: dto.description.trim(), startedByUserId: user.sub
       }});
       const changed = await tx.tank.updateMany({ where: { id: tank.id, version: tank.version, state: tank.state }, data: { version: { increment: 1 } } });
       if (changed.count !== 1) throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
@@ -356,7 +360,9 @@ export class PlantService {
       const current = await tx.packagingOrder.findFirst({ where: { tankId, finishedAt: null }, orderBy: { startedAt: 'desc' } });
       if (!current) throw new ConflictException('No existe una OE abierta');
       const after = await tx.packagingOrder.update({ where: { id: current.id }, data: {
-        packagingOrder: dto.packagingOrder, line: dto.line, format: dto.format
+        packagingOrder: dto.packagingOrder, materialCode: dto.materialCode,
+        line: dto.line, format: dto.format,
+        description: dto.description.trim()
       }});
       const changed = await tx.tank.updateMany({ where: { id: tank.id, version: tank.version }, data: { version: { increment: 1 } } });
       if (changed.count !== 1) throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
@@ -474,7 +480,11 @@ export class PlantService {
         startedAt: { lt: toDate },
         OR: fromDate ? [{ endedAt: null }, { endedAt: { gte: fromDate } }] : undefined
       },
-      include: { tank: { select: { number: true, name: true } }, lot: true, user: { select: { fullName: true, username: true } } },
+      include: {
+        tank: { select: { number: true, name: true } },
+        lot: { include: { packagingOrders: { orderBy: { startedAt: 'desc' } } } },
+        user: { select: { fullName: true, username: true } }
+      },
       orderBy: { startedAt: 'desc' }, take: 1000
     });
     const now = new Date();
@@ -654,7 +664,7 @@ export class PlantService {
 
   private async validatePackaging(companyId: string, dto: PackagingDto, plantId?: string) {
     const config = await this.loadConfig(companyId, plantId);
-    if (!config.lines.includes(dto.line)) throw new BadRequestException('Línea no configurada');
+    if (!config.lines.includes(dto.line)) throw new BadRequestException('Celda no configurada');
     if (!config.formats.includes(dto.format)) throw new BadRequestException('Formato no configurado');
   }
 
