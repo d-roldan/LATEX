@@ -46,7 +46,7 @@ const emptyForm = {
 
 export function PlantBoardPage({ sector }: { sector: Sector }) {
   const location = useLocation();
-  const { active } = useActivePlant();
+  const { active } = useActivePlant({ enabled: sector !== 'monitoreo' });
   const plantCode = active?.code ?? new URLSearchParams(location.search).get('plant')?.toUpperCase() ?? 'LATEX';
   const base = `/plants/${plantCode}`;
   const navigationState = location.state as { highlightTankId?: string; highlightNonce?: number } | null;

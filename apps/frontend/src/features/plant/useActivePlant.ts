@@ -5,12 +5,12 @@ import { api } from '../../shared/api/http';
 
 export interface AuthorizedPlant { id: string; code: string; name: string; displayOrder: number; finalOperation: 'PACKAGING' | 'TRANSFER' }
 
-export function useActivePlant() {
+export function useActivePlant({ enabled = true }: { enabled?: boolean } = {}) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const client = useQueryClient();
-  const plants = useQuery({ queryKey: ['authorized-plants'], queryFn: () => api.get<AuthorizedPlant[]>('/plants').then(r => r.data), staleTime: 60_000 });
+  const plants = useQuery({ queryKey: ['authorized-plants'], queryFn: () => api.get<AuthorizedPlant[]>('/plants').then(r => r.data), staleTime: 60_000, enabled });
   const requested = params.get('plant')?.toUpperCase();
   const active = useMemo(() => plants.data?.find(p => p.code === requested) ?? plants.data?.find(p => p.code === localStorage.getItem('disal.activePlant')) ?? plants.data?.[0], [plants.data, requested]);
 
