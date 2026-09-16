@@ -8,6 +8,7 @@ import { Input } from '../../shared/ui/Input';
 import { useLocation } from 'react-router-dom';
 import { useHighlightTarget } from '../../shared/utils/highlightTarget';
 import { useActivePlant } from './useActivePlant';
+import type { PublicPlant } from './plantCatalog';
 
 type Sector = 'fabricacion' | 'laboratorio' | 'envasado' | 'monitoreo';
 type TankState = 'VACIO' | 'FABRICANDO' | 'LABORATORIO' | 'AJUSTE' | 'RECHAZADO' | 'APROBADO' | 'ENVASANDO' | 'TRASVASANDO' | 'FUERA_DE_SERVICIO';
@@ -44,10 +45,11 @@ const emptyForm = {
   plannedQuantityKg: '', producedKg: '', wasteKg: '', producedUnits: ''
 };
 
-export function PlantBoardPage({ sector }: { sector: Sector }) {
+export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; publicPlant?: PublicPlant }) {
   const location = useLocation();
   const { active } = useActivePlant({ enabled: sector !== 'monitoreo' });
-  const plantCode = active?.code ?? new URLSearchParams(location.search).get('plant')?.toUpperCase() ?? 'LATEX';
+  const plantCode = active?.code ?? publicPlant?.code ?? 'LATEX';
+  const plantName = active?.name ?? publicPlant?.name ?? plantCode;
   const base = `/plants/${plantCode}`;
   const navigationState = location.state as { highlightTankId?: string; highlightNonce?: number } | null;
   useHighlightTarget(navigationState?.highlightTankId ? `tank-${navigationState.highlightTankId}` : null, `${location.key}:${navigationState?.highlightNonce ?? ''}`);
@@ -155,7 +157,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
   return (
     <div className={`plant-page plant-page--${sector} plant-page--${plantCode.toLowerCase()}`}>
       <header className="plant-page-head">
-        <div><h1>{titles[sector]}</h1></div>
+        <div><p>PLANTA {plantName} · {plantCode}</p><h1>{titles[sector]}</h1></div>
         <div className="plant-health"><Radio size={16}/><span>{tanks.data?.some(t => t.telemetryMode === 'AUTOMATIC') ? `${onlineCount}/${tanks.data.filter(t => t.telemetryMode === 'AUTOMATIC').length} balanzas en línea` : tanks.data?.some(t => t.telemetryMode === 'PENDING') ? 'Mapeo de peso pendiente' : 'Sin medición de peso'}</span>{sector !== 'monitoreo' ? <button onClick={() => tanks.refetch()} aria-label="Actualizar estado"><RefreshCw size={16}/></button> : null}</div>
       </header>
       {tanks.isError ? <div className="plant-error"><AlertTriangle/> No se pudo leer el estado de la planta.</div> : null}
@@ -200,7 +202,7 @@ export function PlantBoardPage({ sector }: { sector: Sector }) {
         open={Boolean(selection)}
         onOpenChange={(open) => !open && closeDialog()}
         disableClose={mutation.isPending}
-        title={selection ? confirming ? `Confirmar operación · ${active?.name ?? plantCode}` : `${actionTitle(selection.action)} · ${selection.tank.name} · ${active?.name ?? plantCode}` : ''}
+        title={selection ? confirming ? `Confirmar operación · ${plantName}` : `${actionTitle(selection.action)} · ${selection.tank.name} · ${plantName}` : ''}
         description={confirming ? 'Esta acción modifica el estado operativo y quedará registrada.' : 'Revisá los datos. El backend volverá a validar rol, estado y versión antes de guardar.'}
       >
         {confirming && selection ? (

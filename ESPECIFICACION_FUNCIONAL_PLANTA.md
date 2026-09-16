@@ -84,7 +84,7 @@ Toda operación que modifica información debe:
 
 Si otra operación modificó el tanque primero, la solicitud desactualizada responde `409` y la pantalla refresca los datos.
 
-Las confirmaciones se muestran mediante diálogos propios de la aplicación. No se permiten alertas o confirmaciones nativas del navegador.
+Las confirmaciones se muestran mediante diálogos propios de la aplicación. No se permiten alertas o confirmaciones nativas del navegador. Al abrirse, el diálogo lleva el foco al primer control útil, contiene el recorrido con `Tab` y `Shift+Tab`, permite cerrar con `Escape` cuando la operación no está guardándose y devuelve el foco al control que lo abrió.
 
 ## 7. Fabricación
 
@@ -201,13 +201,17 @@ Los tiempos objetivo se configuran por estado en minutos. El 80 % del objetivo g
 - Menú lateral desplegable en PC y pantallas pequeñas.
 - Botón de menú alineado verticalmente con el título.
 - Botón para entrar y salir de pantalla completa.
+- Planta activa identificada por nombre y código en el encabezado.
+- Vista pública `/tv` sin planta predeterminada: requiere seleccionar o conservar `?plant=LATEX`, `TERPLAST`, `SLURRY` o `ENDUIDO`.
 - Nueve tarjetas y reloj visibles en Full HD sin scroll vertical.
+- Controles operativos principales con objetivos táctiles de al menos 44 px y textos secundarios ampliados para lectura a distancia.
 - Hora/minutos principales, segundos secundarios, fecha y zona `America/Buenos_Aires`.
 - Acciones visibles sólo en el panel responsable.
 - Botones TARA y CERO ausentes.
 - Confirmación interna antes de toda operación de estado.
 - Duración visible del estado actual y semáforo por tiempo objetivo.
 - Pantalla de Jefatura preparada para reunión diaria, con exportación y cierre reproducible.
+- Pantallas principales cargadas de forma diferida, con un estado accesible mientras se descarga cada módulo.
 
 ## 14. Seguridad
 

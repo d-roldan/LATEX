@@ -1,6 +1,6 @@
 # Requisitos funcionales · Planta de Látex DISAL
 
-Estado de referencia: 6 de septiembre de 2026.
+Estado de referencia: 15 de septiembre de 2026.
 
 Este documento separa el alcance vigente de la evolución recomendada. Los requisitos objetivo requieren relevamiento y validación con Fabricación, Laboratorio, Envasado, Automatización y Jefatura antes de implementarse.
 
@@ -13,6 +13,9 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 - Caminos controlados de ajuste, rechazo y fuera de servicio.
 - Pantallas separadas para Fabricación, Laboratorio y Envasado.
 - Confirmaciones internas, control de versión y autorización en backend.
+- Vista pública de TV configurada mediante una planta explícita en la URL, sin fallback silencioso a Látex.
+- Nombre y código de la planta visibles en las vistas operativas y de monitoreo.
+- Diálogos con foco inicial, recorrido de teclado contenido y devolución del foco al control de origen.
 - Peso en vivo desde Node-RED sin persistencia de muestras continuas.
 - Foto del peso únicamente al confirmar un cambio de etapa.
 
@@ -57,7 +60,7 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 - La grilla se actualiza por consulta periódica cada 2 segundos. Las notificaciones se consultan cada 3 segundos.
 - El último peso recibido vive en memoria del backend y se pierde al reiniciarlo; la próxima lectura de Node-RED vuelve a poblarlo.
 - InfluxDB, PLC y SCADA aún no están integrados al modelo ampliado de receta, pasos y cargas.
-- La pantalla TV es pública dentro de la red donde se publique el servicio y muestra datos operativos de OF, material y OE.
+- La pantalla TV es pública dentro de la red donde se publique el servicio y muestra datos operativos de OF, material y OE. Cada dispositivo debe guardar una dirección `/tv?plant=CODIGO`; `/tv` sin planta abre solamente la selección de configuración.
 - Un aviso leído no tiene estados de aceptación, atención o resolución.
 - El cierre de envasado declara el tanque vacío por operación humana; no existe todavía una validación automática contra peso remanente.
 - La relación persistida es una OE asociada a un lote. Debe confirmarse si la operación real admite relaciones uno-a-varios o varios-a-uno.

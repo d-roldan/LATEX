@@ -231,6 +231,29 @@ button:disabled {
 .ds-button--sm { min-height: var(--button-height-sm); padding-inline: var(--spacing-md); font-size: var(--font-size-xs); }
 .ds-button--lg { min-height: var(--button-height-lg); padding-inline: var(--spacing-xl); font-size: var(--font-size-md); }
 
+.route-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--spacing-md);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+}
+
+.route-loading__indicator {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-info);
+  border-radius: 50%;
+  animation: route-loading-spin 0.8s linear infinite;
+}
+
+@keyframes route-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
 .panel,
 .ds-card {
   border: 1px solid var(--card-border);
@@ -553,6 +576,7 @@ button.panel:hover,
   border-color: color-mix(in srgb, var(--color-danger) 70%, var(--color-border));
 }
 
+/* El acceso se define sólo en este archivo para evitar cascadas heredadas. */
 .login-page {
   position: relative;
   min-height: 100vh;
@@ -673,9 +697,11 @@ button.panel:hover,
 }
 
 @media (max-width: 760px) {
-  .login-shell { grid-template-columns: 1fr; padding: var(--spacing-xl); }
+  .login-page { place-items: start center; overflow-y: auto; padding-top: clamp(5rem, 16vh, 8rem); }
+  .login-shell { grid-template-columns: 1fr; padding: var(--spacing-lg); }
   .login-brand { display: none; }
-  .login-form { padding: var(--spacing-xl); }
+  .login-form { min-width: 0; padding: var(--spacing-xl); }
+  .login-form .ds-input { min-width: 0; }
   .login-theme-toggle span { display: none; }
   .login-theme-toggle { width: 2.75rem; padding-inline: 0; }
 }

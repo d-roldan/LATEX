@@ -17,7 +17,7 @@ Se almacenan únicamente la carcasa de la aplicación, el manifiesto, los iconos
 
 ## Actualizaciones
 
-El HTML usa red primero y los bundles Vite tienen nombres versionados. El navegador consulta actualizaciones del service worker al cargar y cada hora, pero no fuerza una recarga ni reemplaza una sesión activa. La versión nueva se activa cuando se cierran las ventanas anteriores de la aplicación.
+El HTML usa red primero y los bundles Vite tienen nombres versionados. El navegador consulta actualizaciones del service worker al cargar y cada hora. Una versión nueva usa `skipWaiting`, toma control de las ventanas abiertas y provoca una única recarga automática cuando cambia el controlador, evitando que permanezcan formularios o bundles anteriores en uso.
 
 ## Producción HTTPS
 

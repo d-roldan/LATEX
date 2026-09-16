@@ -20,7 +20,7 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 - Pesos conservados sólo en memoria: las muestras de balanza no se escriben en PostgreSQL.
 - Interfaz responsive, menú lateral desplegable, confirmaciones internas y modo pantalla completa.
 - Vista Full HD de nueve tanques y reloj sin desplazamiento vertical.
-- Vista pública de sólo lectura para televisores en `/tv`.
+- Vista pública de sólo lectura para televisores, con planta explícita en `/tv?plant=CODIGO`.
 - Notificaciones por sector con sonido configurable, navegación y resaltado del tanque involucrado.
 - Duración visible por estado, semáforos configurables y línea temporal completa por OF.
 - Resumen diario para reunión, cierre persistido y exportación PDF/Excel.
@@ -62,6 +62,19 @@ VACÍO ↔ FUERA DE SERVICIO
 | `MONITOREO` | Consultar planta e históricos sin modificar el proceso |
 | `JEFATURA` | Resumen diario, monitoreo, historial, cierres y exportaciones sin operar tanques |
 | `ADMIN` | Acceso completo y administración de usuarios |
+
+## Pantalla pública para televisores
+
+La vista `/tv` no selecciona una planta por omisión. Al abrirla sin parámetros muestra las plantas disponibles para configurar el televisor. La dirección elegida debe conservarse como favorito o página de inicio del dispositivo:
+
+| Planta | Dirección |
+|---|---|
+| Látex | `/tv?plant=LATEX` |
+| Terplast | `/tv?plant=TERPLAST` |
+| Slurry | `/tv?plant=SLURRY` |
+| Enduido | `/tv?plant=ENDUIDO` |
+
+El nombre y el código de la planta permanecen visibles en el encabezado. `/monitoreo?plant=CODIGO` redirige a la misma pantalla sin perder el parámetro.
 
 ## Tecnología
 
@@ -133,7 +146,7 @@ El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **
 - [Contrato detallado de Node-RED](docs/NODE_RED_PESOS.md)
 - [Consultas históricas PostgreSQL](docs/CONSULTAS_HISTORICAS.md)
 - [API y transiciones operativas](docs/OPERACION_PLANTA.md)
-- [Notas de versión V0.0.20](docs/RELEASE_NOTES_V0.0.20.md)
+- [Notas de versión V0.0.22](docs/RELEASE_NOTES_V0.0.22.md)
 
 ## Verificación
 

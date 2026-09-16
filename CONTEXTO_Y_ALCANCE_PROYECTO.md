@@ -152,12 +152,12 @@ VACIO ↔ FUERA_DE_SERVICIO
 - Fabricación.
 - Laboratorio.
 - Envasado.
-- Monitoreo de planta.
+- Monitoreo de planta y vista pública para televisores con planta explícita en la URL.
 - Historial de estados y línea temporal por lote.
 - Resumen diario para Jefatura.
 - Administración de usuarios.
 
-La interfaz está preparada para Full HD, tiene menú desplegable, pantalla completa, confirmaciones internas y actualización frecuente de pesos.
+La interfaz está preparada para Full HD, tiene menú desplegable, pantalla completa, confirmaciones internas y actualización frecuente de pesos. La planta activa se identifica por nombre y código; `/tv` requiere configurarla mediante `?plant=CODIGO` para evitar que un televisor muestre otra operación por omisión. Los diálogos conservan el foco dentro de la interacción y las pantallas principales se descargan como módulos independientes.
 
 ## 7. Arquitectura actual
 
@@ -699,4 +699,3 @@ El próximo documento técnico debería ser la **Matriz de Integración PLC/SCAD
 8. Criterios de timestamps, calidad, reintentos e idempotencia.
 
 Con esa matriz se podrá cerrar el modelo de datos definitivo y especificar los endpoints de integración sin hacer suposiciones sobre el comportamiento del PLC.
-

@@ -1140,41 +1140,6 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.login-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-}
-
-.login-shell {
-  width: min(1040px, 100%);
-  display: grid;
-  grid-template-columns: 1.08fr 0.92fr;
-  gap: 1.08rem;
-}
-
-.login-brand {
-  display: grid;
-  gap: 0.75rem;
-  align-content: start;
-}
-
-.login-brand h1 {
-  font-size: clamp(1.5rem, 2.2vw, 2rem);
-}
-
-.login-brand p,
-.login-form p {
-  color: var(--ink-soft);
-  line-height: 1.56;
-}
-
-.login-form {
-  display: grid;
-  gap: 0.78rem;
-}
-
 .module-list {
   display: grid;
   gap: 0.52rem;
@@ -1590,9 +1555,6 @@ button:disabled {
     display: block;
   }
 
-  .login-shell {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {

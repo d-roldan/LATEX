@@ -25,6 +25,9 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 
 ## Historial de versiones
 
+- [V0.0.22](RELEASE_NOTES_V0.0.22.md) — legibilidad, TV por planta, accesibilidad de diálogos y carga diferida.
+- [V0.0.20](RELEASE_NOTES_V0.0.20.md) — datos propios de las órdenes de envasado y actualización inmediata de la PWA.
+- [V0.0.19](RELEASE_NOTES_V0.0.19.md) — temas claro/oscuro y contraste de la interfaz industrial.
 - [V0.0.18](RELEASE_NOTES_V0.0.18.md) — candidata multiplanta; no desplegada en producción.
 - [V0.0.17](RELEASE_NOTES_V0.0.17.md) — mejoras visuales y simplificación del inicio de fabricación.
 - [V0.0.16](RELEASE_NOTES_V0.0.16.md) — notificaciones entre sectores y pantalla TV.

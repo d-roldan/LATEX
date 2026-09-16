@@ -189,6 +189,7 @@ El alcance es estado instantáneo y fotografías de peso en transiciones. No int
 - [x] Ajustar TV, exportaciones, historial, leyendas, semáforos y objetivos para Trasvase y equipos sin telemetría.
 - [x] Calcular estado de balanzas sólo sobre sensores habilitados; si no hay sensores, indicar «Sin medición de peso» en lugar de una falla.
 - [x] Identificar planta y equipo en confirmaciones y notificaciones para reducir errores de contexto.
+- [x] Exigir planta explícita en la URL de TV, ofrecer una pantalla inicial de configuración y conservar el parámetro al redirigir desde `/monitoreo`.
 
 Salida: recorrido completo por las cuatro plantas en las vistas operativa, TV e historial.
 

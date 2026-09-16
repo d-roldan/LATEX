@@ -103,7 +103,7 @@ export function LoginPage() {
               type="text"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
-              placeholder="Nombre Apellido o correo@empresa.com"
+              placeholder="Usuario o correo corporativo"
               autoComplete="username"
               required
             />
