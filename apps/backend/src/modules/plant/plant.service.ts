@@ -12,6 +12,7 @@ import { JwtUser } from '../../common/auth/jwt-user.interface';
 import {
   CorrectLotDto,
   CorrectPackagingDto,
+  CorrectQualityAdjustmentDto,
   DailyClosureDto,
   FinishPackagingDto,
   PackagingDto,
@@ -155,7 +156,11 @@ export class PlantService {
         activeLot: {
           include: {
             packagingOrders: { where: { finishedAt: null }, orderBy: { startedAt: 'desc' }, take: 1 },
-            qualityDecisions: { orderBy: { createdAt: 'desc' }, take: 1 }
+            qualityDecisions: {
+              include: { adjustmentItems: { orderBy: { position: 'asc' } } },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
           }
         }
       },
@@ -173,7 +178,15 @@ export class PlantService {
         capacityKg: tank.capacityKg === null ? null : Number(tank.capacityKg),
         activeLot: tank.activeLot ? {
           ...tank.activeLot,
-          specificWeight: tank.activeLot.specificWeight === null ? null : Number(tank.activeLot.specificWeight)
+          specificWeight: tank.activeLot.specificWeight === null ? null : Number(tank.activeLot.specificWeight),
+          qualityDecisions: tank.activeLot.qualityDecisions.map((decision) => ({
+            ...decision,
+            specificWeight: decision.specificWeight === null ? null : Number(decision.specificWeight),
+            adjustmentItems: decision.adjustmentItems.map((item) => ({
+              ...item,
+              quantityKg: Number(item.quantityKg)
+            }))
+          }))
         } : null,
         stateStartedAt: currentPeriod?.startedAt ?? tank.updatedAt,
         stateElapsedSeconds,
@@ -279,9 +292,15 @@ export class PlantService {
     if (dto.result === 'APROBADO' && (!dto.specificWeight || dto.specificWeight <= 0)) {
       throw new BadRequestException('El peso específico es obligatorio para aprobar');
     }
-    if (dto.result === 'AJUSTE' && !dto.reason) throw new BadRequestException('Seleccioná un motivo de ajuste');
+    if (dto.result === 'AJUSTE' && !dto.adjustmentReasons?.length) throw new BadRequestException('Seleccioná al menos un motivo de ajuste');
     if (dto.result.startsWith('RECHAZADO') && !dto.reason) throw new BadRequestException('Indicá el motivo del rechazo');
     if (dto.result === 'RECHAZADO_RECUPERAR' && !dto.recoveryAction) throw new BadRequestException('Indicá el destino de recuperación');
+
+    const adjustmentReasons = dto.result === 'AJUSTE'
+      ? [...new Set(dto.adjustmentReasons!.map((reason) => reason.trim()).filter(Boolean))]
+      : [];
+    if (dto.result === 'AJUSTE' && !adjustmentReasons.length) throw new BadRequestException('Seleccioná al menos un motivo de ajuste');
+    const decisionReason = dto.result === 'AJUSTE' ? adjustmentReasons.join(', ') : dto.reason;
 
     return this.prisma.$transaction(async (tx) => {
       const tank = await this.findTank(tx, companyId, tankId);
@@ -291,10 +310,17 @@ export class PlantService {
       const decision = await tx.qualityDecision.create({ data: {
         companyId, plantId: tank.plantId, lotId: tank.activeLotId, result: dto.result as QualityResult,
         employeeNumber: dto.employeeNumber, specificWeight: dto.specificWeight,
-        reason: dto.reason, recoveryAction: dto.recoveryAction, userId: user.sub
+        reason: decisionReason, adjustmentReasons, recoveryAction: dto.recoveryAction, userId: user.sub,
+        adjustmentItems: dto.result === 'AJUSTE' ? {
+          create: dto.adjustments!.map((item, position) => ({
+            position,
+            materialCode: item.materialCode,
+            quantityKg: item.quantityKg
+          }))
+        } : undefined
       }});
       await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { specificWeight: state === 'APROBADO' ? dto.specificWeight : null } });
-      await this.move(tx, tank, state, user, tank.activeLotId, dto.reason ?? dto.result);
+      await this.move(tx, tank, state, user, tank.activeLotId, decisionReason ?? dto.result);
       if (state === 'APROBADO') {
         await this.notifications.notifyTankAction(tx, {
           companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'ENVASADO',
@@ -305,10 +331,76 @@ export class PlantService {
         await this.notifications.notifyTankAction(tx, {
           companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'FABRICACION',
           title: state === 'AJUSTE' ? 'Tanque requiere ajuste' : 'Tanque rechazado por Laboratorio',
-          message: `${tank.name} requiere intervención de Fabricación${dto.reason ? `: ${dto.reason}` : '.'}`
+          message: `${tank.name} requiere intervención de Fabricación${decisionReason ? `: ${decisionReason}` : '.'}`
         });
       }
-      await this.audit(tx, companyId, user, tank.id, tank.activeLotId, 'QUALITY_DECISION', 'QualityDecision', decision.id, null, dto, dto.reason);
+      await this.audit(tx, companyId, user, tank.id, tank.activeLotId, 'QUALITY_DECISION', 'QualityDecision', decision.id, null, dto, decisionReason);
+      return { ok: true };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async correctQualityAdjustment(companyId: string, tankId: string, user: JwtUser, dto: CorrectQualityAdjustmentDto) {
+    const adjustmentReasons = [...new Set(dto.adjustmentReasons.map((reason) => reason.trim()).filter(Boolean))];
+    if (!adjustmentReasons.length) throw new BadRequestException('Seleccioná al menos un motivo de ajuste');
+    const decisionReason = adjustmentReasons.join(', ');
+
+    return this.prisma.$transaction(async (tx) => {
+      const tank = await this.findTank(tx, companyId, tankId);
+      this.assertTank(tank, 'AJUSTE', dto.version);
+      if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
+
+      const current = await tx.qualityDecision.findFirst({
+        where: { companyId, lotId: tank.activeLotId, result: 'AJUSTE' },
+        include: { adjustmentItems: { orderBy: { position: 'asc' } } },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (!current) throw new ConflictException('No existe una solicitud de ajuste activa para corregir');
+
+      const changed = await tx.tank.updateMany({
+        where: { id: tank.id, state: 'AJUSTE', version: dto.version },
+        data: { version: { increment: 1 } }
+      });
+      if (changed.count !== 1) throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
+
+      const before = {
+        reason: current.reason,
+        adjustmentReasons: current.adjustmentReasons,
+        adjustments: current.adjustmentItems.map((item) => ({
+          materialCode: item.materialCode,
+          quantityKg: Number(item.quantityKg)
+        }))
+      };
+      const decision = await tx.qualityDecision.update({
+        where: { id: current.id },
+        data: {
+          reason: decisionReason,
+          adjustmentReasons,
+          adjustmentItems: {
+            deleteMany: {},
+            create: dto.adjustments.map((item, position) => ({
+              position,
+              materialCode: item.materialCode,
+              quantityKg: item.quantityKg
+            }))
+          }
+        },
+        include: { adjustmentItems: { orderBy: { position: 'asc' } } }
+      });
+      const after = {
+        reason: decision.reason,
+        adjustmentReasons: decision.adjustmentReasons,
+        adjustments: decision.adjustmentItems.map((item) => ({
+          materialCode: item.materialCode,
+          quantityKg: Number(item.quantityKg)
+        }))
+      };
+
+      await this.notifications.notifyTankAction(tx, {
+        companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'FABRICACION',
+        title: 'Solicitud de ajuste actualizada',
+        message: `${tank.name}: Laboratorio corrigió la solicitud de ajuste (${decisionReason}).`
+      });
+      await this.audit(tx, companyId, user, tank.id, tank.activeLotId, 'CORRECTION', 'QualityDecision', decision.id, before, after, 'Corrección de solicitud de ajuste');
       return { ok: true };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
@@ -500,7 +592,13 @@ export class PlantService {
       include: {
         tank: { select: { name: true, number: true } },
         stateHistory: { include: { user: { select: { fullName: true, username: true } } }, orderBy: { startedAt: 'asc' } },
-        qualityDecisions: { include: { user: { select: { fullName: true } } }, orderBy: { createdAt: 'asc' } },
+        qualityDecisions: {
+          include: {
+            user: { select: { fullName: true } },
+            adjustmentItems: { orderBy: { position: 'asc' } }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
         packagingOrders: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } },
         transferOperations: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } }
       }
@@ -516,6 +614,14 @@ export class PlantService {
         ...row,
         weightKg: row.weightKg === null ? null : Number(row.weightKg),
         durationSeconds: row.durationSeconds ?? Math.max(0, Math.floor(((row.endedAt ?? now).getTime() - row.startedAt.getTime()) / 1000))
+      })),
+      qualityDecisions: lot.qualityDecisions.map((decision) => ({
+        ...decision,
+        specificWeight: decision.specificWeight === null ? null : Number(decision.specificWeight),
+        adjustmentItems: decision.adjustmentItems.map((item) => ({
+          ...item,
+          quantityKg: Number(item.quantityKg)
+        }))
       })),
       packagingOrders: lot.packagingOrders.map((order) => ({
         ...order,

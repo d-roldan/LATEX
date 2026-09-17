@@ -25,6 +25,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 
 ## Historial de versiones
 
+- [V0.0.23](RELEASE_NOTES_V0.0.23.md) — tarjetas operativas, SEMI/Material y solicitudes de ajuste editables.
 - [V0.0.22](RELEASE_NOTES_V0.0.22.md) — legibilidad, TV por planta, accesibilidad de diálogos y carga diferida.
 - [V0.0.20](RELEASE_NOTES_V0.0.20.md) — datos propios de las órdenes de envasado y actualización inmediata de la PWA.
 - [V0.0.19](RELEASE_NOTES_V0.0.19.md) — temas claro/oscuro y contraste de la interfaz industrial.

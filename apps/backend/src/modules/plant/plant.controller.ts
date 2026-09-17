@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { JwtUser } from '../../common/auth/jwt-user.interface';
 import { Roles } from '../../common/auth/roles.decorator';
 import { RolesGuard } from '../../common/auth/roles.guard';
-import { CorrectLotDto, CorrectPackagingDto, DailyClosureDto, FinishPackagingDto, PackagingDto, QualityDecisionDto, ServiceDto, StageTargetsDto, StartManufacturingDto, VersionedActionDto, WeightBatchDto } from './dto/plant.dto';
+import { CorrectLotDto, CorrectPackagingDto, CorrectQualityAdjustmentDto, DailyClosureDto, FinishPackagingDto, PackagingDto, QualityDecisionDto, ServiceDto, StageTargetsDto, StartManufacturingDto, VersionedActionDto, WeightBatchDto } from './dto/plant.dto';
 import { PlantService } from './plant.service';
 
 @Controller('plant')
@@ -47,6 +47,8 @@ export class PlantScopedController {
   async lab(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:VersionedActionDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.sendToLab(u.companyId,id,u,d); }
   @Post(':plantCode/tanks/:id/quality') @Roles('LABORATORIO','ADMIN')
   async quality(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:QualityDecisionDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.quality(u.companyId,id,u,d); }
+  @Patch(':plantCode/tanks/:id/quality/adjustment') @Roles('LABORATORIO','ADMIN')
+  async correctAdjustment(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:CorrectQualityAdjustmentDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.correctQualityAdjustment(u.companyId,id,u,d); }
   @Post(':plantCode/tanks/:id/packaging') @Roles('ENVASADO','ADMIN')
   async packaging(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:PackagingDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.startPackaging(u.companyId,id,u,d); }
   @Post(':plantCode/tanks/:id/packaging/new-order') @Roles('ENVASADO','ADMIN')
@@ -102,6 +104,9 @@ export class PlantProtectedController {
 
   @Post('tanks/:id/quality') @Roles('LABORATORIO', 'ADMIN')
   quality(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: QualityDecisionDto) { return this.service.quality(user.companyId, id, user, dto); }
+
+  @Patch('tanks/:id/quality/adjustment') @Roles('LABORATORIO', 'ADMIN')
+  correctAdjustment(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: CorrectQualityAdjustmentDto) { return this.service.correctQualityAdjustment(user.companyId, id, user, dto); }
 
   @Post('tanks/:id/packaging') @Roles('ENVASADO', 'ADMIN')
   packaging(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: PackagingDto) { return this.service.startPackaging(user.companyId, id, user, dto); }

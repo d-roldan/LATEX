@@ -146,7 +146,7 @@ El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **
 - [Contrato detallado de Node-RED](docs/NODE_RED_PESOS.md)
 - [Consultas históricas PostgreSQL](docs/CONSULTAS_HISTORICAS.md)
 - [API y transiciones operativas](docs/OPERACION_PLANTA.md)
-- [Notas de versión V0.0.22](docs/RELEASE_NOTES_V0.0.22.md)
+- [Notas de versión V0.0.23](docs/RELEASE_NOTES_V0.0.23.md)
 
 ## Verificación
 
@@ -163,7 +163,7 @@ Estado verificado de esta versión:
 
 - Backend compilado.
 - Frontend compilado para producción.
-- 27 pruebas automatizadas aprobadas.
+- 52 pruebas automatizadas aprobadas.
 - Stack Docker operativo y API saludable.
 
 ## Seguridad y respaldo

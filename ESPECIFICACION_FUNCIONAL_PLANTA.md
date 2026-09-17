@@ -90,7 +90,7 @@ Las confirmaciones se muestran mediante diálogos propios de la aplicación. No 
 
 ### 7.1 Inicio
 
-Sólo puede iniciarse desde `VACIO`. El formulario requiere OF de exactamente 8 dígitos, código de material de exactamente 6 dígitos y descripción de hasta 180 caracteres.
+Sólo puede iniciarse desde `VACIO`. El formulario requiere OF de exactamente 8 dígitos, código de SEMI de exactamente 6 dígitos y descripción de hasta 180 caracteres.
 
 Al confirmar se crea un `ProductionLot`, se asocia como lote activo, el tanque cambia a `FABRICANDO`, se abre el histórico y se audita la creación.
 
@@ -104,7 +104,7 @@ Fabricación puede corregir OF, material o descripción sin crear un lote nuevo.
 
 ### 7.4 Rechazado y servicio
 
-Un tanque `RECHAZADO` puede registrarse como vaciado, finalizando el lote y volviendo a `VACIO`. Desde `VACIO` se puede marcar `FUERA_DE_SERVICIO` con motivo obligatorio y observaciones opcionales; desde allí sólo puede volver a servicio.
+Un tanque `RECHAZADO` puede registrarse como vaciado, finalizando el lote y volviendo a `VACIO`. Desde `VACIO` se puede marcar `FUERA_DE_SERVICIO` con motivo obligatorio, limitado a `Mantenimiento` o `Lavado`, y observaciones opcionales de hasta 500 caracteres; desde allí sólo puede volver a servicio.
 
 ## 8. Laboratorio
 
@@ -116,7 +116,7 @@ Requiere legajo de exactamente 6 dígitos y peso específico mayor que cero, con
 
 ### 8.2 Ajuste
 
-El resultado `AJUSTE` requiere un motivo de proceso. Fabricación realiza la corrección y devuelve el tanque a Laboratorio.
+El resultado `AJUSTE` requiere seleccionar uno o más motivos de proceso y cargar una lista de uno o más materiales. Cada material registra su número y la cantidad positiva en kilogramos, con hasta 3 decimales. Laboratorio puede agregar tantos renglones como necesite y, mientras el tanque permanezca en `AJUSTE`, puede reabrir la solicitud en un diálogo con los datos precargados para corregir motivos, materiales o cantidades. La corrección reemplaza la solicitud vigente, incrementa la versión operativa y queda auditada. La tarjeta de Fabricación muestra los motivos y la lista vigentes. Fabricación realiza la corrección y devuelve el tanque a Laboratorio.
 
 ### 8.3 Rechazo
 
@@ -126,7 +126,7 @@ Resultados admitidos: `RECHAZADO_RECUPERAR` y `RECHAZADO_DESTRUIR`. Para recuper
 
 ### 9.1 Inicio
 
-Sólo puede iniciarse desde `APROBADO`. Requiere OE de exactamente 8 dígitos, línea de hasta 80 caracteres y formato de hasta 40 caracteres. Se crea una `PackagingOrder`, se registra usuario/hora y el tanque cambia a `ENVASANDO`.
+Sólo puede iniciarse desde `APROBADO`. Requiere OE de 6 u 8 dígitos, material de 4 o 5 dígitos, línea de hasta 80 caracteres y formato de hasta 40 caracteres. Se crea una `PackagingOrder`, se registra usuario/hora y el tanque cambia a `ENVASANDO`. La tarjeta conserva visible el SEMI informado por Fabricación y muestra también el material de Envasado.
 
 ### 9.2 Nueva OE y corrección
 

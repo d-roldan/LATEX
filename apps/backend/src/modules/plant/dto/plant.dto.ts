@@ -5,6 +5,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsISO8601,
@@ -13,6 +14,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested
 } from 'class-validator';
 
@@ -32,18 +34,44 @@ export class VersionedActionDto {
   @IsOptional() @IsString() @MaxLength(500) reason?: string;
 }
 
+export class QualityAdjustmentItemDto {
+  @Matches(/^\d{1,20}$/, { message: 'El número de material debe contener sólo dígitos' })
+  materialCode!: string;
+  @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.001) quantityKg!: number;
+}
+
 export class QualityDecisionDto extends VersionedActionDto {
   @IsIn(['APROBADO', 'AJUSTE', 'RECHAZADO_RECUPERAR', 'RECHAZADO_DESTRUIR']) result!: string;
   @Matches(/^\d{6}$/) employeeNumber!: string;
   @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.001) specificWeight?: number;
   @IsOptional() @IsString() @MaxLength(180) recoveryAction?: string;
+  @ValidateIf((dto: QualityDecisionDto) => dto.result === 'AJUSTE')
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20)
+  @IsString({ each: true }) @IsNotEmpty({ each: true }) @MaxLength(180, { each: true })
+  adjustmentReasons?: string[];
+  @ValidateIf((dto: QualityDecisionDto) => dto.result === 'AJUSTE')
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
+  @ValidateNested({ each: true }) @Type(() => QualityAdjustmentItemDto)
+  adjustments?: QualityAdjustmentItemDto[];
+}
+
+export class CorrectQualityAdjustmentDto {
+  @IsInt() @Min(0) version!: number;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20)
+  @IsString({ each: true }) @IsNotEmpty({ each: true }) @MaxLength(180, { each: true })
+  adjustmentReasons!: string[];
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
+  @ValidateNested({ each: true }) @Type(() => QualityAdjustmentItemDto)
+  adjustments!: QualityAdjustmentItemDto[];
 }
 
 export class PackagingDto extends VersionedActionDto {
-  @Matches(/^\d{6}$/, { message: 'La orden de envasado debe tener exactamente 6 dígitos' })
+  @Matches(/^\d{6}(?:\d{2})?$/, {
+    message: 'La orden de envasado debe tener 6 u 8 dígitos'
+  })
   packagingOrder!: string;
   @Transform(({ value }) => typeof value === 'string' ? value.replace(/\s+/g, '') : value)
-  @Matches(/^\d{4}$/, { message: 'El material de envasado debe tener exactamente 4 dígitos' })
+  @Matches(/^\d{4,5}$/, { message: 'El material de envasado debe tener 4 o 5 dígitos' })
   materialCode!: string;
   @IsString() @MaxLength(80) line!: string;
   @IsString() @MaxLength(40) format!: string;
@@ -75,8 +103,12 @@ export class CorrectPackagingDto extends PackagingDto {
   @IsString() @MaxLength(300) reason!: string;
 }
 
-export class ServiceDto extends VersionedActionDto {
-  @IsString() @MaxLength(180) reason!: string;
+export class ServiceDto {
+  @IsInt() @Min(0) version!: number;
+  @IsIn(['Mantenimiento', 'Lavado'], {
+    message: 'El motivo debe ser Mantenimiento o Lavado'
+  })
+  reason!: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }
 

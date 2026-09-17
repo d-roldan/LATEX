@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { PackagingDto } from './plant.dto';
+import { CorrectQualityAdjustmentDto, PackagingDto, QualityDecisionDto, ServiceDto } from './plant.dto';
 
 describe('PackagingDto', () => {
   const validDto = () =>
@@ -18,16 +18,30 @@ describe('PackagingDto', () => {
     await expect(validate(validDto())).resolves.toHaveLength(0);
   });
 
-  it('rechaza órdenes de envasado que no tengan 6 dígitos', async () => {
+  it('acepta órdenes de envasado de 8 dígitos', async () => {
     const dto = validDto();
     dto.packagingOrder = '12345678';
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza órdenes de envasado que no tengan 6 u 8 dígitos', async () => {
+    const dto = validDto();
+    dto.packagingOrder = '1234567';
 
     expect(await validate(dto)).toEqual(
       expect.arrayContaining([expect.objectContaining({ property: 'packagingOrder' })])
     );
   });
 
-  it('rechaza materiales de envasado que no tengan 4 dígitos', async () => {
+  it('acepta materiales de envasado de 5 dígitos', async () => {
+    const dto = validDto();
+    dto.materialCode = '12345';
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza materiales de envasado que no tengan 4 o 5 dígitos', async () => {
     const dto = validDto();
     dto.materialCode = '123456';
 
@@ -50,5 +64,105 @@ describe('PackagingDto', () => {
     expect(await validate(dto as object)).toEqual(
       expect.arrayContaining([expect.objectContaining({ property: 'description' })])
     );
+  });
+});
+
+describe('ServiceDto', () => {
+  it.each(['Mantenimiento', 'Lavado'])('acepta el motivo %s', async (reason) => {
+    const dto = Object.assign(new ServiceDto(), { version: 1, reason });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza motivos distintos de Mantenimiento o Lavado', async () => {
+    const dto = Object.assign(new ServiceDto(), { version: 1, reason: 'Otro' });
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'reason' })])
+    );
+  });
+
+  it('requiere un motivo', async () => {
+    const dto = Object.assign(new ServiceDto(), { version: 1 });
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'reason' })])
+    );
+  });
+});
+
+describe('QualityDecisionDto adjustments', () => {
+  const adjustmentDto = (adjustments?: Array<{ materialCode: string; quantityKg: number }>) =>
+    plainToInstance(QualityDecisionDto, {
+      version: 1,
+      result: 'AJUSTE',
+      employeeNumber: '123456',
+      adjustmentReasons: ['Corrección de fórmula', 'Ajuste de viscosidad'],
+      adjustments
+    });
+
+  it('acepta todos los materiales y cantidades válidos del ajuste', async () => {
+    const dto = adjustmentDto([
+      { materialCode: '1010', quantityKg: 25.5 },
+      { materialCode: '202020', quantityKg: 1.125 }
+    ]);
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('requiere al menos un material cuando el resultado es AJUSTE', async () => {
+    expect(await validate(adjustmentDto())).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'adjustments' })])
+    );
+  });
+
+  it('acepta uno o más motivos cuando el resultado es AJUSTE', async () => {
+    const dto = adjustmentDto([{ materialCode: '1010', quantityKg: 25.5 }]);
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('requiere al menos un motivo cuando el resultado es AJUSTE', async () => {
+    const dto = adjustmentDto([{ materialCode: '1010', quantityKg: 25.5 }]);
+    dto.adjustmentReasons = [];
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'adjustmentReasons' })])
+    );
+  });
+
+  it('rechaza materiales no numéricos o cantidades no positivas', async () => {
+    const errors = await validate(adjustmentDto([{ materialCode: 'MAT-A', quantityKg: 0 }]));
+
+    expect(errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'adjustments' })])
+    );
+  });
+});
+
+describe('CorrectQualityAdjustmentDto', () => {
+  const validDto = () => plainToInstance(CorrectQualityAdjustmentDto, {
+    version: 4,
+    adjustmentReasons: ['Viscosidad', 'Color'],
+    adjustments: [
+      { materialCode: '1010', quantityKg: 12.5 },
+      { materialCode: '2020', quantityKg: 3.125 }
+    ]
+  });
+
+  it('acepta corregir varios motivos y materiales', async () => {
+    await expect(validate(validDto())).resolves.toHaveLength(0);
+  });
+
+  it('requiere al menos un motivo y un material', async () => {
+    const dto = validDto();
+    dto.adjustmentReasons = [];
+    dto.adjustments = [];
+
+    const errors = await validate(dto);
+    expect(errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ property: 'adjustmentReasons' }),
+      expect.objectContaining({ property: 'adjustments' })
+    ]));
   });
 });

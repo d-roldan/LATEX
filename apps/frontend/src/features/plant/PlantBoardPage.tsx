@@ -12,7 +12,7 @@ import type { PublicPlant } from './plantCatalog';
 
 type Sector = 'fabricacion' | 'laboratorio' | 'envasado' | 'monitoreo';
 type TankState = 'VACIO' | 'FABRICANDO' | 'LABORATORIO' | 'AJUSTE' | 'RECHAZADO' | 'APROBADO' | 'ENVASANDO' | 'TRASVASANDO' | 'FUERA_DE_SERVICIO';
-type Action = 'start' | 'sendLab' | 'quality' | 'packaging' | 'newOrder' | 'correctOrder' | 'finish' | 'startTransfer' | 'finishTransfer' | 'emptyRejected' | 'serviceOut' | 'serviceIn' | 'correctLot';
+type Action = 'start' | 'sendLab' | 'quality' | 'editAdjustment' | 'packaging' | 'newOrder' | 'correctOrder' | 'finish' | 'startTransfer' | 'finishTransfer' | 'emptyRejected' | 'serviceOut' | 'serviceIn' | 'correctLot';
 type PendingRequest = { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> };
 
 interface Tank {
@@ -23,6 +23,7 @@ interface Tank {
   activeLot: null | {
     id: string; manufacturingOrder: string; materialCode: string; description: string; specificWeight: number | null;
     packagingOrders: Array<{ packagingOrder: string; materialCode: string | null; line: string; format: string; description: string; startedAt: string }>;
+    qualityDecisions: Array<{ id: string; result: string; reason: string | null; adjustmentReasons: string[]; adjustmentItems: Array<{ id: string; materialCode: string; quantityKg: number; position: number }> }>;
   };
 }
 
@@ -42,7 +43,9 @@ const equipmentCountByPlant: Record<string, number> = { LATEX: 9, TERPLAST: 4, S
 const emptyForm = {
   manufacturingOrder: '', materialCode: '', packagingMaterialCode: '', description: '', employeeNumber: '', specificWeight: '',
   qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', notes: '',
-  plannedQuantityKg: '', producedKg: '', wasteKg: '', producedUnits: ''
+  plannedQuantityKg: '', producedKg: '', wasteKg: '', producedUnits: '',
+  adjustmentReasons: [] as string[],
+  adjustments: [{ materialCode: '', quantityKg: '' }]
 };
 
 export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; publicPlant?: PublicPlant }) {
@@ -85,12 +88,20 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
   const openAction = (tank: Tank, action: Action) => {
     setSelection({ tank, action }); setPendingRequest(null); setConfirming(false); setError(null);
     const currentOrder = tank.activeLot?.packagingOrders[0];
+    const currentAdjustment = action === 'editAdjustment' ? tank.activeLot?.qualityDecisions[0] : undefined;
     setForm({ ...emptyForm,
       manufacturingOrder: tank.activeLot?.manufacturingOrder ?? '', materialCode: tank.activeLot?.materialCode ?? '',
       packagingMaterialCode: action === 'correctOrder' ? currentOrder?.materialCode ?? '' : '',
       description: action === 'correctOrder' ? currentOrder?.description ?? '' : action === 'correctLot' ? tank.activeLot?.description ?? '' : '', packagingOrder: action === 'correctOrder' ? currentOrder?.packagingOrder ?? '' : '',
       line: action === 'correctOrder' ? currentOrder?.line ?? '' : config.data?.lines[0] ?? '',
-      format: action === 'correctOrder' ? currentOrder?.format ?? '' : config.data?.formats[0] ?? ''
+      format: action === 'correctOrder' ? currentOrder?.format ?? '' : config.data?.formats[0] ?? '',
+      qualityResult: action === 'editAdjustment' ? 'AJUSTE' : 'APROBADO',
+      adjustmentReasons: currentAdjustment?.adjustmentReasons.length
+        ? [...currentAdjustment.adjustmentReasons]
+        : currentAdjustment?.reason ? [currentAdjustment.reason] : [],
+      adjustments: currentAdjustment?.adjustmentItems.length
+        ? currentAdjustment.adjustmentItems.map((item) => ({ materialCode: item.materialCode, quantityKg: String(item.quantityKg) }))
+        : [{ materialCode: '', quantityKg: '' }]
     });
   };
 
@@ -104,6 +115,7 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
       if (tank.state === 'FUERA_DE_SERVICIO') return [['Volver a servicio', 'serviceIn', 'success']] as Array<[string, Action, string]>;
     }
     if (sector === 'laboratorio' && tank.state === 'LABORATORIO') return [['Resolver análisis', 'quality', 'warning']] as Array<[string, Action, string]>;
+    if (sector === 'laboratorio' && tank.state === 'AJUSTE') return [['Editar ajuste', 'editAdjustment', 'warning']] as Array<[string, Action, string]>;
     if (sector === 'envasado') {
       if (tank.state === 'APROBADO' && config.data?.finalOperation === 'TRANSFER') return [['Iniciar trasvase', 'startTransfer', 'primary']] as Array<[string, Action, string]>;
       if (tank.state === 'TRASVASANDO') return [['Finalizar trasvase', 'finishTransfer', 'danger']] as Array<[string, Action, string]>;
@@ -126,11 +138,16 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
     event.preventDefault();
     if (!selection) return;
     const { tank, action } = selection;
+    if (((action === 'quality' && form.qualityResult === 'AJUSTE') || action === 'editAdjustment') && form.adjustmentReasons.length === 0) {
+      setError('Seleccioná al menos un motivo de ajuste.');
+      return;
+    }
     const version = tank.version;
     const map: Record<Action, { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> }> = {
       start: { path: `${base}/tanks/${tank.id}/manufacturing`, method: 'post', payload: { version, manufacturingOrder: form.manufacturingOrder, materialCode: form.materialCode, description: form.description, plannedQuantityKg: form.plannedQuantityKg ? Number(form.plannedQuantityKg) : undefined } },
       sendLab: { path: `${base}/tanks/${tank.id}/send-to-lab`, method: 'post', payload: { version, reason: form.reason || undefined } },
-      quality: { path: `${base}/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.reason || undefined, recoveryAction: form.recoveryAction || undefined } },
+      quality: { path: `${base}/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.qualityResult.startsWith('RECHAZADO') ? form.reason || undefined : undefined, adjustmentReasons: form.qualityResult === 'AJUSTE' ? form.adjustmentReasons : undefined, recoveryAction: form.recoveryAction || undefined, adjustments: form.qualityResult === 'AJUSTE' ? form.adjustments.map((item) => ({ materialCode: item.materialCode, quantityKg: Number(item.quantityKg) })) : undefined } },
+      editAdjustment: { path: `${base}/tanks/${tank.id}/quality/adjustment`, method: 'patch', payload: { version, adjustmentReasons: form.adjustmentReasons, adjustments: form.adjustments.map((item) => ({ materialCode: item.materialCode, quantityKg: Number(item.quantityKg) })) } },
       packaging: { path: `${base}/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description } },
       newOrder: { path: `${base}/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description, reason: form.reason || undefined } },
       correctOrder: { path: `${base}/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description, reason: form.reason } },
@@ -166,6 +183,11 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
           const weight = tank.telemetry.grossKg;
           const fill = tank.capacityKg ? Math.max(0, Math.min(100, ((weight ?? 0) / tank.capacityKg) * 100)) : 0;
           const order = tank.activeLot?.packagingOrders[0];
+          const adjustmentDecision = tank.state === 'AJUSTE' ? tank.activeLot?.qualityDecisions[0] : undefined;
+          const adjustmentItems = adjustmentDecision?.adjustmentItems ?? [];
+          const adjustmentReasonText = adjustmentDecision?.adjustmentReasons.length
+            ? adjustmentDecision.adjustmentReasons.join(' · ')
+            : adjustmentDecision?.reason;
           return <article id={`tank-${tank.id}`} className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}`} key={tank.id}>
             <div className="tank-card__content">
               <div className="tank-card__title"><h2>{tank.name}</h2>{tank.telemetryMode === 'AUTOMATIC' && !tank.telemetry.online ? <span className="tank-offline"><WifiOff size={13}/> Sin señal</span> : null}</div>
@@ -173,15 +195,17 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
               {tank.telemetryMode !== 'NOT_INSTALLED' ? <><strong className="tank-weight">{weight === null ? '—' : Math.round(weight).toLocaleString('es-AR')}</strong><small>Kg (bruto)</small></> : <small>Sin medición de peso</small>}
               <dl>
                 <div className="tank-elapsed"><dt>En estado</dt><dd>{formatDuration(tank.stateElapsedSeconds)}</dd></div>
-                {tank.activeLot ? tank.state === 'ENVASANDO' && order ? <><div><dt>Material</dt><dd>{order.materialCode ?? 'Sin informar'}</dd></div><div><dt>Descripción</dt><dd>{order.description}</dd></div></> : <><div><dt>OF</dt><dd>{tank.activeLot.manufacturingOrder}</dd></div><div><dt>Material</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Descripción</dt><dd>{tank.activeLot.description}</dd></div></> : null}
+                {tank.activeLot ? tank.state === 'ENVASANDO' && order ? <><div><dt>SEMI</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Material</dt><dd>{order.materialCode ?? 'Sin informar'}</dd></div><div><dt>Descripción</dt><dd>{order.description}</dd></div></> : <><div><dt>OF</dt><dd>{tank.activeLot.manufacturingOrder}</dd></div><div><dt>SEMI</dt><dd>{tank.activeLot.materialCode}</dd></div><div><dt>Descripción</dt><dd>{tank.activeLot.description}</dd></div></> : null}
                 {tank.activeLot?.specificWeight ? <div><dt>P. específico</dt><dd>{tank.activeLot.specificWeight}</dd></div> : null}
+                {adjustmentReasonText ? <div className="tank-adjustment-reasons"><dt>Motivos</dt><dd>{adjustmentReasonText}</dd></div> : null}
+                {adjustmentItems.length ? <div className="tank-adjustment-list"><dt>Ajustes</dt><dd><ul>{adjustmentItems.map((item) => <li key={item.id}><span>Material {item.materialCode}</span><strong>{item.quantityKg.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</strong></li>)}</ul></dd></div> : null}
                 {order ? <><div><dt>OE</dt><dd>{order.packagingOrder}</dd></div><div><dt>Celda / Formato</dt><dd>{order.line} · {order.format}</dd></div></> : null}
                 {tank.serviceReason ? <div><dt>Motivo</dt><dd>{tank.serviceReason}</dd></div> : null}
               </dl>
               <div className="tank-actions">{actionsFor(tank).map(([label, action, variant]) => <Button key={action} size="sm" variant={variant as 'primary'} onClick={() => openAction(tank, action)}>{label}</Button>)}</div>
             </div>
             {tank.telemetryMode !== 'NOT_INSTALLED' ? <><div className={`tank-gauge${tank.capacityKg ? '' : ' is-pending'}`} aria-label={tank.capacityKg ? `${fill.toFixed(0)}% de capacidad` : 'Capacidad pendiente'}>
-              <div style={{ height: `${fill}%` }}/>
+              <div style={{ clipPath: `inset(${100 - fill}% 0 0)` }}/>
             </div>
             <div className="tank-capacity">
               <span><b>MAX:</b> {tank.capacityKg ? `${tank.capacityKg.toLocaleString('es-AR')} kg` : 'Pendiente'}</span>
@@ -233,7 +257,7 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
 }
 
 function actionTitle(action: Action) {
-  return ({ start: 'Nueva fabricación', sendLab: 'Enviar a Laboratorio', quality: 'Decisión de calidad', packaging: 'Iniciar envasado', newOrder: 'Ingresar nueva OE', correctOrder: 'Corregir OE activa', finish: 'Finalizar envasado', startTransfer: 'Iniciar trasvase', finishTransfer: 'Finalizar trasvase', emptyRejected: 'Vaciar rechazado', serviceOut: 'Sacar de servicio', serviceIn: 'Volver a servicio', correctLot: 'Corregir lote' } as Record<Action, string>)[action];
+  return ({ start: 'Nueva fabricación', sendLab: 'Enviar a Laboratorio', quality: 'Decisión de calidad', editAdjustment: 'Editar solicitud de ajuste', packaging: 'Iniciar envasado', newOrder: 'Ingresar nueva OE', correctOrder: 'Corregir OE activa', finish: 'Finalizar envasado', startTransfer: 'Iniciar trasvase', finishTransfer: 'Finalizar trasvase', emptyRejected: 'Vaciar rechazado', serviceOut: 'Sacar de servicio', serviceIn: 'Volver a servicio', correctLot: 'Corregir lote' } as Record<Action, string>)[action];
 }
 
 function formatDuration(seconds: number | null) {
@@ -245,31 +269,43 @@ function formatDuration(seconds: number | null) {
 
 function renderFields(action: Action, form: typeof emptyForm, setForm: (value: typeof emptyForm) => void, config?: Config) {
   const field = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
+  const adjustmentField = (index: number, key: 'materialCode' | 'quantityKg', value: string) => setForm({
+    ...form,
+    adjustments: form.adjustments.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)
+  });
+  const toggleAdjustmentReason = (reason: string) => setForm({
+    ...form,
+    adjustmentReasons: form.adjustmentReasons.includes(reason)
+      ? form.adjustmentReasons.filter((selectedReason) => selectedReason !== reason)
+      : [...form.adjustmentReasons, reason]
+  });
+  const adjustmentReasonOptions = [...new Set([...(config?.adjustmentReasons ?? []), ...form.adjustmentReasons])];
   if (action === 'start' || action === 'correctLot') return <>
     <label>Orden de fabricación (8 dígitos)<Input value={form.manufacturingOrder} onChange={(e) => field('manufacturingOrder', e.target.value)} pattern="\d{8}" required/></label>
-    <label>Material (6 dígitos)<Input value={form.materialCode} onChange={(e) => field('materialCode', e.target.value)} pattern="\d{6}" required/></label>
+    <label>SEMI (6 dígitos)<Input value={form.materialCode} onChange={(e) => field('materialCode', e.target.value)} pattern="\d{6}" inputMode="numeric" maxLength={6} required/></label>
     <label>Descripción<Input value={form.description} onChange={(e) => field('description', e.target.value)} required maxLength={180}/></label>
     {action === 'start' ? <>
       <label>Cantidad planificada (kg)<Input type="number" min="0.001" step="0.001" value={form.plannedQuantityKg} onChange={(e) => field('plannedQuantityKg', e.target.value)}/></label>
     </> : null}
     {action === 'correctLot' ? <label>Motivo de la corrección<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required/></label> : null}
   </>;
-  if (action === 'quality') return <>
-    <label>Resultado<select value={form.qualityResult} onChange={(e) => field('qualityResult', e.target.value)}><option value="APROBADO">Aprobar</option><option value="AJUSTE">Solicitar ajuste</option><option value="RECHAZADO_RECUPERAR">Rechazar a recuperar</option><option value="RECHAZADO_DESTRUIR">Rechazar a destruir</option></select></label>
-    <label>Legajo (6 dígitos)<Input value={form.employeeNumber} onChange={(e) => field('employeeNumber', e.target.value)} pattern="\d{6}" required/></label>
+  if (action === 'quality' || action === 'editAdjustment') return <>
+    {action === 'quality' ? <><label>Resultado<select value={form.qualityResult} onChange={(e) => field('qualityResult', e.target.value)}><option value="APROBADO">Aprobar</option><option value="AJUSTE">Solicitar ajuste</option><option value="RECHAZADO_RECUPERAR">Rechazar a recuperar</option><option value="RECHAZADO_DESTRUIR">Rechazar a destruir</option></select></label><label>Legajo (6 dígitos)<Input value={form.employeeNumber} onChange={(e) => field('employeeNumber', e.target.value)} pattern="\d{6}" required/></label></> : null}
     {form.qualityResult === 'APROBADO' ? <label>Peso específico<Input type="number" min="0.001" step="0.001" value={form.specificWeight} onChange={(e) => field('specificWeight', e.target.value)} required/></label> : null}
-    {form.qualityResult !== 'APROBADO' ? <label>Motivo<select value={form.reason} onChange={(e) => field('reason', e.target.value)} required><option value="">Seleccionar…</option>{config?.adjustmentReasons.map((reason) => <option key={reason}>{reason}</option>)}</select></label> : null}
+    {form.qualityResult === 'AJUSTE' ? <fieldset className="quality-reasons"><legend>Motivos del ajuste</legend><div className="quality-reasons__options">{adjustmentReasonOptions.map((reason) => <label key={reason}><input type="checkbox" checked={form.adjustmentReasons.includes(reason)} onChange={() => toggleAdjustmentReason(reason)}/><span>{reason}</span></label>)}</div></fieldset> : null}
+    {form.qualityResult.startsWith('RECHAZADO') ? <label>Motivo<select value={form.reason} onChange={(e) => field('reason', e.target.value)} required><option value="">Seleccionar…</option>{config?.adjustmentReasons.map((reason) => <option key={reason}>{reason}</option>)}</select></label> : null}
+    {form.qualityResult === 'AJUSTE' ? <fieldset className="quality-adjustments"><legend>Materiales a ajustar</legend>{form.adjustments.map((item, index) => <div className="quality-adjustment-row" key={index}><label>N.º de material<Input value={item.materialCode} onChange={(e) => adjustmentField(index, 'materialCode', e.target.value.replace(/\D/g, '').slice(0, 20))} inputMode="numeric" pattern="\d{1,20}" required/></label><label>Cantidad (kg)<Input type="number" min="0.001" step="0.001" value={item.quantityKg} onChange={(e) => adjustmentField(index, 'quantityKg', e.target.value)} required/></label><Button type="button" size="sm" variant="danger" disabled={form.adjustments.length === 1} onClick={() => setForm({ ...form, adjustments: form.adjustments.filter((_, itemIndex) => itemIndex !== index) })}>Quitar</Button></div>)}<Button type="button" size="sm" variant="secondary" onClick={() => setForm({ ...form, adjustments: [...form.adjustments, { materialCode: '', quantityKg: '' }] })}>Agregar material</Button></fieldset> : null}
     {form.qualityResult === 'RECHAZADO_RECUPERAR' ? <label>Destino<select value={form.recoveryAction} onChange={(e) => field('recoveryAction', e.target.value)} required><option value="">Seleccionar…</option><option>Recuperar en el mismo tanque</option><option>Bajar producto para futuras fabricaciones</option></select></label> : null}
   </>;
   if (action === 'packaging' || action === 'newOrder' || action === 'correctOrder') return <>
-    <label>Orden de envasado (6 dígitos)<Input value={form.packagingOrder} onChange={(e) => field('packagingOrder', e.target.value)} pattern="\d{6}" inputMode="numeric" maxLength={6} required/></label>
-    <label>Material de envasado (4 dígitos)<Input value={form.packagingMaterialCode} onChange={(e) => field('packagingMaterialCode', e.target.value.replace(/\D/g, '').slice(0, 4))} pattern="\d{4}" inputMode="numeric" maxLength={4} required/></label>
+    <label>Orden de envasado (6 u 8 dígitos)<Input value={form.packagingOrder} onChange={(e) => field('packagingOrder', e.target.value.replace(/\D/g, '').slice(0, 8))} pattern="(?:\d{6}|\d{8})" inputMode="numeric" maxLength={8} required/></label>
+    <label>Material (4 o 5 dígitos)<Input value={form.packagingMaterialCode} onChange={(e) => field('packagingMaterialCode', e.target.value.replace(/\D/g, '').slice(0, 5))} pattern="\d{4,5}" inputMode="numeric" maxLength={5} required/></label>
     <label>Celda<select value={form.line} onChange={(e) => field('line', e.target.value)} required>{config?.lines.map((line) => <option key={line}>{line}</option>)}</select></label>
     <label>Formato<select value={form.format} onChange={(e) => field('format', e.target.value)} required>{config?.formats.map((format) => <option key={format}>{format}</option>)}</select></label>
     <label>Descripción de envasado<Input value={form.description} onChange={(e) => field('description', e.target.value)} required maxLength={180}/></label>
     {action === 'newOrder' || action === 'correctOrder' ? <label>Motivo / observación<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required={action === 'correctOrder'}/></label> : null}
   </>;
-  if (action === 'serviceOut') return <><label>Motivo<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required/></label><label>Observaciones<textarea value={form.notes} onChange={(e) => field('notes', e.target.value)}/></label></>;
+  if (action === 'serviceOut') return <><label>Motivo<select value={form.reason} onChange={(e) => field('reason', e.target.value)} required><option value="">Seleccionar…</option><option value="Mantenimiento">Mantenimiento</option><option value="Lavado">Lavado</option></select></label><label>Observaciones<textarea value={form.notes} onChange={(e) => field('notes', e.target.value)} maxLength={500}/></label></>;
   if (action === 'finish') return <>
     <label>Kilogramos envasados<Input type="number" min="0" step="0.001" value={form.producedKg} onChange={(e) => field('producedKg', e.target.value)} required/></label>
     <label>Merma (kg)<Input type="number" min="0" step="0.001" value={form.wasteKg} onChange={(e) => field('wasteKg', e.target.value)}/></label>

@@ -905,24 +905,39 @@ model TankStateHistory {
 }
 
 model QualityDecision {
-  id             String        @id @default(cuid())
-  companyId      String
-  plantId        String
-  lotId          String
-  result         QualityResult
-  employeeNumber String
-  specificWeight Decimal?      @db.Decimal(8, 3)
-  reason         String?
-  recoveryAction String?
-  userId         String
-  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
-  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  plant          Plant         @relation(fields: [plantId], references: [id], onDelete: Restrict)
-  lot            ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id                String        @id @default(cuid())
+  companyId         String
+  plantId           String
+  lotId             String
+  result            QualityResult
+  employeeNumber    String
+  specificWeight    Decimal?      @db.Decimal(8, 3)
+  reason            String?
+  adjustmentReasons String[]    @default([])
+  recoveryAction    String?
+  userId            String
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plant             Plant         @relation(fields: [plantId], references: [id], onDelete: Restrict)
+  lot               ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  adjustmentItems   QualityAdjustmentItem[]
 
   @@index([companyId, createdAt])
   @@index([lotId, createdAt])
+}
+
+model QualityAdjustmentItem {
+  id                String          @id @default(cuid())
+  qualityDecisionId String
+  position          Int
+  materialCode      String
+  quantityKg        Decimal         @db.Decimal(12, 3)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  qualityDecision   QualityDecision @relation(fields: [qualityDecisionId], references: [id], onDelete: Cascade)
+
+  @@unique([qualityDecisionId, position])
+  @@index([qualityDecisionId])
 }
 
 model PackagingOrder {
