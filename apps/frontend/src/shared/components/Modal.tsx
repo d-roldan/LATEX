@@ -1,4 +1,4 @@
-import { PropsWithChildren, useEffect, useId, useRef } from 'react';
+import { PropsWithChildren, ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -18,6 +18,7 @@ interface ModalProps {
   subtitle?: string;
   disableClose?: boolean;
   className?: string;
+  headerActions?: ReactNode;
 }
 
 export function Modal({
@@ -27,6 +28,7 @@ export function Modal({
   onClose,
   disableClose,
   className,
+  headerActions,
   children
 }: PropsWithChildren<ModalProps>) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -123,15 +125,18 @@ export function Modal({
             <h3 id={titleId}>{title}</h3>
             {subtitle ? <p id={subtitleId}>{subtitle}</p> : null}
           </div>
-          <button
-            className="modal-close"
-            type="button"
-            onClick={onClose}
-            disabled={disableClose}
-            aria-label="Cerrar"
-          >
-            <X size={19} aria-hidden="true" />
-          </button>
+          <div className="modal-head__actions">
+            {headerActions}
+            <button
+              className="modal-close"
+              type="button"
+              onClick={onClose}
+              disabled={disableClose}
+              aria-label="Cerrar"
+            >
+              <X size={19} aria-hidden="true" />
+            </button>
+          </div>
         </div>
         {children}
       </div>

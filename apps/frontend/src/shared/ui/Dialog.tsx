@@ -1,4 +1,4 @@
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, ReactNode } from 'react';
 import { Modal } from '../components/Modal';
 
 interface DialogProps {
@@ -8,9 +8,19 @@ interface DialogProps {
   description?: string;
   disableClose?: boolean;
   className?: string;
+  headerActions?: ReactNode;
 }
 
-export function Dialog({ open, onOpenChange, title, description, disableClose, className, children }: PropsWithChildren<DialogProps>) {
+export function Dialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  disableClose,
+  className,
+  headerActions,
+  children
+}: PropsWithChildren<DialogProps>) {
   return (
     <Modal
       isOpen={open}
@@ -19,6 +29,7 @@ export function Dialog({ open, onOpenChange, title, description, disableClose, c
       subtitle={description}
       disableClose={disableClose}
       className={className}
+      headerActions={headerActions}
     >
       {children}
     </Modal>

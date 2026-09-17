@@ -76,7 +76,7 @@ export class PlantScopedController {
   @Get(':plantCode/management/daily') @Roles('JEFATURA','ADMIN')
   async daily(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Query('date') date:string) { const p=await this.service.assertPlantAccess(u.companyId,u.sub,c); return this.service.dailyManagement(u.companyId,date,p.id); }
   @Get(':plantCode/management/lots/:id/timeline') @Roles('MONITOREO','JEFATURA','ADMIN')
-  async timeline(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string) { const p=await this.service.assertPlantAccess(u.companyId,u.sub,c); return this.service.lotTimeline(u.companyId,id,p.id); }
+  async timeline(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Query('includeWeightHistory') weights?:string) { const p=await this.service.assertPlantAccess(u.companyId,u.sub,c); return this.service.lotTimeline(u.companyId,id,p.id,weights==='true'); }
   @Post(':plantCode/management/closures') @Roles('JEFATURA','ADMIN')
   async close(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Body() d:DailyClosureDto) { const p=await this.service.assertPlantAccess(u.companyId,u.sub,c); return this.service.closeDay(u.companyId,u,d,p.id); }
   @Patch(':plantCode/management/targets') @Roles('ADMIN')
@@ -144,7 +144,7 @@ export class PlantProtectedController {
   daily(@CurrentUser() user: JwtUser, @Query('date') date: string) { return this.service.dailyManagement(user.companyId, date); }
 
   @Get('management/lots/:id/timeline') @Roles('MONITOREO', 'JEFATURA', 'ADMIN')
-  timeline(@CurrentUser() user: JwtUser, @Param('id') id: string) { return this.service.lotTimeline(user.companyId, id); }
+  timeline(@CurrentUser() user: JwtUser, @Param('id') id: string, @Query('includeWeightHistory') weights?: string) { return this.service.lotTimeline(user.companyId, id, undefined, weights === 'true'); }
 
   @Post('management/closures') @Roles('JEFATURA', 'ADMIN')
   closeDay(@CurrentUser() user: JwtUser, @Body() dto: DailyClosureDto) { return this.service.closeDay(user.companyId, user, dto); }

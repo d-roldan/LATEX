@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +26,7 @@ import {
 } from './dto/plant.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { createHash, timingSafeEqual } from 'crypto';
+import { InfluxHistoryService } from './influx-history.service';
 
 type Telemetry = { grossKg: number; netKg?: number; measuredAt: string; receivedAt: string };
 
@@ -59,7 +61,8 @@ export class PlantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    @Optional() private readonly influxHistory?: InfluxHistoryService
   ) {}
 
   async authorizedPlants(companyId: string, userId: string) {
@@ -586,11 +589,11 @@ export class PlantService {
     }));
   }
 
-  async lotTimeline(companyId: string, lotId: string, plantId?: string) {
+  async lotTimeline(companyId: string, lotId: string, plantId?: string, includeWeightHistory = false) {
     const lot = await this.prisma.productionLot.findFirst({
       where: { id: lotId, companyId, plantId },
       include: {
-        tank: { select: { name: true, number: true } },
+        tank: { select: { name: true, number: true, scaleKey: true } },
         stateHistory: { include: { user: { select: { fullName: true, username: true } } }, orderBy: { startedAt: 'asc' } },
         qualityDecisions: {
           include: {
@@ -605,8 +608,13 @@ export class PlantService {
     });
     if (!lot) throw new NotFoundException('Orden de fabricación no encontrada');
     const now = new Date();
+    const manufacturingStartedAt = lot.stateHistory.find((row) => row.state === 'FABRICANDO')?.startedAt ?? lot.startedAt;
+    const weightHistory = includeWeightHistory && this.influxHistory
+      ? await this.influxHistory.readWeightSeries(lot.tank.scaleKey, manufacturingStartedAt, lot.finishedAt ?? now)
+      : { status: 'CONFIGURATION_PENDING' as const, message: 'La consulta histórica de InfluxDB todavía no está configurada.', points: [], lastTimestamp: null };
     return {
       ...lot,
+      tank: { name: lot.tank.name, number: lot.tank.number },
       specificWeight: lot.specificWeight === null ? null : Number(lot.specificWeight),
       plannedQuantityKg: lot.plannedQuantityKg === null ? null : Number(lot.plannedQuantityKg),
       totalDurationSeconds: Math.max(0, Math.floor(((lot.finishedAt ?? now).getTime() - lot.startedAt.getTime()) / 1000)),
@@ -627,7 +635,9 @@ export class PlantService {
         ...order,
         producedKg: order.producedKg === null ? null : Number(order.producedKg),
         wasteKg: order.wasteKg === null ? null : Number(order.wasteKg)
-      }))
+      })),
+      manufacturingCharges: [],
+      weightHistory
     };
   }
 
