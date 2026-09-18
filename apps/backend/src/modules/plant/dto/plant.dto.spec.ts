@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CorrectQualityAdjustmentDto, PackagingDto, QualityDecisionDto, ServiceDto } from './plant.dto';
+import { CorrectQualityAdjustmentDto, FinishPackagingDto, PackagingDto, QualityDecisionDto, ServiceDto } from './plant.dto';
 
 describe('PackagingDto', () => {
   const validDto = () =>
@@ -64,6 +64,14 @@ describe('PackagingDto', () => {
     expect(await validate(dto as object)).toEqual(
       expect.arrayContaining([expect.objectContaining({ property: 'description' })])
     );
+  });
+});
+
+describe('FinishPackagingDto', () => {
+  it('permite finalizar sin cargar kilos ni unidades manualmente', async () => {
+    const dto = Object.assign(new FinishPackagingDto(), { version: 1 });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
   });
 });
 

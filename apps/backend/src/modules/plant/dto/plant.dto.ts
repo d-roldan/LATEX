@@ -79,7 +79,7 @@ export class PackagingDto extends VersionedActionDto {
 }
 
 export class FinishPackagingDto extends VersionedActionDto {
-  @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) producedKg!: number;
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) producedKg?: number;
   @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) wasteKg?: number;
   @IsOptional() @IsInt() @Min(0) producedUnits?: number;
 }

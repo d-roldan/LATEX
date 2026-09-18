@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileDown } from 'lucide-react';
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -109,6 +110,17 @@ const states = [
   'ENVASANDO',
   'FUERA_DE_SERVICIO'
 ];
+const statePresentation: Record<string, { label: string; color: string }> = {
+  VACIO: { label: 'Vacío', color: '#c92a2f' },
+  FABRICANDO: { label: 'Fabricando', color: '#8f969e' },
+  LABORATORIO: { label: 'Laboratorio', color: '#f1b62c' },
+  AJUSTE: { label: 'Ajuste', color: '#f07c29' },
+  RECHAZADO: { label: 'Rechazado', color: '#c92a2f' },
+  APROBADO: { label: 'Aprobado', color: '#3b9848' },
+  ENVASANDO: { label: 'Envasando', color: '#0998d7' },
+  TRASVASANDO: { label: 'Trasvasando', color: '#715aa8' },
+  FUERA_DE_SERVICIO: { label: 'Fuera de servicio', color: '#715aa8' }
+};
 const duration = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -414,6 +426,51 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
   const values = weightHistory.points.map((point) => point.grossKg);
   const minimum = values.length ? Math.min(...values) : null;
   const maximum = values.length ? Math.max(...values) : null;
+  const chartPoints = weightHistory.points
+    .map((point) => ({ ...point, chartTimestamp: new Date(point.timestamp).getTime() }))
+    .filter((point) => Number.isFinite(point.chartTimestamp))
+    .sort((left, right) => left.chartTimestamp - right.chartTimestamp);
+  const firstTimestamp = chartPoints[0]?.chartTimestamp;
+  const lastTimestamp = chartPoints[chartPoints.length - 1]?.chartTimestamp;
+  const visibleStates =
+    firstTimestamp === undefined || lastTimestamp === undefined
+      ? []
+      : timeline.stateHistory
+          .map((period) => ({
+            ...period,
+            start: Math.max(firstTimestamp, new Date(period.startedAt).getTime()),
+            end: Math.min(
+              lastTimestamp,
+              period.endedAt ? new Date(period.endedAt).getTime() : lastTimestamp
+            )
+          }))
+          .filter(
+            (period) =>
+              Number.isFinite(period.start) &&
+              Number.isFinite(period.end) &&
+              period.end >= period.start
+          )
+          .sort((left, right) => left.start - right.start);
+  const chartSpan =
+    firstTimestamp === undefined || lastTimestamp === undefined
+      ? 0
+      : Math.max(1, lastTimestamp - firstTimestamp);
+  const gradientStops = visibleStates.flatMap((period) => {
+    const presentation = statePresentation[period.state] ?? {
+      label: period.state.replaceAll('_', ' '),
+      color: '#55c6ff'
+    };
+    const start = ((period.start - (firstTimestamp ?? 0)) / chartSpan) * 100;
+    const end = ((period.end - (firstTimestamp ?? 0)) / chartSpan) * 100;
+    return [
+      { offset: start, color: presentation.color },
+      { offset: end, color: presentation.color }
+    ];
+  });
+  const legendStates = visibleStates.filter(
+    (period, index, periods) =>
+      periods.findIndex((candidate) => candidate.state === period.state) === index
+  );
 
   return (
     <section className="weight-history" aria-labelledby="weight-history-title">
@@ -432,14 +489,31 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
         <>
           <div className="weight-history__chart" role="img" aria-label="Evolución del peso bruto">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={weightHistory.points}
-                margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
-              >
+              <AreaChart data={chartPoints} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                <defs>
+                  <linearGradient id="weight-state-gradient" x1="0" y1="0" x2="1" y2="0">
+                    {(gradientStops.length
+                      ? gradientStops
+                      : [
+                          { offset: 0, color: '#55c6ff' },
+                          { offset: 100, color: '#55c6ff' }
+                        ]
+                    ).map((stop, index) => (
+                      <stop
+                        key={`${stop.offset}-${stop.color}-${index}`}
+                        offset={`${stop.offset}%`}
+                        stopColor={stop.color}
+                        stopOpacity={0.34}
+                      />
+                    ))}
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#324353" />
                 <XAxis
-                  dataKey="timestamp"
-                  tickFormatter={chartTime}
+                  dataKey="chartTimestamp"
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
+                  tickFormatter={(value) => chartTime(new Date(Number(value)).toISOString())}
                   minTickGap={32}
                   stroke="#8fa2b4"
                   fontSize={11}
@@ -452,11 +526,19 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
                   width={66}
                 />
                 <Tooltip
-                  labelFormatter={(value) => dateTime(String(value))}
+                  labelFormatter={(value) => dateTime(new Date(Number(value)).toISOString())}
                   formatter={(value) => [kilograms(Number(value)), 'Peso bruto']}
                   contentStyle={{ background: '#101922', border: '1px solid #344858' }}
                   labelStyle={{ color: '#eaf3f9' }}
                   itemStyle={{ color: '#55c6ff' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="grossKg"
+                  stroke="none"
+                  fill="url(#weight-state-gradient)"
+                  tooltipType="none"
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -467,9 +549,25 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
                   dot={false}
                   activeDot={{ r: 4 }}
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
+          {legendStates.length ? (
+            <ul className="weight-history__legend" aria-label="Estados representados en el gráfico">
+              {legendStates.map((period) => {
+                const presentation = statePresentation[period.state] ?? {
+                  label: period.state.replaceAll('_', ' '),
+                  color: '#55c6ff'
+                };
+                return (
+                  <li key={period.state}>
+                    <i style={{ backgroundColor: presentation.color }} />
+                    {presentation.label}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
           <p className="weight-history__summary">
             Rango visible: {kilograms(minimum ?? 0)} — {kilograms(maximum ?? 0)} ·{' '}
             {weightHistory.points.length} puntos
