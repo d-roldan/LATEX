@@ -14,6 +14,7 @@ import {
 import { api } from '../../shared/api/http';
 import { Dialog } from '../../shared/ui/Dialog';
 import { useActivePlant } from './useActivePlant';
+import { historyStateAt, presentationForHistoryState } from './history-state-presentation';
 
 export interface PackagingOrderSummary {
   id: string;
@@ -110,17 +111,6 @@ const states = [
   'ENVASANDO',
   'FUERA_DE_SERVICIO'
 ];
-const statePresentation: Record<string, { label: string; color: string }> = {
-  VACIO: { label: 'Vacío', color: '#c92a2f' },
-  FABRICANDO: { label: 'Fabricando', color: '#8f969e' },
-  LABORATORIO: { label: 'Laboratorio', color: '#f1b62c' },
-  AJUSTE: { label: 'Ajuste', color: '#f07c29' },
-  RECHAZADO: { label: 'Rechazado', color: '#c92a2f' },
-  APROBADO: { label: 'Aprobado', color: '#3b9848' },
-  ENVASANDO: { label: 'Envasando', color: '#0998d7' },
-  TRASVASANDO: { label: 'Trasvasando', color: '#715aa8' },
-  FUERA_DE_SERVICIO: { label: 'Fuera de servicio', color: '#715aa8' }
-};
 const duration = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -427,7 +417,18 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
   const minimum = values.length ? Math.min(...values) : null;
   const maximum = values.length ? Math.max(...values) : null;
   const chartPoints = weightHistory.points
-    .map((point) => ({ ...point, chartTimestamp: new Date(point.timestamp).getTime() }))
+    .map((point) => {
+      const chartTimestamp = new Date(point.timestamp).getTime();
+      const statePeriod = historyStateAt(timeline.stateHistory, chartTimestamp);
+      const state = statePeriod?.state;
+      const presentation = state ? presentationForHistoryState(state) : undefined;
+      return {
+        ...point,
+        chartTimestamp,
+        stateLabel: presentation?.label ?? 'Sin estado registrado',
+        stateColor: presentation?.color ?? '#8fa2b4'
+      };
+    })
     .filter((point) => Number.isFinite(point.chartTimestamp))
     .sort((left, right) => left.chartTimestamp - right.chartTimestamp);
   const firstTimestamp = chartPoints[0]?.chartTimestamp;
@@ -456,10 +457,7 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
       ? 0
       : Math.max(1, lastTimestamp - firstTimestamp);
   const gradientStops = visibleStates.flatMap((period) => {
-    const presentation = statePresentation[period.state] ?? {
-      label: period.state.replaceAll('_', ' '),
-      color: '#55c6ff'
-    };
+    const presentation = presentationForHistoryState(period.state);
     const start = ((period.start - (firstTimestamp ?? 0)) / chartSpan) * 100;
     const end = ((period.end - (firstTimestamp ?? 0)) / chartSpan) * 100;
     return [
@@ -525,13 +523,7 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
                   fontSize={11}
                   width={66}
                 />
-                <Tooltip
-                  labelFormatter={(value) => dateTime(new Date(Number(value)).toISOString())}
-                  formatter={(value) => [kilograms(Number(value)), 'Peso bruto']}
-                  contentStyle={{ background: '#101922', border: '1px solid #344858' }}
-                  labelStyle={{ color: '#eaf3f9' }}
-                  itemStyle={{ color: '#55c6ff' }}
-                />
+                <Tooltip content={<WeightHistoryTooltip />} />
                 <Area
                   type="monotone"
                   dataKey="grossKg"
@@ -555,10 +547,7 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
           {legendStates.length ? (
             <ul className="weight-history__legend" aria-label="Estados representados en el gráfico">
               {legendStates.map((period) => {
-                const presentation = statePresentation[period.state] ?? {
-                  label: period.state.replaceAll('_', ' '),
-                  color: '#55c6ff'
-                };
+                const presentation = presentationForHistoryState(period.state);
                 return (
                   <li key={period.state}>
                     <i style={{ backgroundColor: presentation.color }} />
@@ -579,6 +568,34 @@ function WeightChart({ timeline }: { timeline: Timeline }) {
         </div>
       )}
     </section>
+  );
+}
+
+interface WeightTooltipPoint {
+  timestamp: string;
+  grossKg: number;
+  stateLabel: string;
+  stateColor: string;
+}
+
+function WeightHistoryTooltip({
+  active,
+  payload
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: WeightTooltipPoint }>;
+}) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+
+  return (
+    <div className="weight-history__tooltip">
+      <span>{dateTime(point.timestamp)}</span>
+      <strong>
+        {kilograms(point.grossKg)} <small>Peso bruto</small>
+      </strong>
+      <em style={{ color: point.stateColor }}>{point.stateLabel}</em>
+    </div>
   );
 }
 

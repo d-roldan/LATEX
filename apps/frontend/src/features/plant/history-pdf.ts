@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Timeline } from './PlantHistoryPage';
+import { historyStateAt, presentationForHistoryState } from './history-state-presentation';
 
 const COLORS = {
   navy: [9, 35, 63] as const,
@@ -73,9 +74,60 @@ function sectionTitle(doc: jsPDF, title: string, y: number) {
   return position + 11;
 }
 
+const hexToRgb = (hex: string): [number, number, number] => {
+  const value = hex.replace('#', '');
+  return [
+    Number.parseInt(value.slice(0, 2), 16),
+    Number.parseInt(value.slice(2, 4), 16),
+    Number.parseInt(value.slice(4, 6), 16)
+  ];
+};
+
+const softenedStateColor = (hex: string): [number, number, number] =>
+  hexToRgb(hex).map((channel) => Math.round(255 - (255 - channel) * 0.32)) as [
+    number,
+    number,
+    number
+  ];
+
+function chartPointsWithStateBoundaries(timeline: Timeline) {
+  const points = timeline.weightHistory.points
+    .map((point) => ({ ...point, time: new Date(point.timestamp).getTime() }))
+    .filter((point) => Number.isFinite(point.time))
+    .sort((left, right) => left.time - right.time);
+  if (points.length < 2) return points;
+
+  const first = points[0].time;
+  const last = points[points.length - 1].time;
+  const boundaries = timeline.stateHistory.flatMap((period) => [
+    new Date(period.startedAt).getTime(),
+    period.endedAt ? new Date(period.endedAt).getTime() : Number.NaN
+  ]);
+  const allTimes = [
+    ...new Set([
+      ...points.map((point) => point.time),
+      ...boundaries.filter((time) => Number.isFinite(time) && time > first && time < last)
+    ])
+  ].sort((left, right) => left - right);
+
+  return allTimes.map((time) => {
+    const exact = points.find((point) => point.time === time);
+    if (exact) return exact;
+    const nextIndex = points.findIndex((point) => point.time > time);
+    const previous = points[nextIndex - 1];
+    const next = points[nextIndex];
+    const ratio = (time - previous.time) / Math.max(1, next.time - previous.time);
+    return {
+      timestamp: new Date(time).toISOString(),
+      time,
+      grossKg: previous.grossKg + (next.grossKg - previous.grossKg) * ratio
+    };
+  });
+}
+
 function drawWeightChart(doc: jsPDF, timeline: Timeline, y: number) {
   const chartY = ensureSpace(doc, y, 62);
-  const points = timeline.weightHistory.points;
+  const points = chartPointsWithStateBoundaries(timeline);
   const x = 18;
   const width = 174;
   const height = 45;
@@ -102,6 +154,40 @@ function drawWeightChart(doc: jsPDF, timeline: Timeline, y: number) {
   const graphTop = chartY + 13;
   const graphHeight = height - 10;
 
+  const firstTime = points[0].time;
+  const timeRange = Math.max(1, points[points.length - 1].time - firstTime);
+  const pointPosition = (point: (typeof points)[number]) => ({
+    x: x + (width * (point.time - firstTime)) / timeRange,
+    y: graphTop + graphHeight - ((point.grossKg - minimum) / valueRange) * graphHeight
+  });
+
+  points.slice(1).forEach((point, index) => {
+    const previous = points[index];
+    const previousPosition = pointPosition(previous);
+    const currentPosition = pointPosition(point);
+    const state = historyStateAt(timeline.stateHistory, (previous.time + point.time) / 2)?.state;
+    const presentation = presentationForHistoryState(state ?? '');
+    doc.setFillColor(...softenedStateColor(presentation.color));
+    doc.triangle(
+      previousPosition.x,
+      previousPosition.y,
+      currentPosition.x,
+      currentPosition.y,
+      currentPosition.x,
+      graphTop + graphHeight,
+      'F'
+    );
+    doc.triangle(
+      previousPosition.x,
+      previousPosition.y,
+      currentPosition.x,
+      graphTop + graphHeight,
+      previousPosition.x,
+      graphTop + graphHeight,
+      'F'
+    );
+  });
+
   doc.setDrawColor(224, 232, 239);
   doc.setLineWidth(0.2);
   for (let line = 0; line <= 4; line += 1) {
@@ -113,13 +199,9 @@ function drawWeightChart(doc: jsPDF, timeline: Timeline, y: number) {
   doc.setLineWidth(0.65);
   points.slice(1).forEach((point, index) => {
     const previous = points[index];
-    const previousX = x + (width * index) / Math.max(1, points.length - 1);
-    const currentX = x + (width * (index + 1)) / Math.max(1, points.length - 1);
-    const previousY =
-      graphTop + graphHeight - ((previous.grossKg - minimum) / valueRange) * graphHeight;
-    const currentY =
-      graphTop + graphHeight - ((point.grossKg - minimum) / valueRange) * graphHeight;
-    doc.line(previousX, previousY, currentX, currentY);
+    const previousPosition = pointPosition(previous);
+    const currentPosition = pointPosition(point);
+    doc.line(previousPosition.x, previousPosition.y, currentPosition.x, currentPosition.y);
   });
 
   doc.setFont('helvetica', 'normal');
@@ -131,7 +213,7 @@ function drawWeightChart(doc: jsPDF, timeline: Timeline, y: number) {
     align: 'right'
   });
   doc.text(
-    `${points.length} muestras | Última: ${formatDateTime(points[points.length - 1]?.timestamp ?? '')}`,
+    `${timeline.weightHistory.points.length} muestras | Última: ${formatDateTime(points[points.length - 1]?.timestamp ?? '')}`,
     x + width,
     graphTop - 1,
     { align: 'right' }
@@ -197,8 +279,7 @@ function decoratePages(doc: jsPDF, timeline: Timeline, logo: string | null) {
   }
 }
 
-export async function downloadTraceabilityPdf(timeline: Timeline) {
-  const [logo] = await Promise.all([loadLogo()]);
+export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = null) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
 
   doc.setProperties({
@@ -328,6 +409,12 @@ export async function downloadTraceabilityPdf(timeline: Timeline) {
   );
 
   decoratePages(doc, timeline, logo);
+  return doc;
+}
+
+export async function downloadTraceabilityPdf(timeline: Timeline) {
+  const [logo] = await Promise.all([loadLogo()]);
+  const doc = buildTraceabilityPdf(timeline, logo);
   const safeOrder = timeline.manufacturingOrder.replace(/[^a-zA-Z0-9_-]+/g, '-');
   doc.save(`trazabilidad-OF-${safeOrder}.pdf`);
 }

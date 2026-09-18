@@ -282,6 +282,11 @@ body { background: var(--plant-bg); }
 .weight-history header p { margin: .2rem 0 0; color: #899bac; font-size: .72rem; }
 .weight-history header span { color: #a9bac8; font-size: .68rem; text-align: right; }
 .weight-history__chart { width: 100%; height: 15rem; }
+.weight-history__tooltip { display: grid; gap: .28rem; min-width: 10.5rem; padding: .62rem .7rem; border: 1px solid #344858; border-radius: .45rem; background: #101922f2; box-shadow: 0 .55rem 1.4rem #0008; }
+.weight-history__tooltip span { color: #b9c8d4; font-size: .67rem; }
+.weight-history__tooltip strong { color: #55c6ff; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.weight-history__tooltip strong small { color: #a9bac8; font-size: .66rem; font-weight: 600; }
+.weight-history__tooltip em { padding-top: .28rem; border-top: 1px solid #344858; font-size: .72rem; font-style: normal; font-weight: 850; }
 .weight-history__legend { display: flex; flex-wrap: wrap; gap: .35rem .75rem; margin: .55rem 0 0; padding: 0; color: #b8c6d1; font-size: .66rem; list-style: none; }
 .weight-history__legend li { display: inline-flex; align-items: center; gap: .35rem; }
 .weight-history__legend i { width: .65rem; height: .65rem; border: 1px solid #ffffff44; border-radius: .18rem; box-shadow: 0 0 .35rem currentColor; }
@@ -463,6 +468,10 @@ body { background: var(--plant-bg); }
 :root[data-theme='light'] .lot-packaging-summary dd { color: #172536; }
 :root[data-theme='light'] .weight-history,:root[data-theme='light'] .traceability-loading,:root[data-theme='light'] .traceability-empty { border-color: #c7d2dc; background: #f7fafc; color: #526579; }
 :root[data-theme='light'] .weight-history header p,:root[data-theme='light'] .weight-history header span,:root[data-theme='light'] .weight-history__summary { color: #526579; }
+:root[data-theme='light'] .weight-history__tooltip { border-color: #b7c7d4; background: #fffffff2; box-shadow: 0 .45rem 1rem #3049622b; }
+:root[data-theme='light'] .weight-history__tooltip span,:root[data-theme='light'] .weight-history__tooltip strong small { color: #526579; }
+:root[data-theme='light'] .weight-history__tooltip strong { color: #086d9f; }
+:root[data-theme='light'] .weight-history__tooltip em { border-color: #c7d2dc; }
 :root[data-theme='light'] .weight-history__legend { color: #344b60; }
 :root[data-theme='light'] .manufacturing-charges__table { border-color: #c7d2dc; }
 :root[data-theme='light'] .manufacturing-charges th,:root[data-theme='light'] .manufacturing-charges td { border-color: #d7e0e8; color: #172536; }
