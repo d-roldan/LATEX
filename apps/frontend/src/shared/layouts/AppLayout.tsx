@@ -10,6 +10,7 @@ import {
   Menu,
   Minimize2,
   Settings,
+  ShieldCheck,
   Users,
   X
 } from 'lucide-react';
@@ -30,7 +31,14 @@ const items = [
     icon: History,
     roles: ['MONITOREO', 'JEFATURA', 'ADMIN']
   },
-  { to: '/usuarios', label: 'Usuarios', icon: Users, roles: ['ADMIN'] }
+  { to: '/usuarios', label: 'Usuarios', icon: Users, roles: ['ADMIN'] },
+  {
+    to: '/auditoria',
+    label: 'Auditoría',
+    icon: ShieldCheck,
+    roles: ['ADMIN'],
+    systemOwnerOnly: true
+  }
 ];
 
 const roleLabels: Record<string, string> = {
@@ -46,7 +54,10 @@ export function AppLayout({ children }: PropsWithChildren) {
   const user = getSessionUser();
   const [open, setOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
-  const allowed = items.filter((item) => item.roles.includes(user?.role ?? ''));
+  const allowed = items.filter(
+    (item) =>
+      item.roles.includes(user?.role ?? '') && (!item.systemOwnerOnly || user?.isSystemOwner)
+  );
   const { plants, active, select } = useActivePlant();
   const plantQuery = active ? `?plant=${active.code}` : '';
 

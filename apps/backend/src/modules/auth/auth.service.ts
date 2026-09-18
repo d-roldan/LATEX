@@ -12,11 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtUser } from '../../common/auth/jwt-user.interface';
 import { AuditService } from '../audit/audit.service';
-import {
-  hasExpiredLoginLock,
-  LOGIN_LOCKOUT_MS,
-  maxFailedLoginAttempts
-} from './login-lockout';
+import { hasExpiredLoginLock, LOGIN_LOCKOUT_MS, maxFailedLoginAttempts } from './login-lockout';
 
 @Injectable()
 export class AuthService {
@@ -58,7 +54,18 @@ export class AuthService {
 
     const now = new Date();
     if (user.lockedUntil && user.lockedUntil > now) {
-      const remainingMinutes = Math.max(1, Math.ceil((user.lockedUntil.getTime() - now.getTime()) / 60000));
+      const remainingMinutes = Math.max(
+        1,
+        Math.ceil((user.lockedUntil.getTime() - now.getTime()) / 60000)
+      );
+      await this.auditService.log({
+        companyId: user.companyId,
+        userId: user.id,
+        entityType: 'AUTH',
+        entityId: user.id,
+        action: 'LOGIN',
+        metadata: { result: 'REJECTED_LOCKED', remainingMinutes }
+      });
       throw new HttpException(
         `Demasiados intentos fallidos. La cuenta está bloqueada temporalmente. Intentá nuevamente en ${remainingMinutes} minuto${remainingMinutes === 1 ? '' : 's'}.`,
         HttpStatus.TOO_MANY_REQUESTS
@@ -104,6 +111,15 @@ export class AuthService {
         );
       }
 
+      await this.auditService.log({
+        companyId: user.companyId,
+        userId: user.id,
+        entityType: 'AUTH',
+        entityId: user.id,
+        action: 'LOGIN',
+        metadata: { result: 'FAILED', failedAttempts: updated.failedLoginAttempts }
+      });
+
       throw new UnauthorizedException('Credenciales invalidas');
     }
 
@@ -141,7 +157,8 @@ export class AuthService {
       entityId: user.id,
       action: 'LOGIN',
       metadata: {
-        email: user.email
+        email: user.email,
+        result: 'SUCCESS'
       }
     });
 
@@ -190,7 +207,12 @@ export class AuthService {
     };
   }
 
-  async changePassword(userId: string, companyId: string, oldPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    companyId: string,
+    oldPassword: string,
+    newPassword: string
+  ) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, companyId, isActive: true }
     });

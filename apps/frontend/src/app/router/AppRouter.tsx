@@ -29,6 +29,9 @@ const PlantTvPage = lazy(() =>
 const UsersPage = lazy(() =>
   import('../../features/users/UsersPage').then((module) => ({ default: module.UsersPage }))
 );
+const AuditPage = lazy(() =>
+  import('../../features/audit/AuditPage').then((module) => ({ default: module.AuditPage }))
+);
 
 const page = (sector: 'fabricacion' | 'laboratorio' | 'envasado' | 'monitoreo') => (
   <AppLayout>
@@ -94,6 +97,16 @@ export function AppRouter() {
               element={
                 <AppLayout>
                   <UsersPage />
+                </AppLayout>
+              }
+            />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN']} systemOwnerOnly />}>
+            <Route
+              path="/auditoria"
+              element={
+                <AppLayout>
+                  <AuditPage />
                 </AppLayout>
               }
             />
