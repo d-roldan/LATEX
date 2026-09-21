@@ -12,6 +12,8 @@ La fuente de verdad es `apps/backend/prisma/schema.prisma`.
 - `ProductionLot`: OF, material, producto, planificación, prioridad, turno e inicio/fin del lote.
 - `TankStateHistory`: períodos de permanencia por estado, duración, objetivo, responsable, descripción y fotografía puntual del peso.
 - `QualityDecision`: aprobación, ajuste o rechazo, legajo, peso específico, motivo y recuperación.
+- `LaboratorySample`: una iteración de muestra por envío a Laboratorio, con estados de espera, recepción y resolución, responsables y timestamps.
+- `IntegrationInbox`: bandeja durable de eventos PLC/SCADA/Node-RED, idempotente por planta, fuente y `eventId`; recibir un evento no modifica por sí solo la operación.
 - `PackagingOrder`: OE, línea, formato, inicio/fin, duración, kilogramos, unidades y merma.
 - `PlantAuditLog`: cambios auditables con valores anterior/nuevo y motivo.
 - `DailyPlantClosure`: fotografía JSON del resumen de una jornada, observaciones y responsable del cierre.
@@ -46,8 +48,8 @@ Esta memoria representa sólo el último valor para visualización. InfluxDB con
 - `Tank.activeLotId` permite un único lote activo por tanque.
 - `PackagingOrder.lotId` vincula cada OE con un único lote.
 - `Notification.readAt` registra lectura, pero no aceptación ni resolución de una entrega entre sectores.
-- `QualityDecision` conserva la decisión general, no el detalle de muestra y ensayos.
-- No existen todavía entidades productivas para ejecución de receta, pasos, cargas, eventos PLC o consumos parciales de envasado.
+- `QualityDecision` conserva la decisión general y se vincula con el ciclo de muestra resuelto; todavía no conserva el detalle estructurado de cada ensayo.
+- No existen todavía entidades productivas para ejecución de receta, pasos, cargas o consumos parciales de envasado. La bandeja industrial recibe eventos, pero sus procesadores de negocio aún deben definirse y habilitarse por tipo.
 
 Estas restricciones deben contrastarse con casos reales de mezcla, transferencia, recuperación, envasado parcial y relación varios-a-varios entre OF y OE.
 
@@ -56,12 +58,10 @@ Estas restricciones deben contrastarse con casos reales de mezcla, transferencia
 Las siguientes entidades son conceptuales. Sus nombres y campos definitivos deben cerrarse después del relevamiento industrial.
 
 - `SectorHandoff`: entrega de trabajo entre sectores, estado de recepción/resolución, responsables, tiempos y observaciones.
-- `IntegrationEvent`: evento inmutable recibido desde PLC/SCADA o Node-RED, con `eventId` idempotente, origen, secuencia, timestamps y calidad.
 - `RecipeExecution`: corrida de receta asociada a OF, tanque y fotografía de versión y parámetros efectivos.
 - `RecipeStepExecution`: ejecución ordenada de cada paso, resultado, modo, timestamps, alarmas e intervenciones.
 - `MaterialCharge`: carga automática o manual, material, lote, setpoint, tolerancia, cantidad real, desvío y evidencia del cálculo.
 - `AssetAssignmentRevision`: relación histórica válvula–cañería–material–tanque con período de vigencia.
-- `LaboratorySample`: muestra, extracción, recepción, analista, estado e iteración.
 - `LaboratoryTestResult`: ensayo, valor, unidad, límites, instrumento y conformidad.
 - `PackagingConsumption`: cantidad de un lote consumida por una OE, permitiendo una relación explícita varios-a-varios.
 - `MassBalance`: entradas, envasado, merma, rechazo, remanente y diferencia no explicada con versión de cálculo.

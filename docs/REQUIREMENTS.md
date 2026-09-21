@@ -25,6 +25,8 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 - OF, material, descripción, cantidad planificada, prioridad, turno y programación.
 - Responsable y motivo de cada transición o corrección.
 - Decisiones e iteraciones de Laboratorio.
+- Ciclos de muestra por iteración con hitos de solicitud, recepción y resolución.
+- Bloqueo de la decisión de calidad hasta que Laboratorio confirme la recepción física de la muestra.
 - OE, línea, formato, duración, kilogramos, unidades y merma de Envasado.
 - Línea temporal consultable por OF.
 - Fechas almacenadas con zona horaria y presentadas en Buenos Aires.
@@ -36,13 +38,14 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 - Laboratorio notifica a Fabricación cuando solicita un ajuste o rechaza un lote.
 - Envasado notifica a Fabricación cuando finaliza y libera un tanque.
 - Los avisos son personales, se filtran por sector y pueden marcarse como leídos.
-- La lectura de un aviso no representa todavía la recepción formal ni la resolución del trabajo.
+- La lectura de un aviso no representa la recepción formal del trabajo. Para la entrega Fabricación–Laboratorio, la recepción de la muestra sí se confirma mediante un hito operativo específico.
 
 ### Jefatura
 
 - Rol `JEFATURA` de sólo lectura operativa.
 - Resumen diario para reunión: WIP, esperas, finalizados, calidad, envasado y alertas.
 - Tiempo actual por tanque con semáforos configurables.
+- Conteo de muestras esperando recepción o en análisis, y promedios de envío–recepción y recepción–resultado.
 - Cierre diario persistido con observaciones del jefe.
 - Exportación del resumen en PDF y Excel.
 

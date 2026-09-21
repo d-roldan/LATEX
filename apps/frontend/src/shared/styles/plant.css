@@ -240,6 +240,9 @@ body { background: var(--plant-bg); }
 .tank-card h2 { margin: 0; overflow-wrap: anywhere; color: #72a7ff; font-size: 1rem; letter-spacing: .04em; }
 .tank-offline { display: inline-flex; gap: .25rem; align-items: center; color: #ff8b8b; font-size: .72rem; }
 .tank-state { align-self: flex-start; margin-top: .5rem; padding: .38rem .7rem; border-radius: .48rem; background: var(--state,#6f7c88); color: #fff; font-size: .8rem; font-weight: 850; }
+.tank-laboratory-substate { display: block; margin-top: .35rem; color: #b9c8d4; font-size: .72rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.tank-laboratory-substate.status-awaiting_receipt { color: #f3c45f; }
+.tank-laboratory-substate.status-received { color: #66d6ff; }
 .tank-weight { display: block; margin-top: .45rem; font-size: clamp(2rem,3vw,3rem); line-height: 1; letter-spacing: -.04em; }
 .tank-card__content > small { max-width: 100%; margin-top: .15rem; overflow-wrap: anywhere; color: #e1e8ee; font-size: .78rem; }
 .tank-card dl { display: grid; gap: .3rem; margin: .65rem 0 0; font-size: .78rem; }
@@ -386,6 +389,19 @@ body { background: var(--plant-bg); }
 .lot-packaging-summary dl div { display: grid; grid-template-columns: 5.5rem minmax(0,1fr); gap: .4rem; }
 .lot-packaging-summary dt { color: #7f92a4; font-size: .65rem; font-weight: 800; text-transform: uppercase; }
 .lot-packaging-summary dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #dce7ee; font-size: .73rem; }
+.management-laboratory-cycles { display: grid; gap: .55rem; margin-top: .8rem; }
+.management-laboratory-cycles h3 { margin: 0; color: #eaf3f9; font-size: .9rem; }
+.management-laboratory-cycles article { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .35rem .7rem; padding: .65rem; border: 1px solid #2d5368; border-radius: .5rem; background: #0c1b24; }
+.management-laboratory-cycles article strong { color: #66d6ff; }
+.management-laboratory-cycles article span { color: #b9c8d4; font-size: .7rem; }
+.laboratory-samples > div { display: grid; gap: .55rem; padding-top: .55rem; }
+.laboratory-samples article { padding: .65rem; border: 1px solid #2d5368; border-radius: .5rem; background: #0c1b24; }
+.laboratory-samples header { display: flex; justify-content: space-between; gap: .75rem; color: #66d6ff; }
+.laboratory-samples header span { color: #f3c45f; font-size: .68rem; font-weight: 700; }
+.laboratory-samples dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .35rem .8rem; margin: .55rem 0 0; }
+.laboratory-samples dl div { display: grid; grid-template-columns: 5rem minmax(0,1fr); gap: .4rem; }
+.laboratory-samples dt { color: #7f92a4; font-size: .65rem; font-weight: 800; text-transform: uppercase; }
+.laboratory-samples dd { margin: 0; color: #dce7ee; font-size: .72rem; }
 .traceability-dialog { width: min(1080px,calc(100vw - 2rem)); }
 .traceability-content { display: grid; gap: 1rem; }
 .traceability-pdf-button { display: inline-flex; min-height: 2.2rem; padding: .4rem .65rem; border: 1px solid #32404f; border-radius: .45rem; align-items: center; gap: .4rem; background: #121a24; color: #dbe5ee; cursor: pointer; font-size: .7rem; font-weight: 800; white-space: nowrap; }
@@ -585,6 +601,12 @@ body { background: var(--plant-bg); }
 :root[data-theme='light'] .lot-packaging-summary article { border-color: #c7d2dc; background: #f7fafc; }
 :root[data-theme='light'] .lot-packaging-summary header strong,
 :root[data-theme='light'] .lot-packaging-summary dd { color: #172536; }
+:root[data-theme='light'] .management-laboratory-cycles h3 { color: #172536; }
+:root[data-theme='light'] .management-laboratory-cycles article,
+:root[data-theme='light'] .laboratory-samples article { border-color: #a9c6d8; background: #edf7fc; }
+:root[data-theme='light'] .management-laboratory-cycles article span,
+:root[data-theme='light'] .laboratory-samples dd { color: #344b60; }
+:root[data-theme='light'] .laboratory-samples dt { color: #526579; }
 :root[data-theme='light'] .weight-history,:root[data-theme='light'] .traceability-loading,:root[data-theme='light'] .traceability-empty { border-color: #c7d2dc; background: #f7fafc; color: #526579; }
 :root[data-theme='light'] .weight-history header p,:root[data-theme='light'] .weight-history header span,:root[data-theme='light'] .weight-history__summary { color: #526579; }
 :root[data-theme='light'] .weight-history__tooltip { border-color: #b7c7d4; background: #fffffff2; box-shadow: 0 .45rem 1rem #3049622b; }
@@ -636,6 +658,7 @@ body { background: var(--plant-bg); }
   .weight-history header span { text-align: left; }
   .weight-history__chart { height: 12rem; }
   .lot-packaging-summary dl { grid-template-columns: minmax(0,1fr); }
+  .management-laboratory-cycles article,.laboratory-samples dl { grid-template-columns: minmax(0,1fr); }
 }
 
 /* En escritorio las tarjetas conservan una escala legible: nunca se muestran

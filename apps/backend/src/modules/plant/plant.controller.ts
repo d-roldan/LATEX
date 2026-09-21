@@ -45,6 +45,8 @@ export class PlantScopedController {
   async start(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:StartManufacturingDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.start(u.companyId,id,u,d); }
   @Post(':plantCode/tanks/:id/send-to-lab') @Roles('FABRICACION','ADMIN')
   async lab(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:VersionedActionDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.sendToLab(u.companyId,id,u,d); }
+  @Post(':plantCode/tanks/:id/laboratory/sample-received') @Roles('LABORATORIO','ADMIN')
+  async receiveSample(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:VersionedActionDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.receiveLaboratorySample(u.companyId,id,u,d); }
   @Post(':plantCode/tanks/:id/quality') @Roles('LABORATORIO','ADMIN')
   async quality(@CurrentUser() u:JwtUser,@Param('plantCode') c:string,@Param('id') id:string,@Body() d:QualityDecisionDto) { await this.service.assertPlantAccess(u.companyId,u.sub,c,id); return this.service.quality(u.companyId,id,u,d); }
   @Patch(':plantCode/tanks/:id/quality/adjustment') @Roles('LABORATORIO','ADMIN')
@@ -101,6 +103,9 @@ export class PlantProtectedController {
 
   @Post('tanks/:id/send-to-lab') @Roles('FABRICACION', 'ADMIN')
   sendToLab(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: VersionedActionDto) { return this.service.sendToLab(user.companyId, id, user, dto); }
+
+  @Post('tanks/:id/laboratory/sample-received') @Roles('LABORATORIO', 'ADMIN')
+  receiveSample(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: VersionedActionDto) { return this.service.receiveLaboratorySample(user.companyId, id, user, dto); }
 
   @Post('tanks/:id/quality') @Roles('LABORATORIO', 'ADMIN')
   quality(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: QualityDecisionDto) { return this.service.quality(user.companyId, id, user, dto); }

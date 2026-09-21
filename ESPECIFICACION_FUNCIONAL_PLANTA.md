@@ -96,7 +96,7 @@ Al confirmar se crea un `ProductionLot`, se asocia como lote activo, el tanque c
 
 ### 7.2 Envío a laboratorio
 
-Desde `FABRICANDO` o `AJUSTE`, Fabricación puede enviar el lote a `LABORATORIO`. La OF, material y descripción se conservan.
+Desde `FABRICANDO` o `AJUSTE`, Fabricación puede enviar el lote a `LABORATORIO`. La OF, material y descripción se conservan. Cada envío abre un nuevo ciclo de muestra en estado `AWAITING_RECEIPT` y registra el instante desde el cual Laboratorio espera la entrega física.
 
 ### 7.3 Corrección del lote
 
@@ -110,15 +110,21 @@ Un tanque `RECHAZADO` puede registrarse como vaciado, finalizando el lote y volv
 
 Laboratorio sólo puede actuar sobre un tanque en estado `LABORATORIO`.
 
-### 8.1 Aprobación
+### 8.1 Recepción de muestra
+
+Mientras la muestra todavía no llegó, la tarjeta indica **Esperando recepción de muestra** y la única acción de calidad disponible es **Recibí la muestra**. La confirmación registra fecha, hora y usuario, cambia el subestado a `RECEIVED` y comienza a medir el tiempo de análisis. No cambia el estado físico `LABORATORIO` del tanque.
+
+Laboratorio no puede aprobar, solicitar ajuste ni rechazar antes de confirmar la recepción. Al emitir cualquiera de esos resultados el ciclo queda `RESOLVED`. Si Fabricación realiza un ajuste y vuelve a enviarlo, se abre una nueva iteración de muestra sin sobrescribir las anteriores.
+
+### 8.2 Aprobación
 
 Requiere legajo de exactamente 6 dígitos y peso específico mayor que cero, con máximo 3 decimales. Cambia el tanque a `APROBADO` y actualiza el lote.
 
-### 8.2 Ajuste
+### 8.3 Ajuste
 
 El resultado `AJUSTE` requiere seleccionar uno o más motivos de proceso y cargar una lista de uno o más materiales. Cada material registra su número y la cantidad positiva en kilogramos, con hasta 3 decimales. Laboratorio puede agregar tantos renglones como necesite y, mientras el tanque permanezca en `AJUSTE`, puede reabrir la solicitud en un diálogo con los datos precargados para corregir motivos, materiales o cantidades. La corrección reemplaza la solicitud vigente, incrementa la versión operativa y queda auditada. La tarjeta de Fabricación muestra los motivos y la lista vigentes. Fabricación realiza la corrección y devuelve el tanque a Laboratorio.
 
-### 8.3 Rechazo
+### 8.4 Rechazo
 
 Resultados admitidos: `RECHAZADO_RECUPERAR` y `RECHAZADO_DESTRUIR`. Para recuperación debe indicarse la acción prevista. Ambos resultados cambian el estado a `RECHAZADO` y quedan registrados en `QualityDecision`.
 
@@ -190,7 +196,7 @@ No existe una tabla de muestras continuas de peso. `TankStateHistory` conserva �
 
 El sistema calcula el tiempo actual y el histórico de permanencia en cada estado. Los períodos que atraviesan el inicio o fin de una jornada se prorratean dentro de sus límites. Las fechas se almacenan con zona horaria y se muestran en `America/Argentina/Buenos_Aires`.
 
-Jefatura dispone de un resumen diario con estado actual, OF, material, antigüedad, semáforos, lotes finalizados, incidencias de calidad, kilogramos envasados, merma y balanzas sin señal. Puede abrir la línea temporal completa de una OF, exportar PDF/Excel y guardar el cierre de jornada con observaciones.
+Jefatura dispone de un resumen diario con estado actual, OF, material, antigüedad, semáforos, lotes finalizados, incidencias de calidad, kilogramos envasados, merma y balanzas sin señal. El resumen distingue muestras esperando recepción y muestras en análisis, e informa los promedios diarios desde el envío hasta la recepción y desde la recepción hasta el resultado. Puede abrir la línea temporal completa de una OF, ver cada iteración de muestra, exportar PDF/Excel y guardar el cierre de jornada con observaciones.
 
 Los tiempos objetivo se configuran por estado en minutos. El 80 % del objetivo genera advertencia y el 100 % una alerta crítica.
 

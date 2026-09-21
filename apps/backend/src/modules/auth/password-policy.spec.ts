@@ -11,7 +11,8 @@ describe('password validation policy', () => {
       username: 'usuario.prueba',
       fullName: 'Usuario Prueba',
       password: '123456',
-      role: UserRole.OPERARIO
+      role: UserRole.OPERARIO,
+      plantIds: ['plant-1']
     });
     const resetPassword = Object.assign(new UpdateUserPasswordDto(), { password: '123456' });
     const changePassword = Object.assign(new ChangePasswordDto(), {
@@ -32,6 +33,8 @@ describe('password validation policy', () => {
     });
 
     expect(validateSync(resetPassword).some((error) => error.property === 'password')).toBe(true);
-    expect(validateSync(changePassword).some((error) => error.property === 'newPassword')).toBe(true);
+    expect(validateSync(changePassword).some((error) => error.property === 'newPassword')).toBe(
+      true
+    );
   });
 });

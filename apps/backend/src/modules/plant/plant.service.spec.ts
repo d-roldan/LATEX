@@ -56,6 +56,31 @@ describe('PlantService telemetry', () => {
     expect(tank).not.toHaveProperty('version');
   });
 
+  it('publica únicamente los motivos de ajuste necesarios para la pantalla TV', async () => {
+    prisma.tank.findMany.mockResolvedValueOnce([
+      {
+        id: 'tank-101', companyId: 'company-1', plantId: 'plant-latex', number: 101, name: 'TK101', capacityKg: 60000,
+        scaleKey: 'TK101', telemetryMode: 'AUTOMATIC', state: 'AJUSTE', version: 1, stateHistory: [],
+        activeLot: {
+          id: 'lot-1', manufacturingOrder: '26090101', materialCode: '600101', description: 'Látex', specificWeight: null,
+          packagingOrders: [],
+          laboratorySamples: [],
+          qualityDecisions: [{
+            id: 'decision-1', result: 'AJUSTE', reason: 'Viscosidad', adjustmentReasons: ['Viscosidad'],
+            adjustmentItems: [{ id: 'item-1', materialCode: '1010', quantityKg: 10, position: 0 }]
+          }]
+        }
+      }
+    ]);
+    const service = new PlantService(prisma, config, notifications);
+
+    const [tank] = await service.publicTanks();
+
+    expect(tank.activeLot?.qualityDecisions).toEqual([
+      { reason: 'Viscosidad', adjustmentReasons: ['Viscosidad'] }
+    ]);
+  });
+
   it('uses Buenos Aires day boundaries as UTC instants', () => {
     const service = new PlantService(prisma, config, notifications);
     const bounds = (service as any).plantDayBounds('2026-09-03');
@@ -69,6 +94,67 @@ describe('PlantService telemetry', () => {
 
     expect(result.lines).toEqual(['A', 'B']);
     expect(result.formats).toEqual(['1 L', '4 L', '10 L', '20 L']);
+  });
+});
+
+describe('PlantService laboratory sample cycle', () => {
+  const user = { sub: 'lab-user', companyId: 'company-1', role: 'LABORATORIO' } as any;
+  const tank = {
+    id: 'tank-101', companyId: 'company-1', plantId: 'plant-latex', name: 'TK101',
+    state: 'LABORATORIO', version: 7, activeLotId: 'lot-1'
+  };
+
+  const createService = (sample: any = {
+    id: 'sample-1', status: 'AWAITING_RECEIPT', iteration: 1
+  }) => {
+    const tx = {
+      tank: {
+        findFirst: jest.fn().mockResolvedValue(tank),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ plantId: 'plant-latex' })
+      },
+      laboratorySample: {
+        findFirst: jest.fn().mockResolvedValue(sample),
+        update: jest.fn().mockResolvedValue({ id: 'sample-1' })
+      },
+      qualityDecision: { create: jest.fn() },
+      productionLot: { update: jest.fn() },
+      plantAuditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
+    } as any;
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) } as any;
+    const notifications = { notifyTankAction: jest.fn() } as any;
+    return { service: new PlantService(prisma, { get: jest.fn() } as any, notifications), tx };
+  };
+
+  it('registra quién recibió la muestra sin cambiar el estado físico del tanque', async () => {
+    const { service, tx } = createService();
+
+    const result = await service.receiveLaboratorySample('company-1', 'tank-101', user, { version: 7 });
+
+    expect(result).toMatchObject({ ok: true, sampleId: 'sample-1' });
+    expect(tx.tank.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tank-101', state: 'LABORATORIO', version: 7 },
+      data: { version: { increment: 1 } }
+    });
+    expect(tx.laboratorySample.update).toHaveBeenCalledWith({
+      where: { id: 'sample-1' },
+      data: expect.objectContaining({ status: 'RECEIVED', receivedByUserId: 'lab-user', receivedAt: expect.any(Date) })
+    });
+    expect(tx.plantAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'SAMPLE_RECEIVED', entityType: 'LaboratorySample' })
+    }));
+  });
+
+  it('impide informar un resultado antes de confirmar la recepción', async () => {
+    const { service, tx } = createService(null);
+
+    await expect(service.quality('company-1', 'tank-101', user, {
+      version: 7,
+      result: 'APROBADO',
+      employeeNumber: '1234',
+      specificWeight: 1.25
+    })).rejects.toThrow('Laboratorio debe confirmar la recepción de la muestra');
+    expect(tx.qualityDecision.create).not.toHaveBeenCalled();
   });
 });
 

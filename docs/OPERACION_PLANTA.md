@@ -5,7 +5,7 @@
 | Rol | Pantallas | Operaciones |
 |---|---|---|
 | `FABRICACION` | Fabricación | Iniciar/corregir OF, enviar a Laboratorio, cerrar rechazado y gestionar servicio |
-| `LABORATORIO` | Laboratorio | Aprobar, pedir ajuste o rechazar |
+| `LABORATORIO` | Laboratorio | Confirmar recepción de muestra, aprobar, pedir ajuste o rechazar |
 | `ENVASADO` | Envasado | Iniciar/corregir/cambiar/finalizar OE |
 | `MONITOREO` | Monitoreo e Historial | Sólo lectura |
 | `JEFATURA` | Resumen diario, Monitoreo e Historial | Sólo lectura, cierres y exportaciones |
@@ -30,6 +30,15 @@ APROBADO → TRASVASANDO → VACIO   (sólo Slurry; cierra lote, no crea OE)
 ```
 
 Cada escritura incluye `version`. Si otro usuario actuó primero, el backend responde `409 Conflict` y la pantalla se actualiza.
+
+Dentro de `LABORATORIO` existe un ciclo de muestra que no agrega estados físicos al tanque:
+
+```text
+AWAITING_RECEIPT → RECEIVED → RESOLVED
+     espera           análisis     aprobado / ajuste / rechazo
+```
+
+Fabricación abre el ciclo al enviar el tanque. Laboratorio confirma **Recibí la muestra** cuando la recibe físicamente; hasta entonces el backend bloquea cualquier decisión de calidad. Cada devolución después de un ajuste crea una iteración nueva. Se conservan responsable y horario de solicitud, recepción y resolución, además de los tiempos envío–recepción y recepción–resultado.
 
 ## Persistencia
 

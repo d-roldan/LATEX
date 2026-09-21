@@ -50,6 +50,19 @@ enum TelemetryMode {
   PENDING
 }
 
+enum IntegrationInboxStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum LaboratorySampleStatus {
+  AWAITING_RECEIPT
+  RECEIVED
+  RESOLVED
+}
+
 enum QualityResult {
   APROBADO
   AJUSTE
@@ -189,6 +202,8 @@ model Company {
   dailyPlantClosures DailyPlantClosure[]
   plants             Plant[]
   plantIntegrations  PlantIntegration[]
+  integrationInbox   IntegrationInbox[]
+  laboratorySamples  LaboratorySample[]
   transferOperations TransferOperation[]
 
   @@index([name])
@@ -234,6 +249,8 @@ model User {
   plantAccesses           UserPlantAccess[]
   transferOperationsStarted  TransferOperation[] @relation("TransferStartedBy")
   transferOperationsFinished TransferOperation[] @relation("TransferFinishedBy")
+  laboratorySamplesRequested LaboratorySample[] @relation("LaboratorySampleRequestedBy")
+  laboratorySamplesReceived  LaboratorySample[] @relation("LaboratorySampleReceivedBy")
 
   @@unique([companyId, email])
   @@unique([companyId, username])
@@ -735,6 +752,8 @@ model Plant {
   closures       DailyPlantClosure[]
   notifications  Notification[]
   integrations   PlantIntegration[]
+  integrationInbox IntegrationInbox[]
+  laboratorySamples LaboratorySample[]
   packagingLines PackagingLine[]
 
   @@unique([companyId, code])
@@ -763,9 +782,36 @@ model PlantIntegration {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  inboxEvents IntegrationInbox[]
 
   @@unique([plantId, source])
   @@index([companyId, isActive])
+}
+
+model IntegrationInbox {
+  id            String                   @id @default(cuid())
+  companyId     String
+  plantId       String
+  integrationId String
+  source        String
+  eventId       String
+  eventType     String
+  occurredAt    DateTime                 @db.Timestamptz(3)
+  sequence      String?
+  payload       Json
+  status        IntegrationInboxStatus   @default(RECEIVED)
+  attempts      Int                      @default(0)
+  lastError     String?
+  receivedAt    DateTime                 @default(now()) @db.Timestamptz(3)
+  processedAt   DateTime?                @db.Timestamptz(3)
+  company       Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  plant         Plant                    @relation(fields: [plantId], references: [id], onDelete: Restrict)
+  integration   PlantIntegration         @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+
+  @@unique([plantId, source, eventId])
+  @@index([plantId, status, receivedAt])
+  @@index([plantId, occurredAt])
+  @@index([integrationId, receivedAt])
 }
 
 model PackagingLine {
@@ -840,6 +886,7 @@ model Tank {
   packagingOrders PackagingOrder[]
   auditLogs       PlantAuditLog[]
   transferOperations TransferOperation[]
+  laboratorySamples LaboratorySample[]
 
   @@unique([plantId, number])
   @@unique([plantId, equipmentCode])
@@ -872,6 +919,7 @@ model ProductionLot {
   createdBy          User               @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
   stateHistory       TankStateHistory[]
   qualityDecisions   QualityDecision[]
+  laboratorySamples  LaboratorySample[]
   packagingOrders    PackagingOrder[]
   auditLogs          PlantAuditLog[]
   transferOperations TransferOperation[]
@@ -922,9 +970,39 @@ model QualityDecision {
   lot               ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
   user              User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   adjustmentItems   QualityAdjustmentItem[]
+  laboratorySample  LaboratorySample?
 
   @@index([companyId, createdAt])
   @@index([lotId, createdAt])
+}
+
+model LaboratorySample {
+  id                   String                 @id @default(cuid())
+  companyId            String
+  plantId              String
+  tankId               String
+  lotId                String
+  iteration            Int
+  status               LaboratorySampleStatus @default(AWAITING_RECEIPT)
+  requestedAt          DateTime               @default(now()) @db.Timestamptz(3)
+  requestedByUserId    String?
+  receivedAt           DateTime?              @db.Timestamptz(3)
+  receivedByUserId     String?
+  resolvedAt           DateTime?              @db.Timestamptz(3)
+  qualityDecisionId    String?                @unique
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  company              Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  plant                Plant                  @relation(fields: [plantId], references: [id], onDelete: Restrict)
+  tank                 Tank                   @relation(fields: [tankId], references: [id], onDelete: Restrict)
+  lot                  ProductionLot          @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  requestedBy          User?                  @relation("LaboratorySampleRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  receivedBy           User?                  @relation("LaboratorySampleReceivedBy", fields: [receivedByUserId], references: [id], onDelete: SetNull)
+  qualityDecision      QualityDecision?       @relation(fields: [qualityDecisionId], references: [id], onDelete: SetNull)
+
+  @@unique([lotId, iteration])
+  @@index([plantId, status, requestedAt])
+  @@index([tankId, requestedAt])
+  @@index([lotId, requestedAt])
 }
 
 model QualityAdjustmentItem {

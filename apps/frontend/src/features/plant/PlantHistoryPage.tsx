@@ -83,6 +83,18 @@ export interface Timeline {
   packagingOrders: PackagingOrderSummary[];
   manufacturingCharges: ManufacturingCharge[];
   qualityDecisions: QualityAdjustment[];
+  laboratorySamples?: Array<{
+    id: string;
+    iteration: number;
+    status: 'AWAITING_RECEIPT' | 'RECEIVED' | 'RESOLVED';
+    requestedAt: string;
+    receivedAt?: string;
+    resolvedAt?: string;
+    waitingForReceiptSeconds?: number | null;
+    analysisSeconds?: number | null;
+    requestedBy?: { fullName: string };
+    receivedBy?: { fullName: string };
+  }>;
   weightHistory: {
     status: 'AVAILABLE' | 'NO_DATA' | 'CONFIGURATION_PENDING' | 'UNAVAILABLE';
     message: string;
@@ -377,6 +389,7 @@ function TraceabilityContent({ timeline }: { timeline: Timeline }) {
   return (
     <div className="traceability-content">
       <WeightChart timeline={timeline} />
+      <LaboratorySampleCycles samples={timeline.laboratorySamples ?? []} />
       <section className="lot-timeline" aria-label="Etapas de la orden de fabricación">
         {timeline.stateHistory.map((period) => (
           <article key={period.id}>
@@ -408,6 +421,35 @@ function TraceabilityContent({ timeline }: { timeline: Timeline }) {
         ))}
       </section>
     </div>
+  );
+}
+
+function LaboratorySampleCycles({ samples }: { samples: NonNullable<Timeline['laboratorySamples']> }) {
+  if (!samples.length) return null;
+
+  return (
+    <details className="traceability-disclosure laboratory-samples" open>
+      <summary>
+        Ciclos de muestras de Laboratorio <b>{samples.length}</b>
+      </summary>
+      <div>
+        {samples.map((sample) => (
+          <article key={sample.id}>
+            <header>
+              <strong>Muestra {sample.iteration}</strong>
+              <span>{sample.status === 'AWAITING_RECEIPT' ? 'Esperando recepción' : sample.status === 'RECEIVED' ? 'En análisis' : 'Resuelta'}</span>
+            </header>
+            <dl>
+              <div><dt>Solicitada</dt><dd>{dateTime(sample.requestedAt)}{sample.requestedBy ? ` · ${sample.requestedBy.fullName}` : ''}</dd></div>
+              <div><dt>Recibida</dt><dd>{sample.receivedAt ? `${dateTime(sample.receivedAt)}${sample.receivedBy ? ` · ${sample.receivedBy.fullName}` : ''}` : 'Pendiente'}</dd></div>
+              <div><dt>Espera</dt><dd>{sample.waitingForReceiptSeconds == null ? 'En curso' : duration(sample.waitingForReceiptSeconds)}</dd></div>
+              <div><dt>Resultado</dt><dd>{sample.resolvedAt ? dateTime(sample.resolvedAt) : 'Pendiente'}</dd></div>
+              <div><dt>Análisis</dt><dd>{sample.analysisSeconds == null ? sample.receivedAt ? 'En curso' : 'Pendiente' : duration(sample.analysisSeconds)}</dd></div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </details>
   );
 }
 

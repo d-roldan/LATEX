@@ -14,6 +14,13 @@ interface UserItem {
   role: string;
   isActive: boolean;
   createdAt: string;
+  plantAccesses: Array<{ plant: PlantItem }>;
+}
+
+interface PlantItem {
+  id: string;
+  code: string;
+  name: string;
 }
 
 const ROLES = [
@@ -48,7 +55,8 @@ const emptyForm = {
   email: '',
   username: '',
   role: 'FABRICACION',
-  password: ''
+  password: '',
+  plantIds: [] as string[]
 };
 
 export function UsersPage() {
@@ -74,6 +82,14 @@ export function UsersPage() {
     }
   });
 
+  const plantsQuery = useQuery({
+    queryKey: ['users', 'available-plants'],
+    queryFn: async () => {
+      const response = await api.get<PlantItem[]>('/users/available-plants');
+      return response.data;
+    }
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       await api.post('/users', {
@@ -81,7 +97,8 @@ export function UsersPage() {
         email: form.email,
         username: form.username,
         role: form.role,
-        password: form.password
+        password: form.password,
+        plantIds: form.plantIds
       });
     },
     onSuccess: () => {
@@ -120,6 +137,19 @@ export function UsersPage() {
     },
     onError: (error: { response?: { data?: { message?: string } } }) => {
       setFormError(error.response?.data?.message ?? 'No se pudo actualizar el usuario.');
+    }
+  });
+
+  const updatePlantsMutation = useMutation({
+    mutationFn: async ({ id, plantIds }: { id: string; plantIds: string[] }) => {
+      await api.patch(`/users/${id}/plants`, { plantIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setActionError(null);
+    },
+    onError: (error: { response?: { data?: { message?: string } } }) => {
+      setFormError(error.response?.data?.message ?? 'No se pudieron actualizar las plantas.');
     }
   });
 
@@ -180,7 +210,14 @@ export function UsersPage() {
 
   const openEdit = (user: UserItem) => {
     setEditingId(user.id);
-    setForm({ fullName: user.fullName, email: user.email, username: user.username, role: user.role, password: '' });
+    setForm({
+      fullName: user.fullName,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      password: '',
+      plantIds: user.plantAccesses.map(({ plant }) => plant.id)
+    });
     setNewPassword('');
     setFormError(null);
     setActionError(null);
@@ -189,7 +226,12 @@ export function UsersPage() {
   };
 
   const closeModal = () => {
-    if (createMutation.isPending || updateProfileMutation.isPending) return;
+    if (
+      createMutation.isPending ||
+      updateProfileMutation.isPending ||
+      updatePlantsMutation.isPending
+    )
+      return;
     setIsModalOpen(false);
     setEditingId(null);
     setForm(emptyForm);
@@ -203,6 +245,10 @@ export function UsersPage() {
     setFormError(null);
     setActionError(null);
     setModalInfo(null);
+    if (form.plantIds.length === 0) {
+      setFormError('Seleccioná al menos una planta para el usuario.');
+      return;
+    }
     if (editingId) {
       const changedFields: string[] = [];
 
@@ -218,6 +264,15 @@ export function UsersPage() {
       if (form.role !== editingUser?.role) {
         changedFields.push('puesto');
         updateRoleMutation.mutate({ id: editingId, role: form.role });
+      }
+
+      const previousPlantIds = (editingUser?.plantAccesses ?? [])
+        .map(({ plant }) => plant.id)
+        .sort();
+      const selectedPlantIds = [...form.plantIds].sort();
+      if (previousPlantIds.join('|') !== selectedPlantIds.join('|')) {
+        changedFields.push('plantas');
+        updatePlantsMutation.mutate({ id: editingId, plantIds: form.plantIds });
       }
 
       if (newPassword.trim()) {
@@ -238,18 +293,22 @@ export function UsersPage() {
   const isPending =
     createMutation.isPending ||
     updateProfileMutation.isPending ||
+    updatePlantsMutation.isPending ||
     updateRoleMutation.isPending ||
     updatePasswordMutation.isPending;
 
   return (
     <div className="users-page stack-lg page-enter">
-
       {/* ── HERO ─────────────────────────────────────────── */}
       <header className="page-hero panel stagger-1">
         <div className="page-hero__left">
-          <p className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>👥 MÓDULO USUARIOS</p>
+          <p className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>
+            👥 MÓDULO USUARIOS
+          </p>
           <h2 className="page-hero__title">Gestión de Equipo</h2>
-          <p className="page-hero__sub">Alta, baja y modificación de usuarios del sistema. Asignación de roles y accesos.</p>
+          <p className="page-hero__sub">
+            Alta, baja y modificación de usuarios del sistema. Asignación de roles y accesos.
+          </p>
         </div>
         <div className="page-hero__actions">
           <Badge variant="primary">Control de acceso</Badge>
@@ -270,13 +329,13 @@ export function UsersPage() {
             >
               <option value="">Todos los roles</option>
               {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
               ))}
             </select>
           </div>
-          <div className="dash-period-badge">
-            {listQuery.data?.length ?? 0} usuarios
-          </div>
+          <div className="dash-period-badge">{listQuery.data?.length ?? 0} usuarios</div>
         </div>
 
         {/* ── TABLA ─────────────────────────────────────── */}
@@ -289,34 +348,56 @@ export function UsersPage() {
                 <th>Email</th>
                 <th>Usuario</th>
                 <th>Rol</th>
+                <th>Plantas</th>
                 <th>Estado</th>
                 <th style={{ textAlign: 'right' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {listQuery.isLoading ? (
-                <tr><td colSpan={6} className="empty-state">Cargando usuarios...</td></tr>
+                <tr>
+                  <td colSpan={7} className="empty-state">
+                    Cargando usuarios...
+                  </td>
+                </tr>
               ) : listQuery.data?.length ? (
                 listQuery.data.map((user) => (
                   <tr key={user.id} style={!user.isActive ? { opacity: 0.55 } : {}}>
                     <td className="strong-cell">
                       <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{
-                          width: '2rem', height: '2rem', borderRadius: '50%',
-                          background: 'var(--primary)', display: 'flex', alignItems: 'center',
-                          justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'white', flexShrink: 0
-                        }}>
+                        <span
+                          style={{
+                            width: '2rem',
+                            height: '2rem',
+                            borderRadius: '50%',
+                            background: 'var(--primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            color: 'white',
+                            flexShrink: 0
+                          }}
+                        >
                           {user.fullName.charAt(0).toUpperCase()}
                         </span>
                         {user.fullName}
                       </span>
                     </td>
                     <td style={{ color: 'var(--ink-soft)', fontSize: '0.88rem' }}>{user.email}</td>
-                    <td style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 700 }}>{user.username}</td>
+                    <td style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 700 }}>
+                      {user.username}
+                    </td>
                     <td>
                       <Badge variant={ROLE_COLORS[user.role] ?? 'default'}>
                         {ROLE_LABELS[user.role] ?? user.role}
                       </Badge>
+                    </td>
+                    <td className="users-plants-cell">
+                      {user.plantAccesses.length > 0
+                        ? user.plantAccesses.map(({ plant }) => plant.name).join(', ')
+                        : 'Sin acceso'}
                     </td>
                     <td>
                       <Badge variant={user.isActive ? 'success' : 'destructive'}>
@@ -324,7 +405,12 @@ export function UsersPage() {
                       </Badge>
                     </td>
                     <td className="row-actions" style={{ justifyContent: 'flex-end' }}>
-                      <Button variant="secondary" size="sm" type="button" onClick={() => openEdit(user)}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        type="button"
+                        onClick={() => openEdit(user)}
+                      >
                         Editar
                       </Button>
                       <Button
@@ -348,7 +434,7 @@ export function UsersPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="empty-state">
                       <span className="empty-state__icon">👥</span>
                       <p>No se encontraron usuarios.</p>
@@ -364,10 +450,17 @@ export function UsersPage() {
       {/* ── MODAL CREAR/EDITAR ──────────────────────────── */}
       <Dialog
         open={isModalOpen}
-        onOpenChange={(open) => { if (!open) closeModal(); else setIsModalOpen(true); }}
+        onOpenChange={(open) => {
+          if (!open) closeModal();
+          else setIsModalOpen(true);
+        }}
         disableClose={isPending}
         title={editingId ? 'Editar Usuario' : 'Nuevo Usuario'}
-        description={editingId && editingUser ? `Modificando datos de: ${editingUser.fullName}` : 'Completá los datos para crear un nuevo acceso al sistema.'}
+        description={
+          editingId && editingUser
+            ? `Modificando datos de: ${editingUser.fullName}`
+            : 'Completá los datos para crear un nuevo acceso al sistema.'
+        }
       >
         <form className="form-grid" onSubmit={onSubmit}>
           <div className="form-section">
@@ -409,17 +502,21 @@ export function UsersPage() {
           </div>
 
           <div className="form-section">
-            <h4 className="form-section__title">Rol y Acceso</h4>
+            <h4 className="form-section__title">Nivel y acceso</h4>
             <div className="form-grid-2">
               <label>
-                Rol en el sistema
+                Nivel de usuario
                 <select
                   className="control-bar__select"
                   style={{ width: '100%', padding: '0.6rem' }}
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
-                  {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  {ROLES.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -427,34 +524,93 @@ export function UsersPage() {
                 <Input
                   type="password"
                   value={editingId ? newPassword : form.password}
-                  onChange={(e) => editingId ? setNewPassword(e.target.value) : setForm({ ...form, password: e.target.value })}
+                  onChange={(e) =>
+                    editingId
+                      ? setNewPassword(e.target.value)
+                      : setForm({ ...form, password: e.target.value })
+                  }
                   required={!editingId}
                   minLength={6}
                   placeholder={editingId ? 'Dejar vacio para no cambiar' : 'Minimo 6 caracteres'}
                 />
               </label>
             </div>
+            <fieldset className="users-plant-selector" aria-describedby="plant-access-help">
+              <legend>Plantas habilitadas</legend>
+              <p id="plant-access-help">Seleccioná una o más plantas a las que podrá ingresar.</p>
+              {plantsQuery.isLoading ? (
+                <span className="users-plant-selector__status">Cargando plantas...</span>
+              ) : plantsQuery.isError ? (
+                <span className="error-text">No se pudieron cargar las plantas disponibles.</span>
+              ) : plantsQuery.data?.length ? (
+                <div className="users-plant-selector__options">
+                  {plantsQuery.data.map((plant) => (
+                    <label key={plant.id} className="users-plant-option">
+                      <input
+                        type="checkbox"
+                        checked={form.plantIds.includes(plant.id)}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            plantIds: event.target.checked
+                              ? [...form.plantIds, plant.id]
+                              : form.plantIds.filter((plantId) => plantId !== plant.id)
+                          })
+                        }
+                      />
+                      <span>
+                        <strong>{plant.name}</strong>
+                        <small>{plant.code}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <span className="users-plant-selector__status">
+                  No hay plantas activas disponibles.
+                </span>
+              )}
+            </fieldset>
             {form.role && (
-              <div style={{ marginTop: '0.8rem', padding: '0.7rem', background: 'color-mix(in srgb, var(--primary) 8%, transparent)', borderRadius: '0.5rem', fontSize: '0.82rem', color: 'var(--ink-soft)' }}>
-                {form.role === 'FABRICACION' && '🏭 Opera el inicio de fabricación, ajustes y envío a laboratorio.'}
-                {form.role === 'LABORATORIO' && '🧪 Registra aprobaciones, ajustes y rechazos de calidad.'}
+              <div
+                style={{
+                  marginTop: '0.8rem',
+                  padding: '0.7rem',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.82rem',
+                  color: 'var(--ink-soft)'
+                }}
+              >
+                {form.role === 'FABRICACION' &&
+                  '🏭 Opera el inicio de fabricación, ajustes y envío a laboratorio.'}
+                {form.role === 'LABORATORIO' &&
+                  '🧪 Registra aprobaciones, ajustes y rechazos de calidad.'}
                 {form.role === 'ENVASADO' && '📦 Opera las órdenes y el cierre de envasado.'}
-                {form.role === 'MONITOREO' && '📺 Consulta la planta y su historial sin realizar operaciones.'}
-                {form.role === 'JEFATURA' && '📊 Consulta el resumen diario, monitoreo, trazabilidad y cierres de jornada.'}
-                {form.role === 'ADMIN' && '⚙️ El administrador técnico tiene acceso completo al sistema.'}
+                {form.role === 'MONITOREO' &&
+                  '📺 Consulta la planta y su historial sin realizar operaciones.'}
+                {form.role === 'JEFATURA' &&
+                  '📊 Consulta el resumen diario, monitoreo, trazabilidad y cierres de jornada.'}
+                {form.role === 'ADMIN' &&
+                  '⚙️ El administrador técnico tiene acceso completo al sistema.'}
               </div>
             )}
           </div>
 
           {modalInfo && (
-            <p style={{ color: 'var(--success)', fontWeight: 700, margin: 0 }}>
-              {modalInfo}
-            </p>
+            <p style={{ color: 'var(--success)', fontWeight: 700, margin: 0 }}>{modalInfo}</p>
           )}
           {formError && <p className="error-text">Error: {formError}</p>}
           {actionError && <p className="error-text">Error: {actionError}</p>}
 
-          <div style={{ display: 'flex', gap: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: '1rem',
+              paddingTop: '1rem',
+              borderTop: '1px solid var(--border)'
+            }}
+          >
             <Button type="submit" disabled={isPending}>
               {isPending ? 'Guardando...' : editingId ? 'Guardar Cambios' : 'Crear Usuario'}
             </Button>
@@ -468,23 +624,38 @@ export function UsersPage() {
       {/* ── MODAL CONFIRMAR TOGGLE ─────────────────────── */}
       <Dialog
         open={Boolean(confirmToggle)}
-        onOpenChange={(open) => { if (!open) setConfirmToggle(null); }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmToggle(null);
+        }}
         disableClose={toggleMutation.isPending}
         title={confirmToggle?.isActive ? 'Suspender usuario' : 'Activar usuario'}
-        description={confirmToggle?.isActive
-          ? `¿Suspender a ${confirmToggle?.fullName}? No podrá ingresar al sistema.`
-          : `¿Activar a ${confirmToggle?.fullName}? Podrá ingresar al sistema nuevamente.`}
+        description={
+          confirmToggle?.isActive
+            ? `¿Suspender a ${confirmToggle?.fullName}? No podrá ingresar al sistema.`
+            : `¿Activar a ${confirmToggle?.fullName}? Podrá ingresar al sistema nuevamente.`
+        }
       >
         <div style={{ display: 'flex', gap: '1rem', paddingTop: '0.5rem' }}>
           <Button
             type="button"
             variant={confirmToggle?.isActive ? 'destructive' : 'default'}
             disabled={toggleMutation.isPending}
-            onClick={() => { if (confirmToggle) toggleMutation.mutate(confirmToggle.id); }}
+            onClick={() => {
+              if (confirmToggle) toggleMutation.mutate(confirmToggle.id);
+            }}
           >
-            {toggleMutation.isPending ? 'Procesando...' : confirmToggle?.isActive ? 'Sí, suspender' : 'Sí, activar'}
+            {toggleMutation.isPending
+              ? 'Procesando...'
+              : confirmToggle?.isActive
+                ? 'Sí, suspender'
+                : 'Sí, activar'}
           </Button>
-          <Button variant="secondary" type="button" onClick={() => setConfirmToggle(null)} disabled={toggleMutation.isPending}>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => setConfirmToggle(null)}
+            disabled={toggleMutation.isPending}
+          >
             Cancelar
           </Button>
         </div>
@@ -492,7 +663,9 @@ export function UsersPage() {
 
       <Dialog
         open={Boolean(confirmDelete)}
-        onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null);
+        }}
         disableClose={deleteMutation.isPending}
         title="Eliminar usuario"
         description={`Se dara de baja el acceso de ${confirmDelete?.fullName}. El historial queda conservado.`}
@@ -502,11 +675,18 @@ export function UsersPage() {
             type="button"
             variant="destructive"
             disabled={deleteMutation.isPending}
-            onClick={() => { if (confirmDelete) deleteMutation.mutate(confirmDelete.id); }}
+            onClick={() => {
+              if (confirmDelete) deleteMutation.mutate(confirmDelete.id);
+            }}
           >
             {deleteMutation.isPending ? 'Eliminando...' : 'Si, eliminar'}
           </Button>
-          <Button variant="secondary" type="button" onClick={() => setConfirmDelete(null)} disabled={deleteMutation.isPending}>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => setConfirmDelete(null)}
+            disabled={deleteMutation.isPending}
+          >
             Cancelar
           </Button>
         </div>

@@ -1,4 +1,14 @@
-import { IsEmail, IsEnum, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsArray,
+  IsEmail,
+  IsEnum,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength
+} from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class CreateUserDto {
@@ -26,4 +36,10 @@ export class CreateUserDto {
 
   @IsEnum(UserRole)
   role!: UserRole;
+
+  @IsArray()
+  @ArrayNotEmpty({ message: 'Debe seleccionar al menos una planta' })
+  @ArrayUnique({ message: 'No se pueden repetir plantas' })
+  @IsString({ each: true })
+  plantIds!: string[];
 }

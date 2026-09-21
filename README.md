@@ -110,6 +110,8 @@ Servicios resultantes:
 - `disal-nginx`
 - `disal-node-red`
 
+Durante el arranque también se ejecutan `disal-uploads-init` y `disal-migrate`. Ambos deben terminar con código `0`; no son servicios permanentes. La función, tecnología y comunicación de cada contenedor se explican en [Arquitectura de contenedores](docs/ARQUITECTURA_CONTENEDORES.md).
+
 ## Integración de pesos
 
 Node-RED debe enviar un lote JSON a:
@@ -133,7 +135,7 @@ Ejemplo mínimo:
 
 El endpoint admite entre 1 y 100 lecturas por solicitud. Una balanza se marca sin señal después de 10 segundos sin nuevas lecturas.
 
-El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **Simulador de pesos DISAL** comienza a transmitir automáticamente los nueve tanques cada dos segundos. Desde el editor se puede deshabilitar el inyector periódico, modificar los valores o usar el inyector manual.
+El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **Simulador de pesos DISAL** sólo transmite cuando `DISAL_ENABLE_WEIGHT_SIMULATOR=true`; el valor predeterminado es `false`. Desde el editor se puede modificar el flujo o usar sus inyectores manuales, pero el simulador no debe habilitarse en un entorno conectado a señales reales.
 
 ## Documentación
 
@@ -143,6 +145,7 @@ El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **
 - [Especificación funcional](ESPECIFICACION_FUNCIONAL_PLANTA.md)
 - [Requisitos funcionales y evolución recomendada](docs/REQUIREMENTS.md)
 - [Instructivo de integración y base de datos](docs/INSTRUCTIVO_INTEGRACION_Y_BASE_DE_DATOS.md)
+- [Arquitectura y función de los contenedores](docs/ARQUITECTURA_CONTENEDORES.md)
 - [Contrato detallado de Node-RED](docs/NODE_RED_PESOS.md)
 - [Consultas históricas PostgreSQL](docs/CONSULTAS_HISTORICAS.md)
 - [API y transiciones operativas](docs/OPERACION_PLANTA.md)

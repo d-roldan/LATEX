@@ -18,12 +18,14 @@ interface DailyReport {
   date: string; generatedAt: string; isLive: boolean; snapshotAt: string; currentByState: Record<string, number>; onlineScales: number | null;
   completedLots: Array<{ id: string; manufacturingOrder: string; description: string; durationSeconds: number }>;
   quality: Record<string, number>; packaging: { producedKg: number; wasteKg: number; producedUnits: number; completedOrders: number };
+  laboratory: { awaitingReceipt: number; inAnalysis: number; received: number; resolved: number; averageReceiptSeconds: number | null; averageAnalysisSeconds: number | null };
   durationByState: Record<string, number>; tanks: ManagementTank[]; attention: ManagementTank[];
   closure?: { notes?: string; createdAt: string; createdBy: { fullName: string } } | null;
 }
 interface Timeline {
   id: string; manufacturingOrder: string; materialCode: string; description: string; totalDurationSeconds: number;
   stateHistory: Array<{ id: string; state: string; description?: string; startedAt: string; endedAt?: string; durationSeconds: number; weightKg?: number; targetSeconds?: number; user?: { fullName: string } }>;
+  laboratorySamples?: Array<{ id: string; iteration: number; status: string; requestedAt: string; receivedAt?: string; resolvedAt?: string; waitingForReceiptSeconds?: number | null; analysisSeconds?: number | null; requestedBy?: { fullName: string }; receivedBy?: { fullName: string } }>;
 }
 
 const stateLabel: Record<string, string> = {
@@ -70,7 +72,8 @@ export function PlantManagementPage() {
   const qualityIncidents = (data?.quality.AJUSTE ?? 0) + (data?.quality.RECHAZADO_RECUPERAR ?? 0) + (data?.quality.RECHAZADO_DESTRUIR ?? 0);
   const kpis = useMemo(() => data ? [
     { label: 'Fabricando', value: data.currentByState.FABRICANDO ?? 0, icon: <Gauge />, tone: 'blue' },
-    { label: 'En laboratorio', value: data.currentByState.LABORATORIO ?? 0, icon: <Search />, tone: 'yellow' },
+    { label: 'Esperando muestra', value: data.laboratory.awaitingReceipt, icon: <Clock3 />, tone: 'yellow' },
+    { label: 'En análisis', value: data.laboratory.inAnalysis, icon: <Search />, tone: 'blue' },
     { label: 'Esperando envasado', value: data.currentByState.APROBADO ?? 0, icon: <Clock3 />, tone: 'green' },
     { label: 'Finalizados', value: data.completedLots.length, icon: <CheckCircle2 />, tone: 'green' },
     { label: 'Kg envasados', value: Math.round(data.packaging.producedKg).toLocaleString('es-AR'), icon: <PackageCheck />, tone: 'blue' },
@@ -103,6 +106,8 @@ export function PlantManagementPage() {
       <section className="management-summary">
         {data.isLive ? data.tanks.some(t => t.telemetryMode === 'AUTOMATIC') ? <span><Radio size={16}/><b>{data.onlineScales}/{data.tanks.filter(t => t.telemetryMode === 'AUTOMATIC').length}</b> balanzas en línea</span> : <span><Radio size={16}/><b>{data.tanks.some(t => t.telemetryMode === 'PENDING') ? 'Mapeo pendiente' : 'Sin medición de peso'}</b></span> : <span><Clock3 size={16}/><b>Cierre del día</b> seleccionado</span>}
         <span><b>{qualityIncidents}</b> ajustes/rechazos</span>
+        <span><b>{duration(data.laboratory.averageReceiptSeconds)}</b> promedio hasta recibir muestra</span>
+        <span><b>{duration(data.laboratory.averageAnalysisSeconds)}</b> promedio de análisis</span>
         <span><b>{Math.round(data.packaging.wasteKg).toLocaleString('es-AR')} kg</b> de merma</span>
         {data.closure ? <span className="is-closed"><CheckCircle2 size={16}/> Jornada cerrada por {data.closure.createdBy.fullName}</span> : <span>{data.isLive ? 'Informe en vivo' : 'Reconstrucción histórica'}</span>}
       </section>
@@ -123,6 +128,7 @@ export function PlantManagementPage() {
 
     <Dialog open={Boolean(selectedLotId)} onOpenChange={(open) => !open && setSelectedLotId(null)} title={timeline.data ? `OF ${timeline.data.manufacturingOrder}` : 'Línea de tiempo'} description={timeline.data ? `${timeline.data.materialCode} · ${timeline.data.description} · Total ${duration(timeline.data.totalDurationSeconds)}` : 'Cargando trazabilidad…'}>
       <div className="lot-timeline">{timeline.data?.stateHistory.map((period) => <article key={period.id}><span className={`timeline-dot state-${period.state.toLowerCase()}`}/><div><strong>{stateLabel[period.state] ?? period.state}</strong><small>{localTime(period.startedAt)} — {period.endedAt ? localTime(period.endedAt) : 'En curso'} · {duration(period.durationSeconds)}</small>{period.description ? <p>{period.description}</p> : null}{period.weightKg !== null && period.weightKg !== undefined ? <em>Peso al ingresar: {Math.round(period.weightKg).toLocaleString('es-AR')} kg</em> : null}</div></article>)}</div>
+      {timeline.data?.laboratorySamples?.length ? <section className="management-laboratory-cycles"><h3>Ciclos de Laboratorio</h3>{timeline.data.laboratorySamples.map((sample) => <article key={sample.id}><strong>Muestra {sample.iteration}</strong><span>Solicitada {localTime(sample.requestedAt)}</span><span>Recibida {sample.receivedAt ? localTime(sample.receivedAt) : 'Pendiente'}</span><span>Espera: {duration(sample.waitingForReceiptSeconds)}</span><span>Resultado {sample.resolvedAt ? localTime(sample.resolvedAt) : 'Pendiente'}</span><span>Análisis: {duration(sample.analysisSeconds)}</span></article>)}</section> : null}
     </Dialog>
     <Dialog open={closureOpen} onOpenChange={setClosureOpen} title="Cerrar jornada" description="Guarda una fotografía inmutable de los indicadores para la reunión y los informes posteriores.">
       <label className="closure-notes">Observaciones del jefe<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Pendientes, desvíos, prioridades para el próximo turno…"/></label>

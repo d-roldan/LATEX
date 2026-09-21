@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
@@ -22,7 +18,10 @@ export class UsersService {
     return { module: 'users', status: 'ready' };
   }
 
-  private assertCanManageTarget(target: { id: string; isProtected: boolean; isSystemOwner: boolean }, actor?: JwtUser) {
+  private assertCanManageTarget(
+    target: { id: string; isProtected: boolean; isSystemOwner: boolean },
+    actor?: JwtUser
+  ) {
     if (!target.isProtected && !target.isSystemOwner) {
       return;
     }
@@ -31,10 +30,18 @@ export class UsersService {
       return;
     }
 
-    throw new BadRequestException('Este usuario de seguridad no se puede modificar desde la gestion normal');
+    throw new BadRequestException(
+      'Este usuario de seguridad no se puede modificar desde la gestion normal'
+    );
   }
 
-  private async ensureOperatorResource(companyId: string, fullName: string, isActive = true, previousFullName?: string, linkedUserId?: string) {
+  private async ensureOperatorResource(
+    companyId: string,
+    fullName: string,
+    isActive = true,
+    previousFullName?: string,
+    linkedUserId?: string
+  ) {
     const name = fullName.trim();
     const previousName = previousFullName?.trim();
     if (!name) return;
@@ -77,8 +84,8 @@ export class UsersService {
         sector: 'Operarios',
         status,
         isActive,
-        notes: 'Recurso humano creado automaticamente desde usuarios'
-        ,linkedUserId
+        notes: 'Recurso humano creado automaticamente desde usuarios',
+        linkedUserId
       }
     });
   }
@@ -114,24 +121,39 @@ export class UsersService {
         isActive: true,
         isProtected: actor.isSystemOwner,
         isSystemOwner: actor.isSystemOwner,
-        createdAt: true
+        createdAt: true,
+        plantAccesses: {
+          select: {
+            plant: { select: { id: true, code: true, name: true } }
+          },
+          orderBy: { plant: { displayOrder: 'asc' } }
+        }
       },
       orderBy: [{ role: 'asc' }, { fullName: 'asc' }]
     });
   }
 
+  async availablePlants(companyId: string) {
+    return this.prisma.plant.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, code: true, name: true },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }]
+    });
+  }
+
   async create(companyId: string, dto: CreateUserDto, actorUserId?: string) {
-    if (!['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(dto.role)) {
+    if (
+      !['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(
+        dto.role
+      )
+    ) {
       throw new BadRequestException('Rol no habilitado para la planta');
     }
     const username = this.normalizeUsername(dto.username);
     const existing = await this.prisma.user.findFirst({
       where: {
         companyId,
-        OR: [
-          { email: dto.email.toLowerCase() },
-          { username }
-        ]
+        OR: [{ email: dto.email.toLowerCase() }, { username }]
       }
     });
 
@@ -143,6 +165,15 @@ export class UsersService {
       );
     }
 
+    const availablePlants = await this.prisma.plant.findMany({
+      where: { companyId, isActive: true, id: { in: dto.plantIds } },
+      select: { id: true }
+    });
+
+    if (availablePlants.length !== dto.plantIds.length) {
+      throw new BadRequestException('Una o más plantas no existen o no pertenecen a la empresa');
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const created = await this.prisma.user.create({
@@ -152,7 +183,10 @@ export class UsersService {
         username,
         fullName: dto.fullName,
         role: dto.role,
-        passwordHash
+        passwordHash,
+        plantAccesses: {
+          create: dto.plantIds.map((plantId) => ({ plantId }))
+        }
       },
       select: {
         id: true,
@@ -160,7 +194,12 @@ export class UsersService {
         username: true,
         fullName: true,
         role: true,
-        isActive: true
+        isActive: true,
+        plantAccesses: {
+          select: {
+            plant: { select: { id: true, code: true, name: true } }
+          }
+        }
       }
     });
 
@@ -174,7 +213,13 @@ export class UsersService {
     });
 
     if (created.role === 'OPERARIO') {
-      await this.ensureOperatorResource(companyId, created.fullName, created.isActive, undefined, created.id);
+      await this.ensureOperatorResource(
+        companyId,
+        created.fullName,
+        created.isActive,
+        undefined,
+        created.id
+      );
     }
 
     return created;
@@ -211,13 +256,25 @@ export class UsersService {
     });
 
     if (user.role === 'OPERARIO') {
-      await this.ensureOperatorResource(companyId, updated.fullName, updated.isActive, undefined, updated.id);
+      await this.ensureOperatorResource(
+        companyId,
+        updated.fullName,
+        updated.isActive,
+        undefined,
+        updated.id
+      );
     }
 
     return updated;
   }
 
-  async updateRole(companyId: string, id: string, role: UserRole, actorUserId?: string, actor?: JwtUser) {
+  async updateRole(
+    companyId: string,
+    id: string,
+    role: UserRole,
+    actorUserId?: string,
+    actor?: JwtUser
+  ) {
     const user = await this.prisma.user.findFirst({ where: { id, companyId } });
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
@@ -225,8 +282,12 @@ export class UsersService {
 
     this.assertCanManageTarget(user, actor);
 
-    if (!['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(role)) {
-      throw new BadRequestException('Solo se permiten perfiles FABRICACION, LABORATORIO, ENVASADO, MONITOREO, JEFATURA o ADMIN');
+    if (
+      !['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'].includes(role)
+    ) {
+      throw new BadRequestException(
+        'Solo se permiten perfiles FABRICACION, LABORATORIO, ENVASADO, MONITOREO, JEFATURA o ADMIN'
+      );
     }
 
     const updated = await this.prisma.user.update({
@@ -252,7 +313,13 @@ export class UsersService {
     });
 
     if (updated.role === 'OPERARIO') {
-      await this.ensureOperatorResource(companyId, updated.fullName, updated.isActive, undefined, updated.id);
+      await this.ensureOperatorResource(
+        companyId,
+        updated.fullName,
+        updated.isActive,
+        undefined,
+        updated.id
+      );
     } else if (user.role === 'OPERARIO') {
       await this.deactivateOperatorResource(companyId, user.fullName);
     }
@@ -260,7 +327,13 @@ export class UsersService {
     return updated;
   }
 
-  async updateProfile(companyId: string, id: string, dto: UpdateUserProfileDto, actorUserId?: string, actor?: JwtUser) {
+  async updateProfile(
+    companyId: string,
+    id: string,
+    dto: UpdateUserProfileDto,
+    actorUserId?: string,
+    actor?: JwtUser
+  ) {
     const user = await this.prisma.user.findFirst({ where: { id, companyId } });
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
@@ -323,13 +396,90 @@ export class UsersService {
     });
 
     if (user.role === 'OPERARIO') {
-      await this.ensureOperatorResource(companyId, updated.fullName, updated.isActive, user.fullName, updated.id);
+      await this.ensureOperatorResource(
+        companyId,
+        updated.fullName,
+        updated.isActive,
+        user.fullName,
+        updated.id
+      );
     }
 
     return updated;
   }
 
-  async updatePassword(companyId: string, id: string, password: string, actorUserId?: string, actor?: JwtUser) {
+  async updatePlants(
+    companyId: string,
+    id: string,
+    plantIds: string[],
+    actorUserId?: string,
+    actor?: JwtUser
+  ) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, companyId },
+      include: {
+        plantAccesses: {
+          select: { plantId: true }
+        }
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    this.assertCanManageTarget(user, actor);
+
+    const availablePlants = await this.prisma.plant.findMany({
+      where: { companyId, isActive: true, id: { in: plantIds } },
+      select: { id: true }
+    });
+
+    if (availablePlants.length !== plantIds.length) {
+      throw new BadRequestException('Una o más plantas no existen o no pertenecen a la empresa');
+    }
+
+    const previousPlantIds = user.plantAccesses.map((access) => access.plantId);
+    const currentPlantIds = new Set(previousPlantIds);
+    const requestedPlantIds = new Set(plantIds);
+    const plantIdsToAdd = plantIds.filter((plantId) => !currentPlantIds.has(plantId));
+    const plantIdsToRemove = previousPlantIds.filter((plantId) => !requestedPlantIds.has(plantId));
+
+    await this.prisma.$transaction(async (tx) => {
+      if (plantIdsToRemove.length > 0) {
+        await tx.userPlantAccess.deleteMany({
+          where: { userId: id, plantId: { in: plantIdsToRemove } }
+        });
+      }
+
+      if (plantIdsToAdd.length > 0) {
+        await tx.userPlantAccess.createMany({
+          data: plantIdsToAdd.map((plantId) => ({ userId: id, plantId })),
+          skipDuplicates: true
+        });
+      }
+    });
+
+    await this.auditService.log({
+      companyId,
+      userId: actorUserId,
+      entityType: 'USER',
+      entityId: id,
+      action: 'ASSIGN',
+      before: { plantIds: previousPlantIds } as unknown as Prisma.InputJsonValue,
+      after: { plantIds } as unknown as Prisma.InputJsonValue
+    });
+
+    return { id, plantIds };
+  }
+
+  async updatePassword(
+    companyId: string,
+    id: string,
+    password: string,
+    actorUserId?: string,
+    actor?: JwtUser
+  ) {
     const user = await this.prisma.user.findFirst({ where: { id, companyId } });
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
@@ -357,7 +507,9 @@ export class UsersService {
       entityType: 'USER',
       entityId: id,
       action: 'PASSWORD_CHANGE',
-      metadata: { message: 'Password reseteada por gestion de recursos' } as unknown as Prisma.InputJsonValue
+      metadata: {
+        message: 'Password reseteada por gestion de recursos'
+      } as unknown as Prisma.InputJsonValue
     });
 
     return updated;

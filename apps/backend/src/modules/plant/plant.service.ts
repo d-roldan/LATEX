@@ -143,6 +143,18 @@ export class PlantService {
           format: order.format,
           description: order.description,
           startedAt: order.startedAt
+        })),
+        laboratorySamples: (tank.activeLot.laboratorySamples ?? []).map((sample) => ({
+          id: sample.id,
+          iteration: sample.iteration,
+          status: sample.status,
+          requestedAt: sample.requestedAt,
+          receivedAt: sample.receivedAt,
+          resolvedAt: sample.resolvedAt
+        })),
+        qualityDecisions: tank.activeLot.qualityDecisions.map((decision) => ({
+          reason: decision.reason,
+          adjustmentReasons: decision.adjustmentReasons
         }))
       } : null
     }));
@@ -159,6 +171,7 @@ export class PlantService {
         activeLot: {
           include: {
             packagingOrders: { where: { finishedAt: null }, orderBy: { startedAt: 'desc' }, take: 1 },
+            laboratorySamples: { orderBy: { iteration: 'desc' }, take: 1 },
             qualityDecisions: {
               include: { adjustmentItems: { orderBy: { position: 'asc' } } },
               orderBy: { createdAt: 'desc' },
@@ -281,13 +294,73 @@ export class PlantService {
       const tank = await this.findTank(tx, companyId, tankId);
       if (!['FABRICANDO', 'AJUSTE'].includes(tank.state)) throw new ConflictException(`La transición ${tank.state} → LABORATORIO no está permitida`);
       if (tank.version !== dto.version) throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
+      if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
+      const latestSample = await tx.laboratorySample.findFirst({
+        where: { lotId: tank.activeLotId },
+        orderBy: { iteration: 'desc' },
+        select: { iteration: true }
+      });
+      await tx.laboratorySample.create({
+        data: {
+          companyId,
+          plantId: tank.plantId,
+          tankId: tank.id,
+          lotId: tank.activeLotId,
+          iteration: (latestSample?.iteration ?? 0) + 1,
+          requestedByUserId: user.sub
+        }
+      });
       await this.move(tx, tank, 'LABORATORIO', user, tank.activeLotId, dto.reason);
       await this.notifications.notifyTankAction(tx, {
         companyId, actorUserId: user.sub, tankId: tank.id, targetSector: 'LABORATORIO',
-        title: 'Tanque disponible para analizar',
-        message: `${tank.name} ingresó a Laboratorio y espera el análisis de calidad.`
+        title: 'Muestra pendiente de recepción',
+        message: `${tank.name} ingresó a Laboratorio. Confirmá la recepción cuando llegue la muestra.`
       });
       return { ok: true };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async receiveLaboratorySample(companyId: string, tankId: string, user: JwtUser, dto: VersionedActionDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const tank = await this.findTank(tx, companyId, tankId);
+      this.assertTank(tank, 'LABORATORIO', dto.version);
+      if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
+      const sample = await tx.laboratorySample.findFirst({
+        where: {
+          companyId,
+          plantId: tank.plantId,
+          tankId,
+          lotId: tank.activeLotId,
+          status: 'AWAITING_RECEIPT'
+        },
+        orderBy: { iteration: 'desc' }
+      });
+      if (!sample) throw new ConflictException('No existe una muestra pendiente de recepción');
+
+      const changed = await tx.tank.updateMany({
+        where: { id: tank.id, state: 'LABORATORIO', version: dto.version },
+        data: { version: { increment: 1 } }
+      });
+      if (changed.count !== 1) throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
+      const receivedAt = new Date();
+      await tx.laboratorySample.update({
+        where: { id: sample.id },
+        data: { status: 'RECEIVED', receivedAt, receivedByUserId: user.sub }
+      });
+      await this.audit(
+        tx,
+        companyId,
+        user,
+        tank.id,
+        tank.activeLotId,
+        'SAMPLE_RECEIVED',
+        'LaboratorySample',
+        sample.id,
+        { status: sample.status },
+        { status: 'RECEIVED', receivedAt },
+        dto.reason ?? 'Recepción de muestra confirmada'
+      );
+      return { ok: true, sampleId: sample.id, receivedAt: receivedAt.toISOString() };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
@@ -309,6 +382,19 @@ export class PlantService {
       const tank = await this.findTank(tx, companyId, tankId);
       this.assertTank(tank, 'LABORATORIO', dto.version);
       if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
+      const sample = await tx.laboratorySample.findFirst({
+        where: {
+          companyId,
+          plantId: tank.plantId,
+          tankId,
+          lotId: tank.activeLotId,
+          status: 'RECEIVED'
+        },
+        orderBy: { iteration: 'desc' }
+      });
+      if (!sample) {
+        throw new ConflictException('Laboratorio debe confirmar la recepción de la muestra antes de informar el resultado');
+      }
       const state: TankState = dto.result === 'APROBADO' ? 'APROBADO' : dto.result === 'AJUSTE' ? 'AJUSTE' : 'RECHAZADO';
       const decision = await tx.qualityDecision.create({ data: {
         companyId, plantId: tank.plantId, lotId: tank.activeLotId, result: dto.result as QualityResult,
@@ -323,6 +409,10 @@ export class PlantService {
         } : undefined
       }});
       await tx.productionLot.update({ where: { id: tank.activeLotId }, data: { specificWeight: state === 'APROBADO' ? dto.specificWeight : null } });
+      await tx.laboratorySample.update({
+        where: { id: sample.id },
+        data: { status: 'RESOLVED', resolvedAt: new Date(), qualityDecisionId: decision.id }
+      });
       await this.move(tx, tank, state, user, tank.activeLotId, decisionReason ?? dto.result);
       if (state === 'APROBADO') {
         await this.notifications.notifyTankAction(tx, {
@@ -602,6 +692,13 @@ export class PlantService {
           },
           orderBy: { createdAt: 'asc' }
         },
+        laboratorySamples: {
+          include: {
+            requestedBy: { select: { fullName: true } },
+            receivedBy: { select: { fullName: true } }
+          },
+          orderBy: { iteration: 'asc' }
+        },
         packagingOrders: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } },
         transferOperations: { include: { startedBy: { select: { fullName: true } }, finishedBy: { select: { fullName: true } } }, orderBy: { startedAt: 'asc' } }
       }
@@ -631,6 +728,15 @@ export class PlantService {
           quantityKg: Number(item.quantityKg)
         }))
       })),
+      laboratorySamples: lot.laboratorySamples.map((sample) => ({
+        ...sample,
+        waitingForReceiptSeconds: sample.receivedAt
+          ? Math.max(0, Math.floor((sample.receivedAt.getTime() - sample.requestedAt.getTime()) / 1000))
+          : null,
+        analysisSeconds: sample.receivedAt && sample.resolvedAt
+          ? Math.max(0, Math.floor((sample.resolvedAt.getTime() - sample.receivedAt.getTime()) / 1000))
+          : null
+      })),
       packagingOrders: lot.packagingOrders.map((order) => ({
         ...order,
         producedKg: order.producedKg === null ? null : Number(order.producedKg),
@@ -648,7 +754,7 @@ export class PlantService {
     const now = new Date();
     const isLive = now >= start && now < end;
     const reportAt = isLive ? now : new Date(end.getTime() - 1);
-    const [liveTanks, periods, completedLots, quality, packaging, closure] = await Promise.all([
+    const [liveTanks, periods, completedLots, quality, packaging, laboratorySamples, closure] = await Promise.all([
       this.tanks(companyId, plantId),
       this.prisma.tankStateHistory.findMany({
         where: { companyId, plantId, startedAt: { lt: end }, OR: [{ endedAt: null }, { endedAt: { gte: start } }] },
@@ -658,6 +764,15 @@ export class PlantService {
       this.prisma.productionLot.findMany({ where: { companyId, plantId, finishedAt: { gte: start, lt: end } }, select: { id: true, manufacturingOrder: true, materialCode: true, description: true, startedAt: true, finishedAt: true } }),
       this.prisma.qualityDecision.findMany({ where: { companyId, plantId, createdAt: { gte: start, lt: end } }, select: { result: true } }),
       this.prisma.packagingOrder.findMany({ where: { companyId, plantId, finishedAt: { gte: start, lt: end } }, select: { producedKg: true, wasteKg: true, producedUnits: true, durationSeconds: true } }),
+      this.prisma.laboratorySample.findMany({
+        where: {
+          companyId,
+          plantId,
+          requestedAt: { lt: end },
+          OR: [{ resolvedAt: null }, { resolvedAt: { gte: start } }]
+        },
+        select: { status: true, requestedAt: true, receivedAt: true, resolvedAt: true }
+      }),
       this.prisma.dailyPlantClosure.findUnique({ where: { plantId_date: { plantId, date: start } }, include: { createdBy: { select: { fullName: true } } } })
     ]);
     const durationByState: Record<string, number> = {};
@@ -694,6 +809,21 @@ export class PlantService {
       acc[tank.state] = (acc[tank.state] ?? 0) + 1;
       return acc;
     }, {});
+    const receiptDurations = laboratorySamples
+      .filter((sample) => sample.receivedAt && sample.receivedAt >= start && sample.receivedAt < end)
+      .map((sample) => Math.max(0, Math.floor((sample.receivedAt!.getTime() - sample.requestedAt.getTime()) / 1000)));
+    const analysisDurations = laboratorySamples
+      .filter((sample) => sample.receivedAt && sample.resolvedAt && sample.resolvedAt >= start && sample.resolvedAt < end)
+      .map((sample) => Math.max(0, Math.floor((sample.resolvedAt!.getTime() - sample.receivedAt!.getTime()) / 1000)));
+    const average = (values: number[]) => values.length
+      ? Math.round(values.reduce((total, value) => total + value, 0) / values.length)
+      : null;
+    const awaitingReceipt = laboratorySamples.filter((sample) =>
+      sample.requestedAt <= reportAt && (!sample.receivedAt || sample.receivedAt > reportAt)
+    ).length;
+    const inAnalysis = laboratorySamples.filter((sample) =>
+      sample.receivedAt && sample.receivedAt <= reportAt && (!sample.resolvedAt || sample.resolvedAt > reportAt)
+    ).length;
     return {
       plant,
       date,
@@ -704,6 +834,14 @@ export class PlantService {
       onlineScales: isLive ? tanks.filter((tank) => tank.telemetry.online).length : null,
       completedLots: completedLots.map((lot) => ({ ...lot, durationSeconds: Math.max(0, Math.floor(((lot.finishedAt?.getTime() ?? Date.now()) - lot.startedAt.getTime()) / 1000)) })),
       quality: quality.reduce<Record<string, number>>((acc, decision) => { acc[decision.result] = (acc[decision.result] ?? 0) + 1; return acc; }, {}),
+      laboratory: {
+        awaitingReceipt,
+        inAnalysis,
+        received: laboratorySamples.filter((sample) => sample.receivedAt && sample.receivedAt >= start && sample.receivedAt < end).length,
+        resolved: laboratorySamples.filter((sample) => sample.resolvedAt && sample.resolvedAt >= start && sample.resolvedAt < end).length,
+        averageReceiptSeconds: average(receiptDurations),
+        averageAnalysisSeconds: average(analysisDurations)
+      },
       packaging: { ...totals, completedOrders: packaging.length },
       durationByState,
       tanks,
@@ -751,6 +889,10 @@ export class PlantService {
       ? { ...(liveReport.closure.snapshot as unknown as Omit<typeof liveReport, 'closure'>), isLive: false }
       : liveReport;
     if (format === 'xls') {
+      const laboratory = report.laboratory ?? {
+        awaitingReceipt: 0, inAnalysis: 0, received: 0, resolved: 0,
+        averageReceiptSeconds: null, averageAnalysisSeconds: null
+      };
       const rows = report.tanks.map((tank) => [
         tank.name,
         tank.activeLot?.manufacturingOrder ?? '',
@@ -764,7 +906,16 @@ export class PlantService {
       const xmlRows = [['Equipo', 'OF', 'Material', 'Descripción', 'Estado', 'Desde', 'Duración (seg)', 'Balanza'], ...rows]
         .map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="${typeof cell === 'number' ? 'Number' : 'String'}">${this.escapeXml(String(cell))}</Data></Cell>`).join('')}</Row>`)
         .join('');
-      const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Resumen diario"><Table>${xmlRows}</Table></Worksheet></Workbook>`;
+      const laboratoryRows = [
+        ['Indicador', 'Valor (segundos)'],
+        ['Muestras esperando recepción al cierre', laboratory.awaitingReceipt],
+        ['Muestras en análisis al cierre', laboratory.inAnalysis],
+        ['Muestras recibidas en la jornada', laboratory.received],
+        ['Resultados emitidos en la jornada', laboratory.resolved],
+        ['Promedio envío a recepción', laboratory.averageReceiptSeconds ?? ''],
+        ['Promedio recepción a resultado', laboratory.averageAnalysisSeconds ?? '']
+      ].map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="${typeof cell === 'number' ? 'Number' : 'String'}">${this.escapeXml(String(cell))}</Data></Cell>`).join('')}</Row>`).join('');
+      const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Resumen diario"><Table>${xmlRows}</Table></Worksheet><Worksheet ss:Name="Laboratorio"><Table>${laboratoryRows}</Table></Worksheet></Workbook>`;
       return { body: Buffer.from(`\ufeff${xml}`, 'utf8'), contentType: 'application/vnd.ms-excel; charset=utf-8', filename: `DISAL-resumen-${date}.xls` };
     }
     return { body: this.managementPdf(report, date), contentType: 'application/pdf', filename: `DISAL-resumen-${date}.pdf` };
@@ -923,6 +1074,10 @@ export class PlantService {
     completedLots: unknown[];
     packaging: { producedKg: number; wasteKg: number; producedUnits: number; completedOrders: number };
     quality: Record<string, number>;
+    laboratory?: {
+      awaitingReceipt: number; inAnalysis: number; received: number; resolved: number;
+      averageReceiptSeconds: number | null; averageAnalysisSeconds: number | null;
+    };
     tanks: Array<{
       name: string; state: string; stateElapsedSeconds: number | null;
       activeLot: null | { manufacturingOrder: string; materialCode: string; description: string };
@@ -981,6 +1136,13 @@ export class PlantService {
       text(minutes(tank.stateElapsedSeconds), columns[6], y, 8);
       text(tank.telemetry.grossKg === null ? '-' : `${Math.round(tank.telemetry.grossKg).toLocaleString('es-AR')} kg`, columns[7], y, 8, true);
     });
+
+    if (report.laboratory) {
+      text(
+        `LAB: ${report.laboratory.awaitingReceipt} esperando muestra | ${report.laboratory.inAnalysis} en analisis | Promedio recepcion ${minutes(report.laboratory.averageReceiptSeconds)} | Promedio analisis ${minutes(report.laboratory.averageAnalysisSeconds)}`,
+        40, 91, 7, true, '0.06 0.43 0.63'
+      );
+    }
 
     fill(36, 54, 770, 28, report.attention.length ? '0.995 0.925 0.925' : '0.910 0.975 0.930');
     text(report.attention.length ? `${report.attention.length} situaciones requieren seguimiento.` : 'Sin situaciones criticas para el periodo seleccionado.', 48, 64, 9, true, report.attention.length ? '0.70 0.13 0.16' : '0.12 0.49 0.25');

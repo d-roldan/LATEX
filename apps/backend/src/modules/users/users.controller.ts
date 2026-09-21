@@ -19,6 +19,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 import { UpdateUserPasswordDto } from './dto/update-user-password.dto';
+import { UpdateUserPlantsDto } from './dto/update-user-plants.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -40,6 +41,12 @@ export class UsersController {
     return this.service.findAll(user.companyId, user, role, active);
   }
 
+  @Get('available-plants')
+  @Roles('ADMIN')
+  availablePlants(@CurrentUser() user: JwtUser) {
+    return this.service.availablePlants(user.companyId);
+  }
+
   @Post()
   @Roles('ADMIN')
   create(@CurrentUser() user: JwtUser, @Body() dto: CreateUserDto) {
@@ -54,19 +61,41 @@ export class UsersController {
 
   @Patch(':id/role')
   @Roles('ADMIN')
-  updateRole(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: UpdateUserRoleDto) {
+  updateRole(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserRoleDto
+  ) {
     return this.service.updateRole(user.companyId, id, dto.role, user.sub, user);
   }
 
   @Patch(':id/profile')
   @Roles('ADMIN')
-  updateProfile(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: UpdateUserProfileDto) {
+  updateProfile(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserProfileDto
+  ) {
     return this.service.updateProfile(user.companyId, id, dto, user.sub, user);
+  }
+
+  @Patch(':id/plants')
+  @Roles('ADMIN')
+  updatePlants(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserPlantsDto
+  ) {
+    return this.service.updatePlants(user.companyId, id, dto.plantIds, user.sub, user);
   }
 
   @Patch(':id/password')
   @Roles('ADMIN')
-  updatePassword(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: UpdateUserPasswordDto) {
+  updatePassword(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateUserPasswordDto
+  ) {
     return this.service.updatePassword(user.companyId, id, dto.password, user.sub, user);
   }
 
@@ -76,4 +105,3 @@ export class UsersController {
     return this.service.remove(user.companyId, id, user.sub, user);
   }
 }
-
