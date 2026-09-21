@@ -1,5 +1,7 @@
 # DISAL Planta de Látex · V0.0.15
 
+[← Índice de versiones](README.md)
+
 Fecha: 3 de septiembre de 2026.
 
 ## Resumen
@@ -51,4 +53,3 @@ Esta versión consolida el proyecto como sistema operativo y de trazabilidad par
 - No reutilizar credenciales de desarrollo en producción.
 - Generar un respaldo de PostgreSQL antes de migrar.
 - El escenario `seed-demo-latex.sql` reemplaza datos operativos y debe utilizarse únicamente para demostración o pruebas controladas.
-

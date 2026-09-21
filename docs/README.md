@@ -27,18 +27,8 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 
 ## Historial de versiones
 
-- [V0.0.28](RELEASE_NOTES_V0.0.28.md) — recepción de muestras, métricas de Laboratorio, accesos por planta e inbox industrial idempotente.
-- [V0.0.27](RELEASE_NOTES_V0.0.27.md) — auditoría integral y seguimiento de actividad para el Super Usuario.
-- [V0.0.26](RELEASE_NOTES_V0.0.26.md) — trazabilidad gráfica del peso y mejoras del informe histórico.
-- [V0.0.24](RELEASE_NOTES_V0.0.24.md) — trazabilidad ampliada por OF, InfluxDB e informe PDF.
-- [V0.0.23](RELEASE_NOTES_V0.0.23.md) — tarjetas operativas, SEMI/Material y solicitudes de ajuste editables.
-- [V0.0.22](RELEASE_NOTES_V0.0.22.md) — legibilidad, TV por planta, accesibilidad de diálogos y carga diferida.
-- [V0.0.20](RELEASE_NOTES_V0.0.20.md) — datos propios de las órdenes de envasado y actualización inmediata de la PWA.
-- [V0.0.19](RELEASE_NOTES_V0.0.19.md) — temas claro/oscuro y contraste de la interfaz industrial.
-- [V0.0.18](RELEASE_NOTES_V0.0.18.md) — candidata multiplanta; no desplegada en producción.
-- [V0.0.17](RELEASE_NOTES_V0.0.17.md) — mejoras visuales y simplificación del inicio de fabricación.
-- [V0.0.16](RELEASE_NOTES_V0.0.16.md) — notificaciones entre sectores y pantalla TV.
-- [V0.0.15](RELEASE_NOTES_V0.0.15.md) — consolidación de trazabilidad, Jefatura e integración inicial.
+- [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
+- [Versión vigente · V0.0.28](releases/RELEASE_NOTES_V0.0.28.md): recepción de muestras, métricas de Laboratorio, accesos por planta e inbox industrial idempotente.
 
 ## Criterio de actualización
 
@@ -46,5 +36,5 @@ Cuando cambie el producto:
 
 1. Actualizar los requisitos y el documento operativo correspondiente.
 2. Actualizar el modelo de datos si cambia la información persistida.
-3. Crear una nota de versión nueva dentro de este directorio.
+3. Crear la nota nueva dentro de `docs/releases/` y agregarla a su índice.
 4. Mantener explícita la diferencia entre comportamiento vigente, limitación y objetivo futuro.

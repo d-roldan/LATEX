@@ -1,5 +1,7 @@
 # DISAL Planta de Látex · V0.0.23
 
+[← Índice de versiones](README.md)
+
 Fecha: 17 de septiembre de 2026.
 
 ## Resumen
