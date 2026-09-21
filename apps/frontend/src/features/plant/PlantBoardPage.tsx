@@ -22,13 +22,13 @@ interface Tank {
   telemetry: { grossKg: number | null; netKg: number | null; measuredAt: string | null; online: boolean | null; status: string };
   activeLot: null | {
     id: string; manufacturingOrder: string; materialCode: string; description: string; specificWeight: number | null;
-    packagingOrders: Array<{ packagingOrder: string; materialCode: string | null; line: string; format: string; description: string; startedAt: string }>;
+    packagingOrders: Array<{ packagingOrder: string; materialCode: string | null; line: string; format: string; dispenser: string | null; filter: string | null; description: string; startedAt: string }>;
     laboratorySamples?: Array<{ id: string; iteration: number; status: 'AWAITING_RECEIPT' | 'RECEIVED' | 'RESOLVED'; requestedAt: string; receivedAt: string | null; resolvedAt: string | null }>;
     qualityDecisions?: Array<{ id?: string; result?: string; reason: string | null; adjustmentReasons: string[]; adjustmentItems?: Array<{ id: string; materialCode: string; quantityKg: number; position: number }> }>;
   };
 }
 
-interface Config { lines: string[]; formats: string[]; adjustmentReasons: string[]; finalOperation: 'PACKAGING' | 'TRANSFER' }
+interface Config { lines: string[]; formats: string[]; dispensers: string[]; filters: string[]; adjustmentReasons: string[]; finalOperation: 'PACKAGING' | 'TRANSFER' }
 
 const stateLabel: Record<TankState, string> = {
   VACIO: 'Vacío', FABRICANDO: 'Fabricando', LABORATORIO: 'Laboratorio', AJUSTE: 'Ajuste',
@@ -43,7 +43,7 @@ const equipmentCountByPlant: Record<string, number> = { LATEX: 9, TERPLAST: 4, S
 
 const emptyForm = {
   manufacturingOrder: '', materialCode: '', packagingMaterialCode: '', description: '', employeeNumber: '', specificWeight: '',
-  qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', notes: '',
+  qualityResult: 'APROBADO', reason: '', recoveryAction: '', packagingOrder: '', line: '', format: '', dispenser: '', filter: '', notes: '',
   plannedQuantityKg: '', wasteKg: '',
   adjustmentReasons: [] as string[],
   adjustments: [{ materialCode: '', quantityKg: '' }]
@@ -96,6 +96,8 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
       description: action === 'correctOrder' ? currentOrder?.description ?? '' : action === 'correctLot' ? tank.activeLot?.description ?? '' : '', packagingOrder: action === 'correctOrder' ? currentOrder?.packagingOrder ?? '' : '',
       line: action === 'correctOrder' ? currentOrder?.line ?? '' : config.data?.lines[0] ?? '',
       format: action === 'correctOrder' ? currentOrder?.format ?? '' : config.data?.formats[0] ?? '',
+      dispenser: action === 'correctOrder' ? currentOrder?.dispenser ?? config.data?.dispensers[0] ?? '' : config.data?.dispensers[0] ?? '',
+      filter: action === 'correctOrder' ? currentOrder?.filter ?? config.data?.filters[0] ?? '' : config.data?.filters[0] ?? '',
       qualityResult: action === 'editAdjustment' ? 'AJUSTE' : 'APROBADO',
       adjustmentReasons: currentAdjustment?.adjustmentReasons.length
         ? [...currentAdjustment.adjustmentReasons]
@@ -154,9 +156,9 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
       receiveSample: { path: `${base}/tanks/${tank.id}/laboratory/sample-received`, method: 'post', payload: { version } },
       quality: { path: `${base}/tanks/${tank.id}/quality`, method: 'post', payload: { version, result: form.qualityResult, employeeNumber: form.employeeNumber, specificWeight: form.specificWeight ? Number(form.specificWeight) : undefined, reason: form.qualityResult.startsWith('RECHAZADO') ? form.reason || undefined : undefined, adjustmentReasons: form.qualityResult === 'AJUSTE' ? form.adjustmentReasons : undefined, recoveryAction: form.recoveryAction || undefined, adjustments: form.qualityResult === 'AJUSTE' ? form.adjustments.map((item) => ({ materialCode: item.materialCode, quantityKg: Number(item.quantityKg) })) : undefined } },
       editAdjustment: { path: `${base}/tanks/${tank.id}/quality/adjustment`, method: 'patch', payload: { version, adjustmentReasons: form.adjustmentReasons, adjustments: form.adjustments.map((item) => ({ materialCode: item.materialCode, quantityKg: Number(item.quantityKg) })) } },
-      packaging: { path: `${base}/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description } },
-      newOrder: { path: `${base}/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description, reason: form.reason || undefined } },
-      correctOrder: { path: `${base}/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, description: form.description, reason: form.reason } },
+      packaging: { path: `${base}/tanks/${tank.id}/packaging`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, dispenser: form.dispenser, filter: form.filter, description: form.description } },
+      newOrder: { path: `${base}/tanks/${tank.id}/packaging/new-order`, method: 'post', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, dispenser: form.dispenser, filter: form.filter, description: form.description, reason: form.reason || undefined } },
+      correctOrder: { path: `${base}/tanks/${tank.id}/packaging/current`, method: 'patch', payload: { version, packagingOrder: form.packagingOrder, materialCode: form.packagingMaterialCode, line: form.line, format: form.format, dispenser: form.dispenser, filter: form.filter, description: form.description, reason: form.reason } },
       finish: { path: `${base}/tanks/${tank.id}/packaging/finish`, method: 'post', payload: { version, wasteKg: form.wasteKg ? Number(form.wasteKg) : undefined, reason: form.reason || undefined } },
       startTransfer: { path: `${base}/tanks/${tank.id}/transfer`, method: 'post', payload: { version, reason: form.reason || undefined } },
       finishTransfer: { path: `${base}/tanks/${tank.id}/transfer/finish`, method: 'post', payload: { version, reason: form.reason || undefined } },
@@ -216,7 +218,7 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
                 {tank.activeLot?.specificWeight ? <div><dt>P. específico</dt><dd>{tank.activeLot.specificWeight}</dd></div> : null}
                 {adjustmentReasonText ? <div className="tank-adjustment-reasons"><dt>Motivos</dt><dd>{adjustmentReasonText}</dd></div> : null}
                 {sector !== 'monitoreo' && adjustmentItems.length ? <div className="tank-adjustment-list"><dt>Ajustes</dt><dd><ul>{adjustmentItems.map((item) => <li key={item.id}><span>{item.materialCode}</span><strong>{item.quantityKg.toLocaleString('es-AR', { maximumFractionDigits: 3 })} kg</strong></li>)}</ul></dd></div> : null}
-                {order ? <><div><dt>OE</dt><dd>{order.packagingOrder}</dd></div><div><dt>Celda / Formato</dt><dd>{order.line} · {order.format}</dd></div></> : null}
+                {order ? <><div><dt>OE</dt><dd>{order.packagingOrder}</dd></div><div><dt>Celda / Formato</dt><dd>{order.line} · {order.format}</dd></div><div><dt>Dosif. / Filtro</dt><dd>{order.dispenser ?? '—'} · {order.filter ?? '—'}</dd></div></> : null}
                 {tank.serviceReason ? <div><dt>Motivo</dt><dd>{tank.serviceReason}</dd></div> : null}
               </dl>
               <div className="tank-actions">{actionsFor(tank).map(([label, action, variant]) => <Button key={action} size="sm" variant={variant as 'primary'} onClick={() => openAction(tank, action)}>{label}</Button>)}</div>
@@ -320,6 +322,8 @@ function renderFields(action: Action, form: typeof emptyForm, setForm: (value: t
     <label>Material (4 o 5 dígitos)<Input value={form.packagingMaterialCode} onChange={(e) => field('packagingMaterialCode', e.target.value.replace(/\D/g, '').slice(0, 5))} pattern="\d{4,5}" inputMode="numeric" maxLength={5} required/></label>
     <label>Celda<select value={form.line} onChange={(e) => field('line', e.target.value)} required>{config?.lines.map((line) => <option key={line}>{line}</option>)}</select></label>
     <label>Formato<select value={form.format} onChange={(e) => field('format', e.target.value)} required>{config?.formats.map((format) => <option key={format}>{format}</option>)}</select></label>
+    <label>Dosificadora<select value={form.dispenser} onChange={(e) => field('dispenser', e.target.value)} required>{config?.dispensers.map((dispenser) => <option key={dispenser}>{dispenser}</option>)}</select></label>
+    <label>Filtro<select value={form.filter} onChange={(e) => field('filter', e.target.value)} required>{config?.filters.map((filter) => <option key={filter}>{filter}</option>)}</select></label>
     <label>Descripción de envasado<Input value={form.description} onChange={(e) => field('description', e.target.value)} required maxLength={180}/></label>
     {action === 'newOrder' || action === 'correctOrder' ? <label>Motivo / observación<Input value={form.reason} onChange={(e) => field('reason', e.target.value)} required={action === 'correctOrder'}/></label> : null}
   </>;

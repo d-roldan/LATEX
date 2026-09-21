@@ -22,6 +22,8 @@ export interface PackagingOrderSummary {
   materialCode: string | null;
   line: string;
   format: string;
+  dispenser: string | null;
+  filter: string | null;
   description: string;
   startedAt: string;
   finishedAt?: string;
@@ -199,7 +201,9 @@ export function PlantHistoryPage() {
           order.materialCode,
           order.description,
           order.line,
-          order.format
+          order.format,
+          order.dispenser,
+          order.filter
         ]) ?? [])
       ].some((value) => value?.toLocaleLowerCase('es-AR').includes(term))
     );
@@ -670,6 +674,10 @@ function PackagingOrders({ orders }: { orders: PackagingOrderSummary[] }) {
                   <dd>
                     {order.line} · {order.format}
                   </dd>
+                </div>
+                <div>
+                  <dt>Dosificadora / Filtro</dt>
+                  <dd>{order.dispenser ?? '—'} · {order.filter ?? '—'}</dd>
                 </div>
                 <div>
                   <dt>Inicio</dt>

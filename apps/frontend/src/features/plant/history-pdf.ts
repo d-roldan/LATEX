@@ -397,11 +397,11 @@ export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = n
     doc,
     'Órdenes de envasado',
     y,
-    ['OE', 'Material / Producto', 'Celda / Formato', 'Inicio / Fin', 'Producción / Merma'],
+    ['OE', 'Material / Producto', 'Celda / Formato / Dosificadora / Filtro', 'Inicio / Fin', 'Producción / Merma'],
     timeline.packagingOrders.map((order) => [
       order.packagingOrder,
       `${safeText(order.materialCode)}\n${safeText(order.description)}`,
-      `${order.line} / ${order.format}`,
+      `${order.line} / ${order.format} / ${order.dispenser ?? '—'} / ${order.filter ?? '—'}`,
       `${formatDateTime(order.startedAt)}\n${order.finishedAt ? formatDateTime(order.finishedAt) : 'En curso'}`,
       `${formatKilograms(order.producedKg)} / ${formatKilograms(order.wasteKg)}\n${order.producedUnits ?? 'No informadas'} unidades`
     ]),

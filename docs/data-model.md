@@ -14,7 +14,7 @@ La fuente de verdad es `apps/backend/prisma/schema.prisma`.
 - `QualityDecision`: aprobación, ajuste o rechazo, legajo, peso específico, motivo y recuperación.
 - `LaboratorySample`: una iteración de muestra por envío a Laboratorio, con estados de espera, recepción y resolución, responsables y timestamps.
 - `IntegrationInbox`: bandeja durable de eventos PLC/SCADA/Node-RED, idempotente por planta, fuente y `eventId`; recibir un evento no modifica por sí solo la operación.
-- `PackagingOrder`: OE, línea, formato, inicio/fin, duración, kilogramos, unidades y merma.
+- `PackagingOrder`: OE, línea, formato, dosificadora, filtro, inicio/fin, duración, kilogramos, unidades y merma.
 - `PlantAuditLog`: cambios auditables con valores anterior/nuevo y motivo.
 - `DailyPlantClosure`: fotografía JSON del resumen de una jornada, observaciones y responsable del cierre.
 

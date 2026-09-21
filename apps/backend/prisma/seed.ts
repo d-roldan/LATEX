@@ -15,6 +15,8 @@ const companySettings = {
   defaultWorkOrderPriority: 3,
   packagingLines: ['A', 'B'],
   packagingFormats: ['1 L', '4 L', '10 L', '20 L'],
+  packagingDispensers: ['A', 'B'],
+  packagingFilters: ['1', '2', '3'],
   adjustmentReasons: ['Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad', 'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante', 'Cambio de almacenamiento de producción'],
   plantStageTargetsMinutes: { FABRICANDO: 480, LABORATORIO: 30, AJUSTE: 60, RECHAZADO: 60, APROBADO: 120, ENVASANDO: 360, FUERA_DE_SERVICIO: 480 }
 };
@@ -139,7 +141,7 @@ async function main() {
   const removed = await removeKnownDemoData();
   const latex = await prisma.plant.upsert({
     where: { companyId_code: { companyId: COMPANY_ID, code: 'LATEX' } }, update: {},
-    create: { companyId: COMPANY_ID, code: 'LATEX', name: 'Látex', displayOrder: 10, finalOperation: 'PACKAGING', settings: { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } }
+    create: { companyId: COMPANY_ID, code: 'LATEX', name: 'Látex', displayOrder: 10, finalOperation: 'PACKAGING', settings: { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, packagingDispensers: companySettings.packagingDispensers, packagingFilters: companySettings.packagingFilters, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } }
   });
   const additionalPlants = [
     { code: 'TERPLAST', name: 'Terplast', displayOrder: 20, finalOperation: 'PACKAGING' as const, count: 4 },

@@ -1028,6 +1028,8 @@ model PackagingOrder {
   materialCode     String?
   line             String
   format           String
+  dispenser        String?
+  filter           String?
   description      String
   startedByUserId  String
   finishedByUserId String?

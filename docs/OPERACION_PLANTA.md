@@ -49,7 +49,8 @@ Fabricación abre el ciclo al enviar el tanque. Laboratorio confirma **Recibí l
 ## Datos configurables
 
 - Los 9 tanques TK101–TK109 y sus `scaleKey` están en `Tank`. `capacityKg` se calcula como capacidad nominal en litros × `1,5 kg/L`: 60.000 kg para TK101–102, 45.000 kg para TK103–104, 30.000 kg para TK105–107 y 10.500 kg para TK108–109.
-- Líneas, formatos, motivos y objetivos nuevos están en `Plant.settings`. La lectura de Látex mantiene fallback compatible a los valores anteriores de `Company.settings`.
+- Líneas, formatos, dosificadoras, filtros, motivos y objetivos nuevos están en `Plant.settings`. La lectura de Látex mantiene fallback compatible a los valores anteriores de `Company.settings`.
+- En Látex, `packagingDispensers` admite inicialmente `A` y `B`, mientras que `packagingFilters` admite `1`, `2` y `3`. Cada orden de envasado conserva la selección realizada.
 - Los tiempos objetivo por etapa están en `Company.settings.plantStageTargetsMinutes` y pueden configurarse desde el Resumen diario usando una cuenta ADMIN.
 - El seed crea los valores iniciales observados en la especificación; pueden modificarse para los equipos reales de la planta.
 

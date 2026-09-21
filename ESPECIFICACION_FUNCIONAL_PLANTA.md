@@ -132,11 +132,11 @@ Resultados admitidos: `RECHAZADO_RECUPERAR` y `RECHAZADO_DESTRUIR`. Para recuper
 
 ### 9.1 Inicio
 
-Sólo puede iniciarse desde `APROBADO`. Requiere OE de 6 u 8 dígitos, material de 4 o 5 dígitos, línea de hasta 80 caracteres y formato de hasta 40 caracteres. Se crea una `PackagingOrder`, se registra usuario/hora y el tanque cambia a `ENVASANDO`. La tarjeta conserva visible el SEMI informado por Fabricación y muestra también el material de Envasado.
+Sólo puede iniciarse desde `APROBADO`. Requiere OE de 6 u 8 dígitos, material de 4 o 5 dígitos, línea de hasta 80 caracteres, formato de hasta 40 caracteres, dosificadora configurada y filtro configurado. Para Látex, las selecciones iniciales son dosificadora `A` o `B` y filtro `1`, `2` o `3`. Se crea una `PackagingOrder`, se registra usuario/hora y el tanque cambia a `ENVASANDO`. La tarjeta conserva visible el SEMI informado por Fabricación y muestra también el material de Envasado, la dosificadora y el filtro.
 
 ### 9.2 Nueva OE y corrección
 
-Una nueva OE cierra la anterior, calcula su duración y abre la siguiente sin vaciar el tanque. Corregir OE, línea o formato no crea otra orden: requiere motivo y deja auditoría anterior/nuevo.
+Una nueva OE cierra la anterior, calcula su duración y abre la siguiente sin vaciar el tanque. Corregir OE, línea, formato, dosificadora o filtro no crea otra orden: requiere motivo y deja auditoría anterior/nuevo.
 
 ### 9.3 Finalización
 
@@ -144,7 +144,7 @@ Finalizar envasado cierra la orden activa, calcula su duración, finaliza el lot
 
 ## 10. Monitoreo
 
-Monitoreo es de sólo lectura. Para cada tanque muestra nombre, estado, peso bruto, conectividad, OF, material, descripción, peso específico, OE, línea, formato y capacidad o estado pendiente. También ofrece consulta de históricos sin operaciones productivas.
+Monitoreo es de sólo lectura. Para cada tanque muestra nombre, estado, peso bruto, conectividad, OF, material, descripción, peso específico, OE, línea, formato, dosificadora, filtro y capacidad o estado pendiente. También ofrece consulta de históricos sin operaciones productivas.
 
 ## 11. Pesos y Node-RED
 

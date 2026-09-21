@@ -75,6 +75,8 @@ export class PackagingDto extends VersionedActionDto {
   materialCode!: string;
   @IsString() @MaxLength(80) line!: string;
   @IsString() @MaxLength(40) format!: string;
+  @IsString() @MaxLength(40) dispenser!: string;
+  @IsString() @MaxLength(40) filter!: string;
   @IsString() @MaxLength(180) description!: string;
 }
 

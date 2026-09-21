@@ -88,12 +88,14 @@ describe('PlantService telemetry', () => {
     expect(bounds.end.toISOString()).toBe('2026-09-04T03:00:00.000Z');
   });
 
-  it('usa las celdas y formatos vigentes como configuración de Látex', async () => {
+  it('usa las opciones de envasado vigentes como configuración de Látex', async () => {
     const service = new PlantService(prisma, config, notifications);
     const result = await (service as any).loadConfig('company-1', 'plant-latex');
 
     expect(result.lines).toEqual(['A', 'B']);
     expect(result.formats).toEqual(['1 L', '4 L', '10 L', '20 L']);
+    expect(result.dispensers).toEqual(['A', 'B']);
+    expect(result.filters).toEqual(['1', '2', '3']);
   });
 });
 

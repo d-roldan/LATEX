@@ -27,7 +27,7 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 - Decisiones e iteraciones de Laboratorio.
 - Ciclos de muestra por iteración con hitos de solicitud, recepción y resolución.
 - Bloqueo de la decisión de calidad hasta que Laboratorio confirme la recepción física de la muestra.
-- OE, línea, formato, duración, kilogramos, unidades y merma de Envasado.
+- OE, línea, formato, dosificadora, filtro, duración, kilogramos, unidades y merma de Envasado.
 - Línea temporal consultable por OF.
 - Fechas almacenadas con zona horaria y presentadas en Buenos Aires.
 

@@ -240,9 +240,9 @@ body { background: var(--plant-bg); }
 .tank-card h2 { margin: 0; overflow-wrap: anywhere; color: #72a7ff; font-size: 1rem; letter-spacing: .04em; }
 .tank-offline { display: inline-flex; gap: .25rem; align-items: center; color: #ff8b8b; font-size: .72rem; }
 .tank-state { align-self: flex-start; margin-top: .5rem; padding: .38rem .7rem; border-radius: .48rem; background: var(--state,#6f7c88); color: #fff; font-size: .8rem; font-weight: 850; }
-.tank-laboratory-substate { display: block; margin-top: .35rem; color: #b9c8d4; font-size: .72rem; font-weight: 750; font-variant-numeric: tabular-nums; }
-.tank-laboratory-substate.status-awaiting_receipt { color: #f3c45f; }
-.tank-laboratory-substate.status-received { color: #66d6ff; }
+.tank-laboratory-substate { display: block; align-self: stretch; margin-top: .35rem; color: #000; font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+.tank-laboratory-substate.status-awaiting_receipt,
+.tank-laboratory-substate.status-received { color: #000; }
 .tank-weight { display: block; margin-top: .45rem; font-size: clamp(2rem,3vw,3rem); line-height: 1; letter-spacing: -.04em; }
 .tank-card__content > small { max-width: 100%; margin-top: .15rem; overflow-wrap: anywhere; color: #e1e8ee; font-size: .78rem; }
 .tank-card dl { display: grid; gap: .3rem; margin: .65rem 0 0; font-size: .78rem; }
@@ -728,6 +728,13 @@ body { background: var(--plant-bg); }
   .plant-page--monitoreo .tank-card__content > small { margin-right: 4.8rem; width: auto; }
   .plant-page--monitoreo .tank-card dl { width: 100%; margin-top: .85rem; padding-top: .65rem; border-top: 0; text-align: left; }
   .plant-page--monitoreo .tank-card.has-packaging dl { gap: .25rem; margin-top: .55rem; padding-top: .45rem; }
+  .plant-tv .plant-page--monitoreo .tank-card.has-packaging .tank-state { margin-top: .35rem; padding-block: .4rem; }
+  .plant-tv .plant-page--monitoreo .tank-card.has-packaging .tank-weight { margin-top: .35rem; font-size: clamp(2.35rem,3vw,3.5rem); }
+  .plant-tv .plant-page--monitoreo .tank-card.has-packaging dl { gap: .12rem; margin-top: .3rem; padding-top: .2rem; }
+  .plant-tv .plant-page--monitoreo .tank-card.has-packaging dl div { grid-template-columns: 5.35rem minmax(0,1fr); gap: .3rem; }
+  .plant-tv .plant-page--monitoreo .tank-card.has-packaging dt { font-size: .62rem; line-height: 1.08; }
+  .plant-tv .plant-page--monitoreo .tank-card.has-packaging dd { font-size: .86rem; line-height: 1.08; }
+  .plant-tv .plant-page--monitoreo .tank-laboratory-substate { margin-right: 4.8rem; }
   .plant-page--monitoreo .tank-gauge { top: 2.1rem; height: 6.9rem; }
   .plant-page--monitoreo .tank-capacity { top: 9.2rem; }
 

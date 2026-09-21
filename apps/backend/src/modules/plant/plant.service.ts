@@ -35,6 +35,8 @@ const WEIGHT_SIGNAL_TIMEOUT_MS = 30_000;
 
 const LINES = ['A', 'B'];
 const FORMATS = ['1 L', '4 L', '10 L', '20 L'];
+const DISPENSERS = ['A', 'B'];
+const FILTERS = ['1', '2', '3'];
 const ADJUSTMENT_REASONS = [
   'Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad',
   'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante',
@@ -141,6 +143,8 @@ export class PlantService {
           materialCode: order.materialCode,
           line: order.line,
           format: order.format,
+          dispenser: order.dispenser,
+          filter: order.filter,
           description: order.description,
           startedAt: order.startedAt
         })),
@@ -508,6 +512,7 @@ export class PlantService {
       const order = await tx.packagingOrder.create({ data: {
         companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
         materialCode: dto.materialCode, line: dto.line, format: dto.format,
+        dispenser: dto.dispenser, filter: dto.filter,
         description: dto.description.trim(), startedByUserId: user.sub
       }});
       await this.move(tx, tank, 'ENVASANDO', user, tank.activeLotId, `OE ${dto.packagingOrder}`);
@@ -527,6 +532,7 @@ export class PlantService {
       const order = await tx.packagingOrder.create({ data: {
         companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId, packagingOrder: dto.packagingOrder,
         materialCode: dto.materialCode, line: dto.line, format: dto.format,
+        dispenser: dto.dispenser, filter: dto.filter,
         description: dto.description.trim(), startedByUserId: user.sub
       }});
       const changed = await tx.tank.updateMany({ where: { id: tank.id, version: tank.version, state: tank.state }, data: { version: { increment: 1 } } });
@@ -546,7 +552,7 @@ export class PlantService {
       if (!current) throw new ConflictException('No existe una OE abierta');
       const after = await tx.packagingOrder.update({ where: { id: current.id }, data: {
         packagingOrder: dto.packagingOrder, materialCode: dto.materialCode,
-        line: dto.line, format: dto.format,
+        line: dto.line, format: dto.format, dispenser: dto.dispenser, filter: dto.filter,
         description: dto.description.trim()
       }});
       const changed = await tx.tank.updateMany({ where: { id: tank.id, version: tank.version }, data: { version: { increment: 1 } } });
@@ -933,6 +939,8 @@ export class PlantService {
     const config = await this.loadConfig(companyId, plantId);
     if (!config.lines.includes(dto.line)) throw new BadRequestException('Celda no configurada');
     if (!config.formats.includes(dto.format)) throw new BadRequestException('Formato no configurado');
+    if (!config.dispensers.includes(dto.dispenser)) throw new BadRequestException('Dosificadora no configurada');
+    if (!config.filters.includes(dto.filter)) throw new BadRequestException('Filtro no configurado');
   }
 
   private async loadConfig(companyId: string, plantId?: string) {
@@ -943,6 +951,8 @@ export class PlantService {
     return {
       lines: Array.isArray(settings.packagingLines) ? settings.packagingLines.filter((v): v is string => typeof v === 'string') : isLatex ? LINES : [],
       formats: Array.isArray(settings.packagingFormats) ? settings.packagingFormats.filter((v): v is string => typeof v === 'string') : isLatex ? FORMATS : [],
+      dispensers: Array.isArray(settings.packagingDispensers) ? settings.packagingDispensers.filter((v): v is string => typeof v === 'string') : isLatex ? DISPENSERS : [],
+      filters: Array.isArray(settings.packagingFilters) ? settings.packagingFilters.filter((v): v is string => typeof v === 'string') : isLatex ? FILTERS : [],
       adjustmentReasons: Array.isArray(settings.adjustmentReasons) ? settings.adjustmentReasons.filter((v): v is string => typeof v === 'string') : ADJUSTMENT_REASONS,
       stageTargetsMinutes: Object.fromEntries(Object.entries(DEFAULT_TARGET_SECONDS).map(([state, seconds]) => [state, Number(configuredTargets?.[state]) || Math.round(seconds / 60)])),
       finalOperation: (source as { finalOperation?: 'PACKAGING' | 'TRANSFER' } | null)?.finalOperation ?? 'PACKAGING'

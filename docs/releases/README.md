@@ -6,6 +6,7 @@ Esta carpeta reúne todas las notas de versión disponibles del sistema DISAL Pl
 
 | Versión | Fecha | Contenido principal |
 |---|---|---|
+| [V0.0.29](RELEASE_NOTES_V0.0.29.md) | 21/09/2026 | Dosificadora y filtro por orden de envasado, con mejoras de legibilidad en modo TV. |
 | [V0.0.28](RELEASE_NOTES_V0.0.28.md) | 21/09/2026 | Recepción de muestras, métricas de Laboratorio, accesos por planta e inbox industrial idempotente. |
 | [V0.0.27](RELEASE_NOTES_V0.0.27.md) | 18/09/2026 | Auditoría integral y seguimiento de actividad para el Super Usuario. |
 | [V0.0.26](RELEASE_NOTES_V0.0.26.md) | 18/09/2026 | Trazabilidad gráfica del peso y mejoras del informe histórico. |

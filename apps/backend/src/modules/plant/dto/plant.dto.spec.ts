@@ -11,6 +11,8 @@ describe('PackagingDto', () => {
       materialCode: '4321',
       line: 'A',
       format: '4 L',
+      dispenser: 'A',
+      filter: '1',
       description: 'Látex interior blanco'
     });
 
@@ -63,6 +65,15 @@ describe('PackagingDto', () => {
 
     expect(await validate(dto as object)).toEqual(
       expect.arrayContaining([expect.objectContaining({ property: 'description' })])
+    );
+  });
+
+  it.each(['dispenser', 'filter'] as const)('requiere el campo %s', async (field) => {
+    const dto = validDto() as Partial<PackagingDto>;
+    delete dto[field];
+
+    expect(await validate(dto as object)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: field })])
     );
   });
 });
