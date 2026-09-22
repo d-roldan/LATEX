@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Param,
   Query,
   UseGuards
 } from '@nestjs/common';
@@ -29,6 +30,41 @@ export class AuditLogsController {
         'La auditoría integral está disponible sólo para el Super Usuario'
       );
     }
+  }
+
+  @Get('dashboard/users/:userId/activity')
+  @Roles('ADMIN')
+  userActivity(
+    @CurrentUser() user: JwtUser,
+    @Param('userId') userId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    this.assertSystemOwner(user);
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 86_400_000);
+    const parsedFrom = from ? new Date(from) : defaultFrom;
+    const parsedTo = to ? new Date(to) : now;
+    const validFrom = Number.isNaN(parsedFrom.getTime()) ? defaultFrom : parsedFrom;
+    const validTo = Number.isNaN(parsedTo.getTime()) ? now : parsedTo;
+    const requestedPage = Number(page ?? 1);
+    const currentPage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const pageSize = Number(limit) === 50 ? 50 : 25;
+
+    if (validFrom > validTo) {
+      throw new BadRequestException('La fecha desde no puede ser posterior a la fecha hasta');
+    }
+
+    return this.auditService.userActivity(
+      user.companyId,
+      userId,
+      validFrom,
+      validTo,
+      currentPage,
+      pageSize
+    );
   }
 
   @Get('dashboard')

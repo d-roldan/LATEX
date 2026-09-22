@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
+  CalendarDays,
   Clock3,
   KeyRound,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
 import { api } from '../../shared/api/http';
 import { Badge } from '../../shared/ui/Badge';
 import { Button } from '../../shared/ui/Button';
+import { Dialog } from '../../shared/ui/Dialog';
 import { Input, Select } from '../../shared/ui/Input';
 
 interface AuditUser {
@@ -32,6 +34,16 @@ interface AuditUser {
   daysSinceLogin: number | null;
   loginCount: number;
   lastActivityAt: string | null;
+  activityInPeriod: {
+    totalEvents: number;
+    systemEvents: number;
+    plantEvents: number;
+    successfulLogins: number;
+    failedLogins: number;
+    lastActivityAt: string | null;
+    actions: Array<{ action: string; count: number }>;
+    plants: string[];
+  };
 }
 
 interface AuditActor {
@@ -88,6 +100,14 @@ interface AuditDashboard {
     plants: Array<{ id: string; code: string; name: string }>;
     actions: string[];
   };
+}
+
+interface AuditUserActivity {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  items: AuditEvent[];
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -150,6 +170,13 @@ const inputDate = (date: Date) => {
 const today = inputDate(new Date());
 const initialFrom = inputDate(new Date(Date.now() - 30 * 86_400_000));
 
+const shortDate = (value: string) =>
+  new Date(`${value}T12:00:00`).toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+
 const relativeAccess = (user: AuditUser) => {
   if (!user.lastLoginAt) return 'Nunca ingresó';
   if (user.daysSinceLogin === 0) return 'Ingresó hoy';
@@ -190,6 +217,11 @@ export function AuditPage() {
   const [search, setSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [userStatus, setUserStatus] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [historyFrom, setHistoryFrom] = useState(initialFrom);
+  const [historyTo, setHistoryTo] = useState(today);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyLimit, setHistoryLimit] = useState(25);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
@@ -209,6 +241,33 @@ export function AuditPage() {
           limit
         }
       });
+      return response.data;
+    },
+    staleTime: 30_000
+  });
+
+  const userActivity = useQuery({
+    queryKey: [
+      'audit-user-activity',
+      selectedUserId,
+      historyFrom,
+      historyTo,
+      historyPage,
+      historyLimit
+    ],
+    enabled: Boolean(selectedUserId),
+    queryFn: async () => {
+      const response = await api.get<AuditUserActivity>(
+        `/audit-logs/dashboard/users/${selectedUserId}/activity`,
+        {
+          params: {
+            from: `${historyFrom}T00:00:00-03:00`,
+            to: `${historyTo}T23:59:59.999-03:00`,
+            page: historyPage,
+            limit: historyLimit
+          }
+        }
+      );
       return response.data;
     },
     staleTime: 30_000
@@ -238,6 +297,14 @@ export function AuditPage() {
 
   const chartDays = (dashboard.data?.activityByDay ?? []).slice(-14);
   const maximumActivity = Math.max(1, ...chartDays.map((day) => day.count));
+  const selectedUser = dashboard.data?.users.find((user) => user.id === selectedUserId) ?? null;
+  const periodLabel = from === to ? shortDate(from) : `${shortDate(from)} al ${shortDate(to)}`;
+
+  const selectRecentPeriod = (days: number) => {
+    setTo(today);
+    setFrom(inputDate(new Date(Date.now() - (days - 1) * 86_400_000)));
+    setPage(1);
+  };
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -279,6 +346,71 @@ export function AuditPage() {
           {dashboard.isFetching ? 'Actualizando…' : 'Actualizar'}
         </Button>
       </header>
+
+      <section className="audit-period" aria-labelledby="audit-period-title">
+        <div className="audit-period__heading">
+          <CalendarDays aria-hidden="true" />
+          <div>
+            <strong id="audit-period-title">Período de actividad</strong>
+            <span>{periodLabel} · se aplica a todo el tablero</span>
+          </div>
+        </div>
+        <div className="audit-period__controls">
+          <label>
+            Desde
+            <Input
+              type="date"
+              value={from}
+              max={to}
+              onChange={(event) => {
+                if (!event.target.value) return;
+                setFrom(event.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <label>
+            Hasta
+            <Input
+              type="date"
+              value={to}
+              min={from}
+              max={today}
+              onChange={(event) => {
+                if (!event.target.value) return;
+                setTo(event.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <div className="audit-period__presets" aria-label="Períodos rápidos">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => selectRecentPeriod(1)}
+            >
+              Hoy
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => selectRecentPeriod(7)}
+            >
+              7 días
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => selectRecentPeriod(30)}
+            >
+              30 días
+            </Button>
+          </div>
+        </div>
+      </section>
 
       {dashboard.isError ? (
         <div className="plant-error" role="alert">
@@ -413,10 +545,24 @@ export function AuditPage() {
                     return (
                       <tr key={user.id}>
                         <td>
-                          <strong>{user.fullName}</strong>
-                          <small>
-                            @{user.username} · {user.email}
-                          </small>
+                          <button
+                            type="button"
+                            className="audit-user-link"
+                            onClick={() => {
+                              setHistoryFrom(from);
+                              setHistoryTo(to);
+                              setHistoryPage(1);
+                              setHistoryLimit(25);
+                              setSelectedUserId(user.id);
+                            }}
+                            aria-label={`Ver resumen de actividad de ${user.fullName}`}
+                          >
+                            <strong>{user.fullName}</strong>
+                            <small>
+                              @{user.username} · {user.email}
+                            </small>
+                            <span>Ver resumen</span>
+                          </button>
                         </td>
                         <td>
                           <Badge variant={user.isSystemOwner ? 'primary' : 'default'}>
@@ -478,31 +624,6 @@ export function AuditPage() {
               </div>
             </header>
             <form className="audit-filters" onSubmit={submitSearch}>
-              <label>
-                Desde
-                <Input
-                  type="date"
-                  value={from}
-                  max={to}
-                  onChange={(event) => {
-                    setFrom(event.target.value);
-                    setPage(1);
-                  }}
-                />
-              </label>
-              <label>
-                Hasta
-                <Input
-                  type="date"
-                  value={to}
-                  min={from}
-                  max={today}
-                  onChange={(event) => {
-                    setTo(event.target.value);
-                    setPage(1);
-                  }}
-                />
-              </label>
               <label>
                 Origen
                 <Select
@@ -725,8 +846,349 @@ export function AuditPage() {
               </p>
             </div>
           </aside>
+
+          <Dialog
+            open={Boolean(selectedUser)}
+            onOpenChange={(open) => {
+              if (!open) setSelectedUserId(null);
+            }}
+            className="audit-user-dialog"
+            title={selectedUser?.fullName ?? 'Resumen de actividad'}
+            description={
+              selectedUser
+                ? `@${selectedUser.username} · ${selectedUser.isSystemOwner ? 'Super Usuario' : (ROLE_LABELS[selectedUser.role] ?? selectedUser.role)} · ${periodLabel}`
+                : undefined
+            }
+          >
+            {selectedUser ? (
+              <UserActivitySummary
+                user={selectedUser}
+                periodLabel={periodLabel}
+                events={userActivity.data?.items ?? []}
+                activityTotal={userActivity.data?.total ?? 0}
+                activityPage={userActivity.data?.page ?? historyPage}
+                activityTotalPages={userActivity.data?.totalPages ?? 1}
+                isActivityLoading={userActivity.isLoading}
+                isActivityError={userActivity.isError}
+                historyFrom={historyFrom}
+                historyTo={historyTo}
+                historyLimit={historyLimit}
+                onHistoryFromChange={(value) => {
+                  setHistoryFrom(value);
+                  setHistoryPage(1);
+                }}
+                onHistoryToChange={(value) => {
+                  setHistoryTo(value);
+                  setHistoryPage(1);
+                }}
+                onHistoryLimitChange={(value) => {
+                  setHistoryLimit(value);
+                  setHistoryPage(1);
+                }}
+                onPreviousHistoryPage={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                onNextHistoryPage={() => setHistoryPage((current) => current + 1)}
+              />
+            ) : null}
+          </Dialog>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function UserActivitySummary({
+  user,
+  periodLabel,
+  events,
+  activityTotal,
+  activityPage,
+  activityTotalPages,
+  isActivityLoading,
+  isActivityError,
+  historyFrom,
+  historyTo,
+  historyLimit,
+  onHistoryFromChange,
+  onHistoryToChange,
+  onHistoryLimitChange,
+  onPreviousHistoryPage,
+  onNextHistoryPage
+}: {
+  user: AuditUser;
+  periodLabel: string;
+  events: AuditEvent[];
+  activityTotal: number;
+  activityPage: number;
+  activityTotalPages: number;
+  isActivityLoading: boolean;
+  isActivityError: boolean;
+  historyFrom: string;
+  historyTo: string;
+  historyLimit: number;
+  onHistoryFromChange: (value: string) => void;
+  onHistoryToChange: (value: string) => void;
+  onHistoryLimitChange: (value: number) => void;
+  onPreviousHistoryPage: () => void;
+  onNextHistoryPage: () => void;
+}) {
+  const isLocked = Boolean(user.lockedUntil && new Date(user.lockedUntil) > new Date());
+  const activity = user.activityInPeriod;
+
+  return (
+    <div className="audit-user-summary">
+      <section className="audit-user-summary__identity">
+        <div>
+          <span>Correo</span>
+          <strong>{user.email}</strong>
+        </div>
+        <div>
+          <span>Estado</span>
+          <strong>{user.isActive ? 'Habilitado' : 'Deshabilitado'}</strong>
+        </div>
+        <div>
+          <span>Seguridad</span>
+          <strong>{isLocked ? 'Bloqueado' : 'Normal'}</strong>
+        </div>
+        <div>
+          <span>Último ingreso histórico</span>
+          <strong>{user.lastLoginAt ? localDate(user.lastLoginAt) : 'Sin ingresos'}</strong>
+        </div>
+      </section>
+
+      <section aria-labelledby="user-period-summary-title">
+        <header className="audit-user-summary__section-head">
+          <div>
+            <p>ACTIVIDAD EN EL PERÍODO</p>
+            <h4 id="user-period-summary-title">Resumen del {periodLabel}</h4>
+          </div>
+          <span>
+            {activity.lastActivityAt
+              ? `Último movimiento ${localDate(activity.lastActivityAt)}`
+              : 'Sin movimientos'}
+          </span>
+        </header>
+        <div className="audit-user-summary__kpis">
+          <article>
+            <span>Movimientos</span>
+            <strong>{activity.totalEvents}</strong>
+          </article>
+          <article>
+            <span>En planta</span>
+            <strong>{activity.plantEvents}</strong>
+          </article>
+          <article>
+            <span>Ingresos correctos</span>
+            <strong>{activity.successfulLogins}</strong>
+          </article>
+          <article className={activity.failedLogins ? 'is-alert' : ''}>
+            <span>Ingresos fallidos</span>
+            <strong>{activity.failedLogins}</strong>
+          </article>
+        </div>
+      </section>
+
+      <div className="audit-user-summary__details">
+        <section>
+          <h4>Movimientos realizados</h4>
+          {activity.actions.length ? (
+            <ul>
+              {activity.actions.map(({ action, count }) => (
+                <li key={action}>
+                  <span>{ACTION_LABELS[action] ?? action.replaceAll('_', ' ')}</span>
+                  <strong>{count}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Este usuario no registra movimientos en el período seleccionado.</p>
+          )}
+        </section>
+        <section>
+          <h4>Ámbito de actividad</h4>
+          <dl>
+            <div>
+              <dt>Sistema general</dt>
+              <dd>{activity.systemEvents} movimientos</dd>
+            </div>
+            <div>
+              <dt>Plantas</dt>
+              <dd>
+                {activity.plants.length ? activity.plants.join(' · ') : 'Sin actividad de planta'}
+              </dd>
+            </div>
+            <div>
+              <dt>Accesos históricos</dt>
+              <dd>{user.loginCount} correctos</dd>
+            </div>
+            <div>
+              <dt>Intentos pendientes</dt>
+              <dd>{user.failedLoginAttempts}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      <section className="audit-user-history" aria-labelledby="audit-user-history-title">
+        <header>
+          <div>
+            <p>SECUENCIA CRONOLÓGICA</p>
+            <h4 id="audit-user-history-title">Historial completo de movimientos</h4>
+          </div>
+          <span>{isActivityLoading ? 'Cargando…' : `${activityTotal} movimientos`}</span>
+        </header>
+
+        <div className="audit-user-history__filters" aria-label="Filtro de tiempo del historial">
+          <label>
+            Desde
+            <Input
+              type="date"
+              value={historyFrom}
+              max={historyTo}
+              onChange={(event) => {
+                if (event.target.value) onHistoryFromChange(event.target.value);
+              }}
+            />
+          </label>
+          <label>
+            Hasta
+            <Input
+              type="date"
+              value={historyTo}
+              min={historyFrom}
+              max={today}
+              onChange={(event) => {
+                if (event.target.value) onHistoryToChange(event.target.value);
+              }}
+            />
+          </label>
+        </div>
+
+        {isActivityLoading ? (
+          <div className="audit-user-history__status" role="status">
+            Cargando el historial del usuario…
+          </div>
+        ) : isActivityError ? (
+          <div className="audit-user-history__status is-error" role="alert">
+            No se pudo cargar el historial. Cerrá el popup y volvé a intentarlo.
+          </div>
+        ) : events.length ? (
+          <div className="audit-user-history__scroll" tabIndex={0}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha y hora</th>
+                  <th>Origen</th>
+                  <th>Movimiento</th>
+                  <th>Elemento y contexto</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((event) => {
+                  const result = loginResult(event);
+                  return (
+                    <tr key={`${event.source}-${event.id}`}>
+                      <td>
+                        <time dateTime={event.createdAt}>{localDate(event.createdAt)}</time>
+                      </td>
+                      <td>
+                        <Badge variant={event.source === 'PLANT' ? 'info' : 'default'}>
+                          {event.source === 'PLANT' ? 'Planta' : 'Sistema'}
+                        </Badge>
+                      </td>
+                      <td>
+                        <strong>
+                          {ACTION_LABELS[event.action] ?? event.action.replaceAll('_', ' ')}
+                        </strong>
+                        {result ? (
+                          <small className={result === 'SUCCESS' ? '' : 'audit-danger'}>
+                            {result === 'SUCCESS' ? 'Ingreso correcto' : 'Ingreso fallido'}
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>
+                        <strong>{ENTITY_LABELS[event.entityType] ?? event.entityType}</strong>
+                        <small>{eventContext(event)}</small>
+                      </td>
+                      <td>
+                        {hasDetails(event) ? (
+                          <details className="audit-details">
+                            <summary>Ver detalle</summary>
+                            {event.reason ? <p>{event.reason}</p> : null}
+                            {event.before ? (
+                              <div>
+                                <b>Antes</b>
+                                <pre>{jsonText(event.before)}</pre>
+                              </div>
+                            ) : null}
+                            {event.after ? (
+                              <div>
+                                <b>Después</b>
+                                <pre>{jsonText(event.after)}</pre>
+                              </div>
+                            ) : null}
+                            {event.metadata ? (
+                              <div>
+                                <b>Información</b>
+                                <pre>{jsonText(event.metadata)}</pre>
+                              </div>
+                            ) : null}
+                          </details>
+                        ) : (
+                          <span className="audit-muted">Sin detalle adicional</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="audit-user-history__status">
+            No hay movimientos registrados en el período seleccionado.
+          </div>
+        )}
+
+        {!isActivityLoading && !isActivityError ? (
+          <footer className="audit-user-history__pagination">
+            <span>{activityTotal.toLocaleString('es-AR')} movimientos encontrados</span>
+            <div>
+              <label>
+                <span>Por página</span>
+                <Select
+                  value={historyLimit}
+                  onChange={(event) => onHistoryLimitChange(Number(event.target.value))}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </Select>
+              </label>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={activityPage <= 1}
+                onClick={onPreviousHistoryPage}
+              >
+                Anterior
+              </Button>
+              <span>
+                Página {activityPage} de {activityTotalPages}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={activityPage >= activityTotalPages}
+                onClick={onNextHistoryPage}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </footer>
+        ) : null}
+      </section>
     </div>
   );
 }

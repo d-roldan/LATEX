@@ -34,6 +34,69 @@ const formatKilograms = (value: number | null | undefined) =>
 
 const safeText = (value: string | null | undefined) => value?.trim() || 'No informado';
 
+function chronologicalDetail(
+  timeline: Timeline,
+  period: Timeline['stateHistory'][number],
+  periodIndex: number
+) {
+  const periodStart = Date.parse(period.startedAt);
+  const periodEnd = period.endedAt
+    ? Date.parse(period.endedAt) + 5000
+    : Number.POSITIVE_INFINITY;
+  const weightDetail = `Peso al ingresar: ${formatKilograms(period.weightKg)}`;
+
+  if (period.state === 'LABORATORIO') {
+    const samples = (timeline.laboratorySamples ?? []).filter((sample) => {
+      const requestedAt = Date.parse(sample.requestedAt);
+      return requestedAt >= periodStart - 5000 && requestedAt <= periodEnd;
+    });
+    const sampleDetail = samples
+      .map((sample) => {
+        const reception = sample.receivedAt
+          ? formatDateTime(sample.receivedAt)
+          : 'Pendiente de recepción';
+        const resolution = sample.resolvedAt
+          ? formatDateTime(sample.resolvedAt)
+          : 'Pendiente de resolución';
+        const waiting =
+          sample.waitingForReceiptSeconds == null
+            ? 'en curso'
+            : formatDuration(sample.waitingForReceiptSeconds);
+        const analysis =
+          sample.analysisSeconds == null ? 'en curso' : formatDuration(sample.analysisSeconds);
+        return `Muestra ${sample.iteration}\nIngreso: ${formatDateTime(sample.requestedAt)}\nRecepción: ${reception} · Espera: ${waiting}\nResolución: ${resolution} · Análisis: ${analysis}`;
+      })
+      .join('\n\n');
+    return sampleDetail ? `${sampleDetail}\n${weightDetail}` : weightDetail;
+  }
+
+  if (period.state === 'AJUSTE') {
+    const previousPeriod = periodIndex > 0 ? timeline.stateHistory[periodIndex - 1] : undefined;
+    const decisionStart = previousPeriod
+      ? Date.parse(previousPeriod.startedAt)
+      : periodStart - 5000;
+    const adjustmentDetail = timeline.qualityDecisions
+      .filter((decision) => {
+        const createdAt = Date.parse(decision.createdAt);
+        return decision.result === 'AJUSTE' && createdAt >= decisionStart && createdAt <= periodEnd;
+      })
+      .map((adjustment) => {
+        const reason = adjustment.adjustmentReasons.join(' / ') || safeText(adjustment.reason);
+        const materials = adjustment.adjustmentItems.length
+          ? adjustment.adjustmentItems
+              .map((item) => `${item.materialCode}: ${formatKilograms(item.quantityKg)}`)
+              .join(', ')
+          : 'Sin materiales detallados';
+        const responsible = `${adjustment.employeeNumber} / ${adjustment.user?.fullName ?? 'No informado'}`;
+        return `${formatDateTime(adjustment.createdAt)} · ${reason}\n${responsible}\n${materials}`;
+      })
+      .join('\n\n');
+    return adjustmentDetail ? `${adjustmentDetail}\n${weightDetail}` : weightDetail;
+  }
+
+  return period.description ? `${period.description}\n${weightDetail}` : weightDetail;
+}
+
 async function loadLogo(): Promise<string | null> {
   try {
     const response = await fetch('/brand/grupo-disal-logo.png');
@@ -346,14 +409,14 @@ export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = n
     doc,
     'Etapas de la orden',
     y,
-    ['Estado', 'Inicio', 'Fin', 'Duración', 'Responsable', 'Peso al ingresar'],
-    timeline.stateHistory.map((period) => [
+    ['Estado', 'Inicio', 'Fin', 'Duración', 'Responsable', 'Detalle cronológico'],
+    timeline.stateHistory.map((period, index) => [
       period.state.replaceAll('_', ' '),
       formatDateTime(period.startedAt),
       period.endedAt ? formatDateTime(period.endedAt) : 'En curso',
       formatDuration(period.durationSeconds),
       period.user?.fullName ?? 'Sistema',
-      formatKilograms(period.weightKg)
+      chronologicalDetail(timeline, period, index)
     ]),
     'No hay etapas registradas.'
   );
@@ -371,26 +434,6 @@ export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = n
       formatKilograms(charge.actualKg)
     ]),
     'No hay cargas individuales registradas.'
-  );
-
-  y = addTable(
-    doc,
-    'Ajustes solicitados por laboratorio',
-    y,
-    ['Fecha', 'Motivo', 'Legajo / Responsable', 'Materiales del ajuste'],
-    timeline.qualityDecisions
-      .filter((decision) => decision.result === 'AJUSTE')
-      .map((adjustment) => [
-        formatDateTime(adjustment.createdAt),
-        adjustment.adjustmentReasons.join(' / ') || safeText(adjustment.reason),
-        `${adjustment.employeeNumber} / ${adjustment.user?.fullName ?? 'No informado'}`,
-        adjustment.adjustmentItems.length
-          ? adjustment.adjustmentItems
-              .map((item) => `${item.materialCode}: ${formatKilograms(item.quantityKg)}`)
-              .join('\n')
-          : 'Sin materiales detallados'
-      ]),
-    'No hay ajustes de laboratorio registrados.'
   );
 
   addTable(

@@ -203,33 +203,6 @@
         ]
     },
     {
-        "id": "multiplant-build-batches",
-        "type": "function",
-        "z": "disal-multiplant-live",
-        "name": "Construir lotes por planta",
-        "func": "if (String(env.get('DISAL_ENABLE_WEIGHT_SIMULATOR')).toLowerCase() !== 'true') {\n  node.status({ fill: 'grey', shape: 'ring', text: 'simulador deshabilitado' });\n  return [null, null, null, null];\n}\nconst key = env.get('NODE_RED_API_KEY');\nconst measuredAt = new Date().toISOString();\nconst phase = Date.now() / 12000;\n\nfunction batch(plantCode, source, equipment) {\n  return {\n    method: 'POST',\n    url: 'http://disal-nginx/api/plants/' + plantCode + '/telemetry/weights',\n    headers: { 'content-type': 'application/json', 'x-node-red-key': key },\n    payload: {\n      source,\n      readings: equipment.map(([scaleKey, base], index) => ({\n        scaleKey,\n        grossKg: Math.round(Math.max(0, base + Math.sin(phase + index) * (12 + index * 2)) * 1000) / 1000,\n        measuredAt\n      }))\n    }\n  };\n}\n\nconst latex = batch('LATEX', 'NODE_RED_LATEX', [\n  ['TK101', 58970], ['TK102', 38950], ['TK103', 40130],\n  ['TK104', 25355], ['TK105', 5425], ['TK106', 8780],\n  ['TK107', 9545], ['TK108', 8665], ['TK109', 8085]\n]);\nconst terplast = batch('TERPLAST', 'NODE_RED_TERPLAST_LOCAL', [\n  ['TERP01', 8200], ['TERP02', 7600], ['TERP03', 9100], ['TERP04', 6800]\n]);\nconst slurry = batch('SLURRY', 'NODE_RED_SLURRY_LOCAL', [\n  ['SLURRY01', 4300], ['SLURRY02', 5100]\n]);\nconst enduido = {\n  payload: { plantCode: 'ENDUIDO', telemetryStatus: 'NOT_INSTALLED', sent: false, message: 'Sin sensores: no se envían pesos' }\n};\nnode.status({ fill: 'green', shape: 'dot', text: 'simulación local activa' });\nreturn [latex, terplast, slurry, enduido];",
-        "outputs": 4,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 430,
-        "y": 210,
-        "wires": [
-            [
-                "multiplant-http-latex"
-            ],
-            [],
-            [
-                "multiplant-http-slurry"
-            ],
-            [
-                "multiplant-enduido-status"
-            ]
-        ]
-    },
-    {
         "id": "multiplant-http-latex",
         "type": "http request",
         "z": "disal-multiplant-live",
@@ -364,5 +337,32 @@
         "x": 400,
         "y": 80,
         "wires": []
+    },
+    {
+        "id": "multiplant-build-batches",
+        "type": "function",
+        "z": "disal-multiplant-live",
+        "name": "Construir lotes por planta",
+        "func": "if (String(env.get('DISAL_ENABLE_WEIGHT_SIMULATOR')).toLowerCase() !== 'true') {\n  node.status({ fill: 'grey', shape: 'ring', text: 'simulador deshabilitado' });\n  return [null, null, null, null];\n}\nconst key = env.get('NODE_RED_API_KEY');\nconst measuredAt = new Date().toISOString();\nconst phase = Date.now() / 12000;\n\nfunction batch(plantCode, source, equipment) {\n  return {\n    method: 'POST',\n    url: 'http://disal-nginx/api/plants/' + plantCode + '/telemetry/weights',\n    headers: { 'content-type': 'application/json', 'x-node-red-key': key },\n    payload: {\n      source,\n      readings: equipment.map(([scaleKey, base], index) => ({\n        scaleKey,\n        grossKg: Math.round(Math.max(0, base + Math.sin(phase + index) * (12 + index * 2)) * 1000) / 1000,\n        measuredAt\n      }))\n    }\n  };\n}\n\nconst latex = batch('LATEX', 'NODE_RED_LATEX', [\n  ['TK101', 58970], ['TK102', 38950], ['TK103', 40130],\n  ['TK104', 25355], ['TK105', 5425], ['TK106', 8780],\n  ['TK107', 9545], ['TK108', 8665], ['TK109', 8085]\n]);\nconst terplast = batch('TERPLAST', 'NODE_RED_TERPLAST_LOCAL', [\n  ['TERP01', 8200], ['TERP02', 7600], ['TERP03', 9100], ['TERP04', 6800]\n]);\nconst slurry = batch('SLURRY', 'NODE_RED_SLURRY_LOCAL', [\n  ['SLURRY01', 4300], ['SLURRY02', 5100]\n]);\nconst enduido = {\n  payload: { plantCode: 'ENDUIDO', telemetryStatus: 'NOT_INSTALLED', sent: false, message: 'Sin sensores: no se envían pesos' }\n};\nnode.status({ fill: 'green', shape: 'dot', text: 'simulación local activa' });\nreturn [latex, terplast, slurry, enduido];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 210,
+        "wires": [
+            [
+                "multiplant-http-latex"
+            ],
+            [],
+            [
+                "multiplant-http-slurry"
+            ],
+            [
+                "multiplant-enduido-status"
+            ]
+        ]
     }
 ]

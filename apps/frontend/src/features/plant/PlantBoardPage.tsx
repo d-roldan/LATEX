@@ -193,12 +193,6 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
           const order = tank.activeLot?.packagingOrders[0];
           const adjustmentDecision = tank.state === 'AJUSTE' ? tank.activeLot?.qualityDecisions?.[0] : undefined;
           const laboratorySample = tank.state === 'LABORATORIO' ? tank.activeLot?.laboratorySamples?.[0] : undefined;
-          const laboratoryStartedAt = laboratorySample?.status === 'RECEIVED' && laboratorySample.receivedAt
-            ? laboratorySample.receivedAt
-            : laboratorySample?.requestedAt;
-          const laboratoryElapsed = laboratoryStartedAt
-            ? Math.max(0, Math.floor((now.getTime() - new Date(laboratoryStartedAt).getTime()) / 1000))
-            : null;
           const adjustmentItems = adjustmentDecision?.adjustmentItems ?? [];
           const adjustmentReasonText = adjustmentDecision?.adjustmentReasons.length
             ? adjustmentDecision.adjustmentReasons.join(' · ')
@@ -209,7 +203,6 @@ export function PlantBoardPage({ sector, publicPlant }: { sector: Sector; public
               <span className="tank-state">{stateLabel[tank.state]}</span>
               {laboratorySample ? <span className={`tank-laboratory-substate status-${laboratorySample.status.toLowerCase()}`}>
                 {laboratorySample.status === 'AWAITING_RECEIPT' ? 'Esperando recepción de muestra' : laboratorySample.status === 'RECEIVED' ? 'Muestra recibida · En análisis' : 'Análisis resuelto'}
-                {laboratoryElapsed !== null ? ` · ${formatDuration(laboratoryElapsed)}` : ''}
               </span> : null}
               {tank.telemetryMode !== 'NOT_INSTALLED' ? <><strong className="tank-weight">{weight === null ? '—' : Math.round(weight).toLocaleString('es-AR')}</strong><small>Kg (bruto)</small></> : <small>Sin medición de peso</small>}
               <dl>

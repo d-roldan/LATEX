@@ -393,7 +393,6 @@ function TraceabilityContent({ timeline }: { timeline: Timeline }) {
   return (
     <div className="traceability-content">
       <WeightChart timeline={timeline} />
-      <LaboratorySampleCycles samples={timeline.laboratorySamples ?? []} />
       <section className="lot-timeline" aria-label="Etapas de la orden de fabricación">
         {timeline.stateHistory.map((period) => (
           <article key={period.id}>
@@ -410,8 +409,17 @@ function TraceabilityContent({ timeline }: { timeline: Timeline }) {
                 <em>{kilograms(period.weightKg)} al ingresar</em>
               ) : null}
               {period.state === 'LABORATORIO' ? (
+                <LaboratorySamples
+                  samples={samplesForPeriod(timeline.laboratorySamples ?? [], period)}
+                />
+              ) : null}
+              {period.state === 'AJUSTE' ? (
                 <LaboratoryAdjustments
-                  adjustments={adjustmentsForPeriod(timeline.qualityDecisions, period)}
+                  adjustments={adjustmentsForPeriod(
+                    timeline.qualityDecisions,
+                    timeline.stateHistory,
+                    period
+                  )}
                 />
               ) : null}
               {period.id === firstManufacturingPeriodId ? (
@@ -428,13 +436,14 @@ function TraceabilityContent({ timeline }: { timeline: Timeline }) {
   );
 }
 
-function LaboratorySampleCycles({ samples }: { samples: NonNullable<Timeline['laboratorySamples']> }) {
+function LaboratorySamples({ samples }: { samples: NonNullable<Timeline['laboratorySamples']> }) {
   if (!samples.length) return null;
 
   return (
-    <details className="traceability-disclosure laboratory-samples" open>
+    <details className="traceability-disclosure laboratory-samples">
       <summary>
-        Ciclos de muestras de Laboratorio <b>{samples.length}</b>
+        <span>Ver recepción y análisis de muestra</span>
+        <b>{samples.length}</b>
       </summary>
       <div>
         {samples.map((sample) => (
@@ -444,11 +453,11 @@ function LaboratorySampleCycles({ samples }: { samples: NonNullable<Timeline['la
               <span>{sample.status === 'AWAITING_RECEIPT' ? 'Esperando recepción' : sample.status === 'RECEIVED' ? 'En análisis' : 'Resuelta'}</span>
             </header>
             <dl>
-              <div><dt>Solicitada</dt><dd>{dateTime(sample.requestedAt)}{sample.requestedBy ? ` · ${sample.requestedBy.fullName}` : ''}</dd></div>
-              <div><dt>Recibida</dt><dd>{sample.receivedAt ? `${dateTime(sample.receivedAt)}${sample.receivedBy ? ` · ${sample.receivedBy.fullName}` : ''}` : 'Pendiente'}</dd></div>
-              <div><dt>Espera</dt><dd>{sample.waitingForReceiptSeconds == null ? 'En curso' : duration(sample.waitingForReceiptSeconds)}</dd></div>
-              <div><dt>Resultado</dt><dd>{sample.resolvedAt ? dateTime(sample.resolvedAt) : 'Pendiente'}</dd></div>
-              <div><dt>Análisis</dt><dd>{sample.analysisSeconds == null ? sample.receivedAt ? 'En curso' : 'Pendiente' : duration(sample.analysisSeconds)}</dd></div>
+              <div><dt>Ingreso a Laboratorio</dt><dd>{dateTime(sample.requestedAt)}{sample.requestedBy ? ` · ${sample.requestedBy.fullName}` : ''}</dd></div>
+              <div><dt>Recepción de muestra</dt><dd>{sample.receivedAt ? `${dateTime(sample.receivedAt)}${sample.receivedBy ? ` · ${sample.receivedBy.fullName}` : ''}` : 'Pendiente'}</dd></div>
+              <div><dt>Espera hasta recepción</dt><dd>{sample.waitingForReceiptSeconds == null ? 'En curso' : duration(sample.waitingForReceiptSeconds)}</dd></div>
+              <div><dt>Resolución del análisis</dt><dd>{sample.resolvedAt ? dateTime(sample.resolvedAt) : 'Pendiente'}</dd></div>
+              <div><dt>Tiempo de análisis</dt><dd>{sample.analysisSeconds == null ? sample.receivedAt ? 'En curso' : 'Pendiente' : duration(sample.analysisSeconds)}</dd></div>
             </dl>
           </article>
         ))}
@@ -799,12 +808,29 @@ function LaboratoryAdjustments({ adjustments }: { adjustments: QualityAdjustment
 
 function adjustmentsForPeriod(
   decisions: QualityAdjustment[],
+  stateHistory: Timeline['stateHistory'],
   period: Timeline['stateHistory'][number]
 ) {
-  const startedAt = Date.parse(period.startedAt);
+  const periodIndex = stateHistory.findIndex((candidate) => candidate.id === period.id);
+  const previousPeriod = periodIndex > 0 ? stateHistory[periodIndex - 1] : undefined;
+  const startedAt = previousPeriod
+    ? Date.parse(previousPeriod.startedAt)
+    : Date.parse(period.startedAt) - 5000;
   const endedAt = period.endedAt ? Date.parse(period.endedAt) + 5000 : Number.POSITIVE_INFINITY;
   return decisions.filter((decision) => {
     const createdAt = Date.parse(decision.createdAt);
     return decision.result === 'AJUSTE' && createdAt >= startedAt && createdAt <= endedAt;
+  });
+}
+
+function samplesForPeriod(
+  samples: NonNullable<Timeline['laboratorySamples']>,
+  period: Timeline['stateHistory'][number]
+) {
+  const startedAt = Date.parse(period.startedAt) - 5000;
+  const endedAt = period.endedAt ? Date.parse(period.endedAt) + 5000 : Number.POSITIVE_INFINITY;
+  return samples.filter((sample) => {
+    const requestedAt = Date.parse(sample.requestedAt);
+    return requestedAt >= startedAt && requestedAt <= endedAt;
   });
 }

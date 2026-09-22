@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuditActionType, AuditEntityType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -142,8 +142,7 @@ export class AuditService {
       systemTotal,
       plantTotal,
       systemDates,
-      plantDates,
-      securityLogins
+      plantDates
     ] = await Promise.all([
       this.prisma.user.findMany({
         where: { companyId },
@@ -215,15 +214,22 @@ export class AuditService {
       includePlant ? this.prisma.plantAuditLog.count({ where: plantWhere }) : Promise.resolve(0),
       this.prisma.auditLog.findMany({
         where: { companyId, createdAt: dateFilter },
-        select: { createdAt: true }
+        select: {
+          createdAt: true,
+          userId: true,
+          action: true,
+          entityType: true,
+          metadata: true
+        }
       }),
       this.prisma.plantAuditLog.findMany({
         where: { companyId, createdAt: dateFilter },
-        select: { createdAt: true }
-      }),
-      this.prisma.auditLog.findMany({
-        where: { companyId, entityType: 'AUTH', action: 'LOGIN', createdAt: dateFilter },
-        select: { metadata: true }
+        select: {
+          createdAt: true,
+          userId: true,
+          action: true,
+          plant: { select: { name: true } }
+        }
       })
     ]);
 
@@ -245,8 +251,73 @@ export class AuditService {
     }
 
     const now = new Date();
+    const periodActivityByUser = new Map<
+      string,
+      {
+        systemEvents: number;
+        plantEvents: number;
+        successfulLogins: number;
+        failedLogins: number;
+        lastActivityAt: Date | null;
+        actions: Map<string, number>;
+        plants: Set<string>;
+      }
+    >();
+    const activityFor = (userId: string) => {
+      const current = periodActivityByUser.get(userId);
+      if (current) return current;
+
+      const created: {
+        systemEvents: number;
+        plantEvents: number;
+        successfulLogins: number;
+        failedLogins: number;
+        lastActivityAt: Date | null;
+        actions: Map<string, number>;
+        plants: Set<string>;
+      } = {
+        systemEvents: 0,
+        plantEvents: 0,
+        successfulLogins: 0,
+        failedLogins: 0,
+        lastActivityAt: null,
+        actions: new Map<string, number>(),
+        plants: new Set<string>()
+      };
+      periodActivityByUser.set(userId, created);
+      return created;
+    };
+
+    for (const event of systemDates) {
+      if (!event.userId) continue;
+      const activity = activityFor(event.userId);
+      activity.systemEvents += 1;
+      activity.lastActivityAt =
+        !activity.lastActivityAt || event.createdAt > activity.lastActivityAt
+          ? event.createdAt
+          : activity.lastActivityAt;
+      activity.actions.set(event.action, (activity.actions.get(event.action) ?? 0) + 1);
+      if (event.entityType === 'AUTH' && event.action === 'LOGIN') {
+        if (loginResult(event.metadata) === 'SUCCESS') activity.successfulLogins += 1;
+        else activity.failedLogins += 1;
+      }
+    }
+
+    for (const event of plantDates) {
+      if (!event.userId) continue;
+      const activity = activityFor(event.userId);
+      activity.plantEvents += 1;
+      activity.lastActivityAt =
+        !activity.lastActivityAt || event.createdAt > activity.lastActivityAt
+          ? event.createdAt
+          : activity.lastActivityAt;
+      activity.actions.set(event.action, (activity.actions.get(event.action) ?? 0) + 1);
+      activity.plants.add(event.plant.name);
+    }
+
     const usersWithAccess = users.map((user) => {
       const lastLoginAt = lastLoginByUser.get(user.id) ?? null;
+      const periodActivity = periodActivityByUser.get(user.id);
       return {
         ...user,
         lastLoginAt,
@@ -254,7 +325,23 @@ export class AuditService {
           ? Math.max(0, Math.floor((now.getTime() - lastLoginAt.getTime()) / 86_400_000))
           : null,
         loginCount: loginCountByUser.get(user.id) ?? 0,
-        lastActivityAt: lastActivityByUser.get(user.id) ?? null
+        lastActivityAt: lastActivityByUser.get(user.id) ?? null,
+        activityInPeriod: {
+          totalEvents: (periodActivity?.systemEvents ?? 0) + (periodActivity?.plantEvents ?? 0),
+          systemEvents: periodActivity?.systemEvents ?? 0,
+          plantEvents: periodActivity?.plantEvents ?? 0,
+          successfulLogins: periodActivity?.successfulLogins ?? 0,
+          failedLogins: periodActivity?.failedLogins ?? 0,
+          lastActivityAt: periodActivity?.lastActivityAt ?? null,
+          actions: [...(periodActivity?.actions.entries() ?? [])]
+            .map(([action, count]) => ({ action, count }))
+            .sort(
+              (left, right) => right.count - left.count || left.action.localeCompare(right.action)
+            ),
+          plants: [...(periodActivity?.plants ?? [])].sort((left, right) =>
+            left.localeCompare(right, 'es')
+          )
+        }
       };
     });
 
@@ -301,8 +388,11 @@ export class AuditService {
       activityCounts.set(date, (activityCounts.get(date) ?? 0) + 1);
     }
 
-    const securityEvents = securityLogins.filter(
-      (event) => loginResult(event.metadata) !== 'SUCCESS'
+    const securityEvents = systemDates.filter(
+      (event) =>
+        event.entityType === 'AUTH' &&
+        event.action === 'LOGIN' &&
+        loginResult(event.metadata) !== 'SUCCESS'
     ).length;
 
     return {
@@ -348,6 +438,94 @@ export class AuditService {
           ])
         ].sort()
       }
+    };
+  }
+
+  async userActivity(
+    companyId: string,
+    userId: string,
+    from: Date,
+    to: Date,
+    page: number,
+    limit: number
+  ) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, companyId },
+      select: { id: true, fullName: true, username: true, role: true }
+    });
+
+    if (!user) {
+      throw new NotFoundException('No se encontró el usuario solicitado');
+    }
+
+    const dateFilter = { gte: from, lte: to };
+    const skip = (page - 1) * limit;
+    const fetchLimit = skip + limit;
+    const [systemRows, plantRows, systemTotal, plantTotal] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where: { companyId, userId, createdAt: dateFilter },
+        orderBy: { createdAt: 'asc' },
+        take: fetchLimit
+      }),
+      this.prisma.plantAuditLog.findMany({
+        where: { companyId, userId, createdAt: dateFilter },
+        include: {
+          plant: { select: { id: true, code: true, name: true } },
+          tank: { select: { id: true, name: true, equipmentCode: true } },
+          lot: { select: { id: true, manufacturingOrder: true, materialCode: true } }
+        },
+        orderBy: { createdAt: 'asc' },
+        take: fetchLimit
+      }),
+      this.prisma.auditLog.count({ where: { companyId, userId, createdAt: dateFilter } }),
+      this.prisma.plantAuditLog.count({ where: { companyId, userId, createdAt: dateFilter } })
+    ]);
+
+    const systemEvents = systemRows.map((event) => ({
+      id: event.id,
+      source: 'SYSTEM' as const,
+      createdAt: event.createdAt,
+      action: event.action,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      reason: null,
+      actor: user,
+      plant: null,
+      tank: null,
+      lot: null,
+      before: redactAuditValue(event.before),
+      after: redactAuditValue(event.after),
+      metadata: redactAuditValue(event.metadata)
+    }));
+    const plantEvents = plantRows.map((event) => ({
+      id: event.id,
+      source: 'PLANT' as const,
+      createdAt: event.createdAt,
+      action: event.action,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      reason: event.reason,
+      actor: user,
+      plant: event.plant,
+      tank: event.tank,
+      lot: event.lot,
+      before: redactAuditValue(event.before),
+      after: redactAuditValue(event.after),
+      metadata: null
+    }));
+    const items = [...systemEvents, ...plantEvents]
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+      .slice(skip, skip + limit);
+    const total = systemTotal + plantTotal;
+
+    return {
+      user,
+      period: { from, to },
+      total,
+      page,
+      limit,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+      items
     };
   }
 }

@@ -28,7 +28,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.29](releases/RELEASE_NOTES_V0.0.29.md): dosificadora y filtro por orden de envasado, con mejoras de legibilidad en modo TV.
+- [Versión vigente · V0.0.30](releases/RELEASE_NOTES_V0.0.30.md): auditoría por período, historial paginado por usuario y trazabilidad cronológica de Laboratorio.
 
 ## Criterio de actualización
 
