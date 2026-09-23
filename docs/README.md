@@ -4,6 +4,15 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 
 ## Documentos principales
 
+### Manuales de usuario
+
+- [Manual de Fabricación](MANUAL_USUARIO_FABRICACION.md): inicio y corrección de fabricaciones, envío a Laboratorio, ajustes, rechazados y servicio.
+- [Manual de Laboratorio](MANUAL_USUARIO_LABORATORIO.md): recepción de muestras, aprobación, ajustes, rechazos y correcciones.
+- [Manual de Envasado](MANUAL_USUARIO_ENVASADO.md): inicio y cambio de OE, correcciones, finalización y trasvase.
+- [Manual de Administrador](MANUAL_USUARIO_ADMINISTRADOR.md): usuarios, accesos, asistencia operativa, resumen, historial y auditoría.
+
+### Documentación funcional y técnica
+
 - [Plan de implementación multiplanta](PLAN_IMPLEMENTACION_MULTIPLANTA.md): cuatro plantas, trasvase, fuera de servicio, pesos Node-RED y migración segura.
 - [Requisitos funcionales](REQUIREMENTS.md): alcance implementado, limitaciones y requisitos recomendados.
 - [Operación y API de planta](OPERACION_PLANTA.md): roles, transiciones, persistencia y reglas de operación.
@@ -28,7 +37,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.30](releases/RELEASE_NOTES_V0.0.30.md): auditoría por período, historial paginado por usuario y trazabilidad cronológica de Laboratorio.
+- [Versión vigente · V0.0.31](releases/RELEASE_NOTES_V0.0.31.md): manuales por perfil con capturas reales y aclaración del histórico de pesos en InfluxDB.
 
 ## Criterio de actualización
 

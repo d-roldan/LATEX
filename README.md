@@ -17,7 +17,7 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 - Registro de OF, material, descripción, análisis de calidad, peso específico, OE, línea y formato.
 - Historial de estados y auditoría de correcciones con usuario, fecha, motivo y valores anterior/nuevo.
 - Recepción de pesos desde Node-RED aproximadamente cada dos segundos.
-- Pesos conservados sólo en memoria: las muestras de balanza no se escriben en PostgreSQL.
+- Histórico continuo de peso almacenado segundo a segundo en InfluxDB; el backend conserva en memoria sólo la última lectura para la visualización en vivo y no duplica todas las muestras en PostgreSQL.
 - Interfaz responsive, menú lateral desplegable, confirmaciones internas y modo pantalla completa.
 - Vista Full HD de nueve tanques y reloj sin desplazamiento vertical.
 - Vista pública de sólo lectura para televisores, con planta explícita en `/tv?plant=CODIGO`.
@@ -25,7 +25,7 @@ Sistema web industrial para operar y supervisar los nueve tanques `TK101`–`TK1
 - Duración visible por estado, semáforos configurables y línea temporal completa por OF.
 - Resumen diario para reunión, cierre persistido y exportación PDF/Excel.
 - Registro de cantidad planificada, turno, prioridad, kilogramos envasados, unidades y merma.
-- Fotografías puntuales del peso en cada transición, sin persistir la telemetría continua.
+- Fotografías puntuales del peso en cada transición almacenadas con el historial operativo; la señal continua permanece en InfluxDB.
 
 ## Tanques
 
@@ -133,7 +133,7 @@ Ejemplo mínimo:
 }
 ```
 
-El endpoint admite entre 1 y 100 lecturas por solicitud. Una balanza se marca sin señal después de 10 segundos sin nuevas lecturas.
+El endpoint admite entre 1 y 100 lecturas por solicitud. Una balanza se marca sin señal después de 10 segundos sin nuevas lecturas. LATEX mantiene en RAM únicamente el último valor recibido para el monitoreo en vivo; un reinicio del backend elimina esa caché, pero no el histórico de alta frecuencia almacenado por el sistema industrial en InfluxDB. El endpoint no escribe las muestras en PostgreSQL ni en InfluxDB: la persistencia en el historiador ocurre fuera de esta recepción y LATEX consulta InfluxDB cuando necesita reconstruir la evolución del peso.
 
 El Compose incluye un Node-RED de prueba en `http://localhost:1880`. Su flujo **Simulador de pesos DISAL** sólo transmite cuando `DISAL_ENABLE_WEIGHT_SIMULATOR=true`; el valor predeterminado es `false`. Desde el editor se puede modificar el flujo o usar sus inyectores manuales, pero el simulador no debe habilitarse en un entorno conectado a señales reales.
 

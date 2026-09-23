@@ -20,7 +20,7 @@ Content-Type: application/json
 {"accepted":1,"rejected":0,"ignored":0,"persisted":false,"results":[{"scaleKey":"TK101","status":"ACCEPTED"}]}
 ```
 
-La telemetría instantánea vive en memoria. Tras reiniciar el backend aparece sin comunicación hasta recibir una lectura nueva; las fotografías tomadas al cambiar estados sí quedan en `TankStateHistory`.
+El backend conserva en memoria sólo la última lectura de cada equipo. Tras reiniciarlo, el equipo aparece sin comunicación hasta recibir una lectura nueva; las fotografías tomadas al cambiar estados sí quedan en `TankStateHistory`. La señal continua de peso se almacena por separado en InfluxDB. `persisted: false` indica que este endpoint no escribe la solicitud en PostgreSQL ni en InfluxDB, no que el histórico de alta frecuencia sea exclusivamente volátil.
 
 ## Compatibilidad Látex
 

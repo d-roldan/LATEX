@@ -46,13 +46,15 @@ El único punto de entrada de la aplicación para otros equipos es `disal-nginx`
 | `disal-nginx` | Nginx 1.27 Alpine | Permanente | Es el proxy inverso y punto de entrada; dirige interfaz y API, limita tráfico y agrega cabeceras. |
 | `disal-node-red` | Node-RED 4.0.9 | Permanente | Integra o simula las lecturas de peso y las envía a la API. |
 
+InfluxDB es un historiador externo al Compose descripto en este documento. El sistema industrial almacena allí la señal continua de peso segundo a segundo. LATEX no escribe esa señal en InfluxDB desde su endpoint de telemetría: conserva el último valor en memoria para la vista en vivo y consulta el historiador para recuperar la evolución de peso de una orden.
+
 ## `disal-db`: base de datos
 
 ### Para qué sirve
 
 Es la fuente persistente de verdad del sistema. Conserva la información de negocio y seguridad que debe sobrevivir a reinicios y recreaciones: empresas, usuarios, permisos, plantas, equipos, OF/OE, estados, eventos, cierres y auditoría.
 
-Las muestras continuas de peso recibidas desde Node-RED **no se guardan como telemetría histórica** en PostgreSQL. El backend las mantiene en memoria y sólo persiste las fotografías de peso que forman parte de eventos operativos definidos por la aplicación.
+Las muestras continuas de peso recibidas desde Node-RED **no se guardan como telemetría histórica** en PostgreSQL. El backend mantiene en memoria sólo el último valor y persiste en PostgreSQL las fotografías de peso que forman parte de eventos operativos definidos por la aplicación. El histórico continuo no se pierde por esta decisión: se conserva por separado en InfluxDB.
 
 ### Tecnología y funcionamiento
 
@@ -116,6 +118,7 @@ Centraliza la lógica del sistema. Entre otras responsabilidades:
 - consulta y actualiza PostgreSQL mediante Prisma;
 - recibe telemetría de Node-RED;
 - mantiene las lecturas actuales de peso en memoria;
+- consulta en InfluxDB el histórico continuo de peso cuando una vista de trazabilidad lo solicita;
 - registra eventos y auditoría;
 - expone el estado de salud en `/api/auth/status`.
 
@@ -259,7 +262,7 @@ Los puertos concretos se obtienen de `.env`; no debe asumirse que `HTTP_PORT` es
 | `./infra/nginx/https.conf` | `disal-nginx` con overlay HTTPS | Configuración TLS | Reemplaza la configuración HTTP dentro del contenedor. |
 | `./infra/nginx/certs` | `disal-nginx` con overlay HTTPS | Certificado y clave | Sólo lectura y excluido de Git. |
 
-Un backup completo debe contemplar PostgreSQL, archivos cargados, datos de Node-RED, `.env` y certificados locales cuando corresponda.
+Un backup completo de LATEX debe contemplar PostgreSQL, archivos cargados, datos de Node-RED, `.env` y certificados locales cuando corresponda. La estrategia integral de planta también debe incluir la retención y el respaldo de InfluxDB, aunque ese historiador no sea un volumen administrado por este Compose.
 
 ## Orden de inicio
 

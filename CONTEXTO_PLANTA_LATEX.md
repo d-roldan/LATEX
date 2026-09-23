@@ -139,7 +139,7 @@ La planta utiliza nueve tanques principales:
 - TK108.
 - TK109.
 
-Cada tanque dispone de información de peso adquirida por sistemas existentes. Node-RED procesa esos datos y los envía mediante HTTP al backend de LATEX.
+Cada tanque dispone de información de peso adquirida por sistemas existentes. Node-RED procesa esos datos y los envía mediante HTTP al backend de LATEX. La señal continua se almacena además segundo a segundo en InfluxDB, fuera de la memoria del backend.
 
 ### 5.2 Peso instantáneo y evento productivo
 
@@ -159,7 +159,7 @@ Peso en la transición: 17.945 kg
 Hora: 10:18
 ```
 
-LATEX utiliza el peso en vivo para aportar visibilidad y puede guardar fotografías puntuales en las transiciones relevantes. La telemetría continua no debe confundirse con el historial productivo.
+LATEX conserva en RAM sólo el último peso recibido para aportar visibilidad en vivo y puede guardar fotografías puntuales en las transiciones relevantes. La serie completa permanece en InfluxDB y puede consultarse para reconstruir su evolución. Esta telemetría continua no debe confundirse con el historial productivo contextualizado que LATEX persiste en PostgreSQL.
 
 ## 6. Sector Laboratorio
 

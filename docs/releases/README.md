@@ -6,6 +6,7 @@ Esta carpeta reúne todas las notas de versión disponibles del sistema DISAL Pl
 
 | Versión | Fecha | Contenido principal |
 |---|---|---|
+| [V0.0.31](RELEASE_NOTES_V0.0.31.md) | 23/09/2026 | Manuales por perfil con capturas reales y aclaración del histórico de pesos en InfluxDB. |
 | [V0.0.30](RELEASE_NOTES_V0.0.30.md) | 22/09/2026 | Auditoría por período, resumen e historial paginado por usuario, y trazabilidad cronológica de Laboratorio. |
 | [V0.0.29](RELEASE_NOTES_V0.0.29.md) | 21/09/2026 | Dosificadora y filtro por orden de envasado, con mejoras de legibilidad en modo TV. |
 | [V0.0.28](RELEASE_NOTES_V0.0.28.md) | 21/09/2026 | Recepción de muestras, métricas de Laboratorio, accesos por planta e inbox industrial idempotente. |

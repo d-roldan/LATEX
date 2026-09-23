@@ -103,7 +103,7 @@ Respuesta correcta:
 }
 ```
 
-`persisted: false` confirma que las muestras no se guardaron en PostgreSQL. Se mantienen sólo en memoria del backend. Tras 10 segundos sin recibir una lectura, la balanza se muestra **Sin señal**. Un reinicio del backend borra los últimos pesos recibidos.
+`persisted: false` confirma que este endpoint no guardó las muestras en PostgreSQL ni las escribió en InfluxDB. El backend mantiene en memoria sólo el último valor de cada tanque para mostrarlo en vivo. En paralelo, el sistema industrial almacena la señal continua segundo a segundo en InfluxDB y LATEX la consulta para reconstruir el histórico. Tras 10 segundos sin recibir una lectura, la balanza se muestra **Sin señal**. Un reinicio del backend borra únicamente los últimos valores en RAM; no elimina las muestras existentes en InfluxDB.
 
 ### Ejemplo de Function node de Node-RED
 

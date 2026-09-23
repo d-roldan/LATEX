@@ -39,9 +39,9 @@ La duración cerrada se conserva en segundos. Para estados en curso se calcula c
 
 ## Telemetría
 
-Las lecturas cada dos segundos viven únicamente en memoria. No existe una tabla de muestras. Al cambiar de estado se copia el último peso disponible a `TankStateHistory.weightKg`, generando pocos hitos auditables por lote.
+Dentro del backend de LATEX, las lecturas recibidas cada dos segundos viven únicamente en memoria y no existe una tabla de muestras en PostgreSQL. Al cambiar de estado se copia el último peso disponible a `TankStateHistory.weightKg`, generando pocos hitos auditables por lote.
 
-Esta memoria representa sólo el último valor para visualización. InfluxDB continúa siendo la fuente prevista para reconstruir la señal de alta frecuencia; PostgreSQL debe almacenar resultados consolidados, referencias y evidencia suficiente para repetir un cálculo.
+Esta memoria representa sólo el último valor para visualización. La señal continua se almacena históricamente segundo a segundo en InfluxDB, que es la fuente utilizada para reconstruir el peso de alta frecuencia. LATEX consulta ese histórico, pero su endpoint de recepción no lo escribe. PostgreSQL conserva los resultados consolidados, las referencias y la evidencia operativa necesaria, sin duplicar todas las muestras.
 
 ## Restricciones actuales
 

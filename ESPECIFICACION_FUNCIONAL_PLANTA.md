@@ -11,7 +11,7 @@ El sistema incluye autenticación y autorización por rol, operación sectorial,
 Quedan fuera del alcance actual:
 
 - Configuración definitiva de capacidades; se completará al conocer las dimensiones reales.
-- Persistencia de las muestras de peso.
+- Duplicación de todas las muestras de peso en PostgreSQL; el histórico continuo ya se conserva en InfluxDB.
 - Comandos de TARA y CERO.
 - Automatización directa sobre válvulas, bombas o balanzas.
 
@@ -173,10 +173,11 @@ Reglas:
 - `netKg` opcional con el mismo rango.
 - `measuredAt` opcional en formato ISO 8601.
 - Frecuencia prevista: un lote aproximadamente cada 2 segundos.
-- Los pesos permanecen exclusivamente en memoria del backend.
+- El backend conserva en memoria sólo la última lectura de cada tanque para el monitoreo en vivo; no crea una tabla de muestras en PostgreSQL.
+- La señal continua de peso se almacena históricamente segundo a segundo en InfluxDB y LATEX la consulta para reconstruir su evolución.
 - Una lectura con más de 10 segundos se considera sin señal.
-- Un reinicio elimina los pesos, pero no estados, lotes ni históricos.
-- La respuesta informa `persisted: false`.
+- Un reinicio elimina los últimos valores guardados en RAM, pero no los estados, lotes, históricos operativos ni las muestras existentes en InfluxDB.
+- La respuesta informa `persisted: false`: significa que este endpoint no persiste la solicitud en PostgreSQL ni escribe en InfluxDB; no significa que la señal carezca de almacenamiento histórico.
 
 ## 12. Persistencia
 

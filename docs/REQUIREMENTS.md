@@ -61,7 +61,7 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 
 - El estado mostrado es el estado operativo registrado por la aplicación; todavía no se reconstruye automáticamente la ejecución física completa del PLC.
 - La grilla se actualiza por consulta periódica cada 2 segundos. Las notificaciones se consultan cada 3 segundos.
-- El último peso recibido vive en memoria del backend y se pierde al reiniciarlo; la próxima lectura de Node-RED vuelve a poblarlo.
+- El último peso recibido vive en memoria del backend y se pierde al reiniciarlo; la próxima lectura de Node-RED vuelve a poblarlo. Esto afecta sólo la vista en vivo: el histórico continuo de peso se conserva en InfluxDB.
 - InfluxDB, PLC y SCADA aún no están integrados al modelo ampliado de receta, pasos y cargas.
 - La pantalla TV es pública dentro de la red donde se publique el servicio y muestra datos operativos de OF, material y OE. Cada dispositivo debe guardar una dirección `/tv?plant=CODIGO`; `/tv` sin planta abre solamente la selección de configuración.
 - Un aviso leído no tiene estados de aceptación, atención o resolución.
