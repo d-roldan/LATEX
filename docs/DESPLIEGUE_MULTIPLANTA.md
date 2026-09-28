@@ -9,7 +9,7 @@ Compose usa `postgres_data` para PostgreSQL y `uploads_data` para adjuntos. En e
 1. Completar `.env` y fijar tags/digests revisados de las imágenes.
 2. En una base comprobablemente vacía ejecutar desde la imagen backend `npm run prisma:install-empty`. Este comando rechaza bases con tablas, materializa el esquema vigente, valida y sólo entonces registra la cadena histórica como baseline. Después, `prisma migrate deploy` debe informar que no hay migraciones pendientes.
 3. Ejecutar el bootstrap/seed sólo en una instalación vacía y luego crear accesos explícitos. Los scripts demo no forman parte del arranque normal.
-4. Iniciar con `docker compose up -d` y verificar cuatro plantas, 9/4/2/2 equipos y ausencia de integraciones nuevas habilitadas.
+4. Iniciar con `docker compose up -d` y verificar cinco plantas: Látex 9, Látex Viejo 4, Terplast 4, Slurry 2 y Enduido 2 equipos, sin integraciones nuevas habilitadas.
 
 ## Actualización de una base existente
 

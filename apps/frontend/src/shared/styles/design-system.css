@@ -23,7 +23,8 @@ textarea,
   background: var(--color-surface-soft);
   color: var(--color-text);
   box-shadow: inset 0 1px 1px color-mix(in srgb, var(--color-text) 3%, transparent);
-  transition: border-color var(--duration-normal) var(--easing-primary),
+  transition:
+    border-color var(--duration-normal) var(--easing-primary),
     box-shadow var(--duration-normal) var(--easing-primary),
     background var(--duration-normal) var(--easing-primary);
 }
@@ -69,7 +70,8 @@ textarea:disabled,
   line-height: 1;
   box-shadow: var(--shadow-button);
   transform: translateY(0) scale(1);
-  transition: transform var(--duration-fast) var(--easing-secondary),
+  transition:
+    transform var(--duration-fast) var(--easing-secondary),
     filter var(--duration-normal) var(--easing-primary),
     box-shadow var(--duration-normal) var(--easing-primary),
     background var(--duration-normal) var(--easing-primary);
@@ -82,7 +84,11 @@ textarea:disabled,
   inset: 1px 2px auto;
   height: 42%;
   border-radius: calc(var(--button-radius) - 2px);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-on-status) 19%, transparent), transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-on-status) 19%, transparent),
+    transparent
+  );
   pointer-events: none;
   z-index: -1;
 }
@@ -123,7 +129,16 @@ button:disabled {
 
 .ds-button--primary,
 .btn-primary,
-:where(button:not(.ds-button, .secondary-button, .danger-button, .btn-secondary, .btn-danger, .unstyled-button)) {
+:where(
+  button:not(
+    .ds-button,
+    .secondary-button,
+    .danger-button,
+    .btn-secondary,
+    .btn-danger,
+    .unstyled-button
+  )
+) {
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   color: var(--color-text);
   border-color: color-mix(in srgb, var(--color-success) 24%, var(--color-border));
@@ -171,7 +186,16 @@ button:disabled {
 /* Acción positiva por defecto: limpia en reposo y verde al interactuar. */
 .ds-button--primary:hover:not(:disabled),
 .btn-primary:hover:not(:disabled),
-:where(button:not(.ds-button, .secondary-button, .danger-button, .btn-secondary, .btn-danger, .unstyled-button)):hover:not(:disabled) {
+:where(
+    button:not(
+      .ds-button,
+      .secondary-button,
+      .danger-button,
+      .btn-secondary,
+      .btn-danger,
+      .unstyled-button
+    )
+  ):hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
   color: var(--color-success);
   border-color: color-mix(in srgb, var(--color-success) 52%, var(--color-border));
@@ -228,8 +252,16 @@ button:disabled {
   text-underline-offset: 0.2em;
 }
 
-.ds-button--sm { min-height: var(--button-height-sm); padding-inline: var(--spacing-md); font-size: var(--font-size-xs); }
-.ds-button--lg { min-height: var(--button-height-lg); padding-inline: var(--spacing-xl); font-size: var(--font-size-md); }
+.ds-button--sm {
+  min-height: var(--button-height-sm);
+  padding-inline: var(--spacing-md);
+  font-size: var(--font-size-xs);
+}
+.ds-button--lg {
+  min-height: var(--button-height-lg);
+  padding-inline: var(--spacing-xl);
+  font-size: var(--font-size-md);
+}
 
 .route-loading {
   min-height: 100dvh;
@@ -251,7 +283,9 @@ button:disabled {
 }
 
 @keyframes route-loading-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .panel,
@@ -260,7 +294,8 @@ button:disabled {
   border-radius: var(--card-radius);
   background: var(--card-background);
   box-shadow: var(--card-shadow);
-  transition: transform var(--duration-normal) var(--easing-primary),
+  transition:
+    transform var(--duration-normal) var(--easing-primary),
     border-color var(--duration-normal) var(--easing-primary),
     box-shadow var(--duration-normal) var(--easing-primary);
 }
@@ -273,9 +308,22 @@ button.panel:hover,
   box-shadow: var(--shadow-lg);
 }
 
-.ds-card__header { display: grid; gap: var(--spacing-xs); margin-bottom: var(--spacing-lg); }
-.ds-card__title { color: var(--color-text); font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); letter-spacing: var(--letter-spacing-tight); }
-.ds-card__description { color: var(--color-text-secondary); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
+.ds-card__header {
+  display: grid;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-lg);
+}
+.ds-card__title {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-tight);
+}
+.ds-card__description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
 
 .modal-overlay {
   background: var(--color-surface-overlay);
@@ -359,12 +407,30 @@ button.panel:hover,
   text-transform: uppercase;
 }
 
-.ds-badge--neutral { color: var(--color-text-secondary); background: var(--color-neutral-surface); }
-.ds-badge--primary { color: var(--color-brand-disal); background: color-mix(in srgb, var(--color-brand-disal) 12%, transparent); }
-.ds-badge--success { color: var(--color-success); background: var(--color-success-surface); }
-.ds-badge--warning { color: var(--color-warning); background: var(--color-warning-surface); }
-.ds-badge--danger { color: var(--color-danger); background: var(--color-danger-surface); }
-.ds-badge--info { color: var(--color-info); background: var(--color-info-surface); }
+.ds-badge--neutral {
+  color: var(--color-text-secondary);
+  background: var(--color-neutral-surface);
+}
+.ds-badge--primary {
+  color: var(--color-brand-disal);
+  background: color-mix(in srgb, var(--color-brand-disal) 12%, transparent);
+}
+.ds-badge--success {
+  color: var(--color-success);
+  background: var(--color-success-surface);
+}
+.ds-badge--warning {
+  color: var(--color-warning);
+  background: var(--color-warning-surface);
+}
+.ds-badge--danger {
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
+}
+.ds-badge--info {
+  color: var(--color-info);
+  background: var(--color-info-surface);
+}
 
 .ds-progress {
   width: 100%;
@@ -391,10 +457,22 @@ button.panel:hover,
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
 }
-.ds-alert--success { color: var(--color-success); background: var(--color-success-surface); }
-.ds-alert--warning { color: var(--color-warning); background: var(--color-warning-surface); }
-.ds-alert--danger { color: var(--color-danger); background: var(--color-danger-surface); }
-.ds-alert--info { color: var(--color-info); background: var(--color-info-surface); }
+.ds-alert--success {
+  color: var(--color-success);
+  background: var(--color-success-surface);
+}
+.ds-alert--warning {
+  color: var(--color-warning);
+  background: var(--color-warning-surface);
+}
+.ds-alert--danger {
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
+}
+.ds-alert--info {
+  color: var(--color-info);
+  background: var(--color-info-surface);
+}
 
 .ds-tabs {
   display: inline-flex;
@@ -445,7 +523,8 @@ button.panel:hover,
   opacity: 0;
   visibility: hidden;
   transform: translate(-50%, var(--spacing-xs));
-  transition: opacity var(--duration-fast) var(--easing-primary),
+  transition:
+    opacity var(--duration-fast) var(--easing-primary),
     transform var(--duration-fast) var(--easing-primary),
     visibility var(--duration-fast);
   pointer-events: none;
@@ -493,46 +572,48 @@ button.panel:hover,
 }
 
 /* Jerarquía sobria para acciones dentro de todos los popups. */
-.modal-panel :where(
-  button:not(
-    .ds-button--primary,
-    .ds-button--success,
-    .ds-button--warning,
-    .ds-button--danger,
-    .ds-button--info,
-    .btn-primary,
-    .btn-danger,
-    .danger-button,
-    .unstyled-button
-  ),
-  .btn-secondary,
-  .ds-button--secondary,
-  .ds-button--outline,
-  .ds-button--ghost
-) {
+.modal-panel
+  :where(
+    button:not(
+      .ds-button--primary,
+      .ds-button--success,
+      .ds-button--warning,
+      .ds-button--danger,
+      .ds-button--info,
+      .btn-primary,
+      .btn-danger,
+      .danger-button,
+      .unstyled-button
+    ),
+    .btn-secondary,
+    .ds-button--secondary,
+    .ds-button--outline,
+    .ds-button--ghost
+  ) {
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   color: var(--color-text);
   border-color: var(--color-border);
   box-shadow: none;
 }
 
-.modal-panel :where(
-  button:not(
-    .ds-button--primary,
-    .ds-button--success,
-    .ds-button--warning,
-    .ds-button--danger,
-    .ds-button--info,
-    .btn-primary,
-    .btn-danger,
-    .danger-button,
-    .unstyled-button
-  ),
-  .btn-secondary,
-  .ds-button--secondary,
-  .ds-button--outline,
-  .ds-button--ghost
-):hover:not(:disabled) {
+.modal-panel
+  :where(
+    button:not(
+      .ds-button--primary,
+      .ds-button--success,
+      .ds-button--warning,
+      .ds-button--danger,
+      .ds-button--info,
+      .btn-primary,
+      .btn-danger,
+      .danger-button,
+      .unstyled-button
+    ),
+    .btn-secondary,
+    .ds-button--secondary,
+    .ds-button--outline,
+    .ds-button--ghost
+  ):hover:not(:disabled) {
   background: color-mix(in srgb, var(--primary) 7%, var(--color-surface));
   color: var(--primary);
   border-color: color-mix(in srgb, var(--primary) 34%, var(--color-border));
@@ -600,14 +681,18 @@ button.panel:hover,
 }
 
 .login-page__background {
-  background: radial-gradient(circle at 20% 15%, #0d769d 0, transparent 32%), radial-gradient(circle at 75% 80%, #123b59 0, transparent 38%), #080d13;
+  background:
+    radial-gradient(circle at 20% 15%, #0d769d 0, transparent 32%),
+    radial-gradient(circle at 75% 80%, #123b59 0, transparent 38%), #080d13;
 }
 
 .login-page__scrim {
-  background: linear-gradient(115deg,
+  background: linear-gradient(
+    115deg,
     color-mix(in srgb, var(--color-shadow-base) 76%, transparent),
     color-mix(in srgb, var(--color-shadow-base) 48%, transparent) 45%,
-    color-mix(in srgb, var(--color-brand-disal-strong) 36%, var(--color-shadow-base) 64%));
+    color-mix(in srgb, var(--color-brand-disal-strong) 36%, var(--color-shadow-base) 64%)
+  );
 }
 
 .login-shell {
@@ -640,9 +725,23 @@ button.panel:hover,
   box-shadow: var(--shadow-lg);
 }
 
-.login-brand__plate img { display: block; width: 100%; height: auto; }
-.login-brand__copy { max-width: 24rem; margin-bottom: var(--spacing-2xl); color: color-mix(in srgb, var(--color-on-status) 80%, transparent); font-size: var(--font-size-lg); line-height: var(--line-height-relaxed); }
-.login-brand__badges { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+.login-brand__plate img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.login-brand__copy {
+  max-width: 24rem;
+  margin-bottom: var(--spacing-2xl);
+  color: color-mix(in srgb, var(--color-on-status) 80%, transparent);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+}
+.login-brand__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
 
 .login-form {
   display: flex;
@@ -655,13 +754,46 @@ button.panel:hover,
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-on-status) 5%, transparent);
 }
 
-.login-form h2 { margin-bottom: var(--spacing-sm); color: var(--color-on-status); font-size: var(--font-size-2xl); font-weight: var(--font-weight-heavy); }
-.login-form > div > p { color: color-mix(in srgb, var(--color-on-status) 60%, transparent); font-size: var(--font-size-md); }
-.login-form label { display: flex; flex-direction: column; gap: var(--spacing-sm); }
-.login-form label > span { color: color-mix(in srgb, var(--color-on-status) 72%, transparent); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); letter-spacing: var(--letter-spacing-wide); text-transform: uppercase; }
-.login-form .ds-input { border-color: color-mix(in srgb, var(--color-on-status) 12%, transparent); background: color-mix(in srgb, var(--color-shadow-base) 34%, transparent); color: var(--color-on-status); }
-.login-form__submit { width: 100%; margin-top: var(--spacing-sm); }
-.login-form__legal { display: grid; gap: 0.25rem; margin-top: var(--spacing-sm); color: color-mix(in srgb, var(--color-on-status) 44%, transparent); font-size: var(--font-size-xs); line-height: var(--line-height-relaxed); text-align: center; }
+.login-form h2 {
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-on-status);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-heavy);
+}
+.login-form > div > p {
+  color: color-mix(in srgb, var(--color-on-status) 60%, transparent);
+  font-size: var(--font-size-md);
+}
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+.login-form label > span {
+  color: color-mix(in srgb, var(--color-on-status) 72%, transparent);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+.login-form .ds-input {
+  border-color: color-mix(in srgb, var(--color-on-status) 12%, transparent);
+  background: color-mix(in srgb, var(--color-shadow-base) 34%, transparent);
+  color: var(--color-on-status);
+}
+.login-form__submit {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+}
+.login-form__legal {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: var(--spacing-sm);
+  color: color-mix(in srgb, var(--color-on-status) 44%, transparent);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+  text-align: center;
+}
 
 .login-theme-toggle {
   position: fixed;
@@ -671,11 +803,18 @@ button.panel:hover,
 }
 
 :root[data-theme='light'] .login-page__background {
-  background: radial-gradient(circle at 18% 14%, #b9e5f4 0, transparent 34%), radial-gradient(circle at 78% 82%, #c7d9ea 0, transparent 42%), #eef4f8;
+  background:
+    radial-gradient(circle at 18% 14%, #b9e5f4 0, transparent 34%),
+    radial-gradient(circle at 78% 82%, #c7d9ea 0, transparent 42%), #eef4f8;
 }
 
 :root[data-theme='light'] .login-page__scrim {
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0.34), rgba(239, 246, 251, 0.5) 48%, rgba(230, 0, 18, 0.08));
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.34),
+    rgba(239, 246, 251, 0.5) 48%,
+    rgba(230, 0, 18, 0.08)
+  );
 }
 
 :root[data-theme='light'] .login-shell {
@@ -704,13 +843,32 @@ button.panel:hover,
 }
 
 @media (max-width: 760px) {
-  .login-page { place-items: start center; overflow-y: auto; padding-top: clamp(5rem, 16vh, 8rem); }
-  .login-shell { grid-template-columns: 1fr; padding: var(--spacing-lg); }
-  .login-brand { display: none; }
-  .login-form { min-width: 0; padding: var(--spacing-xl); }
-  .login-form .ds-input { min-width: 0; }
-  .login-theme-toggle span { display: none; }
-  .login-theme-toggle { width: 2.75rem; padding-inline: 0; }
+  .login-page {
+    place-items: start center;
+    overflow-y: auto;
+    padding-top: clamp(5rem, 16vh, 8rem);
+  }
+  .login-shell {
+    grid-template-columns: 1fr;
+    padding: var(--spacing-lg);
+  }
+  .login-brand {
+    display: none;
+  }
+  .login-form {
+    min-width: 0;
+    padding: var(--spacing-xl);
+  }
+  .login-form .ds-input {
+    min-width: 0;
+  }
+  .login-theme-toggle span {
+    display: none;
+  }
+  .login-theme-toggle {
+    width: 2.75rem;
+    padding-inline: 0;
+  }
 }
 
 .toast-viewport {
@@ -740,17 +898,42 @@ button.panel:hover,
   pointer-events: auto;
   animation: ds-toast-in var(--duration-slow) var(--easing-secondary);
 }
-.toast--success { --toast-color: var(--color-success); }
-.toast--error { --toast-color: var(--color-danger); }
-.toast--warning { --toast-color: var(--color-warning); }
-.toast__icon { flex: none; color: var(--toast-color); }
+.toast--success {
+  --toast-color: var(--color-success);
+}
+.toast--error {
+  --toast-color: var(--color-danger);
+}
+.toast--warning {
+  --toast-color: var(--color-warning);
+}
+.toast__icon {
+  flex: none;
+  color: var(--toast-color);
+}
 
-@keyframes ds-fade-in { from { opacity: 0; } }
-@keyframes ds-modal-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
-@keyframes ds-toast-in { from { opacity: 0; transform: translateX(16px) scale(0.97); } }
+@keyframes ds-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ds-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes ds-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.97);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     scroll-behavior: auto !important;
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;

@@ -27,18 +27,15 @@ export function ConfirmDialog({
   return (
     <Dialog
       open={open}
-      onOpenChange={(isOpen) => { if (!isPending) onOpenChange(isOpen); }}
+      onOpenChange={(isOpen) => {
+        if (!isPending) onOpenChange(isOpen);
+      }}
       disableClose={isPending}
       title={title}
       description={description}
     >
       <div className="dialog-actions">
-        <Button
-          type="button"
-          variant={variant}
-          onClick={onConfirm}
-          disabled={isPending}
-        >
+        <Button type="button" variant={variant} onClick={onConfirm} disabled={isPending}>
           {isPending ? 'Procesando...' : confirmLabel}
         </Button>
         <Button

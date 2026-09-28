@@ -1,4 +1,4 @@
-import { useState, useCallback, createContext, useContext, PropsWithChildren } from 'react';
+import { useState, useCallback, createContext, PropsWithChildren } from 'react';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ToastItem {
@@ -46,10 +46,4 @@ export function ToastProvider({ children }: PropsWithChildren) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast(): ToastContextValue['toast'] {
-  const context = useContext(ToastContext);
-  if (!context) throw new Error('useToast must be used inside ToastProvider');
-  return context.toast;
 }

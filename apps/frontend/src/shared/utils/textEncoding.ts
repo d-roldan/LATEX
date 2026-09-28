@@ -21,7 +21,7 @@ const MOJIBAKE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/âž•/g, '+'],
   [/âœ…/g, ''],
   [/âœ”/g, ''],
-  [/âš ï¸/g, ''],
+  [/âš\u00a0ï¸/g, ''],
   [/âšª/g, ''],
   [/â³/g, ''],
   [/â°/g, ''],
@@ -34,7 +34,10 @@ const MOJIBAKE_REPLACEMENTS: Array<[RegExp, string]> = [
 ];
 
 export function repairText(value: string): string {
-  return MOJIBAKE_REPLACEMENTS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+  return MOJIBAKE_REPLACEMENTS.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    value
+  );
 }
 
 export function repairTextDeep<T>(value: T): T {
@@ -42,7 +45,10 @@ export function repairTextDeep<T>(value: T): T {
   if (Array.isArray(value)) return value.map((item) => repairTextDeep(item)) as T;
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, repairTextDeep(item)])
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        repairTextDeep(item)
+      ])
     ) as T;
   }
   return value;

@@ -88,14 +88,17 @@ export interface Timeline {
   laboratorySamples?: Array<{
     id: string;
     iteration: number;
-    status: 'AWAITING_RECEIPT' | 'RECEIVED' | 'RESOLVED';
+    status: 'AWAITING_RECEIPT' | 'RECEIVED' | 'ANALYZING' | 'RESOLVED';
     requestedAt: string;
     receivedAt?: string;
+    analysisStartedAt?: string;
     resolvedAt?: string;
     waitingForReceiptSeconds?: number | null;
+    waitingForAnalysisSeconds?: number | null;
     analysisSeconds?: number | null;
     requestedBy?: { fullName: string };
     receivedBy?: { fullName: string };
+    analysisStartedBy?: { fullName: string };
   }>;
   weightHistory: {
     status: 'AVAILABLE' | 'NO_DATA' | 'CONFIGURATION_PENDING' | 'UNAVAILABLE';
@@ -450,14 +453,72 @@ function LaboratorySamples({ samples }: { samples: NonNullable<Timeline['laborat
           <article key={sample.id}>
             <header>
               <strong>Muestra {sample.iteration}</strong>
-              <span>{sample.status === 'AWAITING_RECEIPT' ? 'Esperando recepción' : sample.status === 'RECEIVED' ? 'En análisis' : 'Resuelta'}</span>
+              <span>
+                {sample.status === 'AWAITING_RECEIPT'
+                  ? 'Esperando recepción'
+                  : sample.status === 'RECEIVED'
+                    ? 'Tanque en espera'
+                    : sample.status === 'ANALYZING'
+                      ? 'En análisis'
+                      : 'Resuelta'}
+              </span>
             </header>
             <dl>
-              <div><dt>Ingreso a Laboratorio</dt><dd>{dateTime(sample.requestedAt)}{sample.requestedBy ? ` · ${sample.requestedBy.fullName}` : ''}</dd></div>
-              <div><dt>Recepción de muestra</dt><dd>{sample.receivedAt ? `${dateTime(sample.receivedAt)}${sample.receivedBy ? ` · ${sample.receivedBy.fullName}` : ''}` : 'Pendiente'}</dd></div>
-              <div><dt>Espera hasta recepción</dt><dd>{sample.waitingForReceiptSeconds == null ? 'En curso' : duration(sample.waitingForReceiptSeconds)}</dd></div>
-              <div><dt>Resolución del análisis</dt><dd>{sample.resolvedAt ? dateTime(sample.resolvedAt) : 'Pendiente'}</dd></div>
-              <div><dt>Tiempo de análisis</dt><dd>{sample.analysisSeconds == null ? sample.receivedAt ? 'En curso' : 'Pendiente' : duration(sample.analysisSeconds)}</dd></div>
+              <div>
+                <dt>Ingreso a Laboratorio</dt>
+                <dd>
+                  {dateTime(sample.requestedAt)}
+                  {sample.requestedBy ? ` · ${sample.requestedBy.fullName}` : ''}
+                </dd>
+              </div>
+              <div>
+                <dt>Recepción de muestra</dt>
+                <dd>
+                  {sample.receivedAt
+                    ? `${dateTime(sample.receivedAt)}${sample.receivedBy ? ` · ${sample.receivedBy.fullName}` : ''}`
+                    : 'Pendiente'}
+                </dd>
+              </div>
+              <div>
+                <dt>Demora en llegar la muestra</dt>
+                <dd>
+                  {sample.waitingForReceiptSeconds == null
+                    ? 'En curso'
+                    : duration(sample.waitingForReceiptSeconds)}
+                </dd>
+              </div>
+              <div>
+                <dt>Inicio del análisis</dt>
+                <dd>
+                  {sample.analysisStartedAt
+                    ? `${dateTime(sample.analysisStartedAt)}${sample.analysisStartedBy ? ` · ${sample.analysisStartedBy.fullName}` : ''}`
+                    : 'Pendiente'}
+                </dd>
+              </div>
+              <div>
+                <dt>Tanque en espera para análisis</dt>
+                <dd>
+                  {sample.waitingForAnalysisSeconds == null
+                    ? sample.receivedAt
+                      ? 'En curso'
+                      : 'Pendiente'
+                    : duration(sample.waitingForAnalysisSeconds)}
+                </dd>
+              </div>
+              <div>
+                <dt>Resolución del análisis</dt>
+                <dd>{sample.resolvedAt ? dateTime(sample.resolvedAt) : 'Pendiente'}</dd>
+              </div>
+              <div>
+                <dt>Tiempo de análisis</dt>
+                <dd>
+                  {sample.analysisSeconds == null
+                    ? sample.analysisStartedAt
+                      ? 'En curso'
+                      : 'Pendiente'
+                    : duration(sample.analysisSeconds)}
+                </dd>
+              </div>
             </dl>
           </article>
         ))}
@@ -686,7 +747,9 @@ function PackagingOrders({ orders }: { orders: PackagingOrderSummary[] }) {
                 </div>
                 <div>
                   <dt>Dosificadora / Filtro</dt>
-                  <dd>{order.dispenser ?? '—'} · {order.filter ?? '—'}</dd>
+                  <dd>
+                    {order.dispenser ?? '—'} · {order.filter ?? '—'}
+                  </dd>
                 </div>
                 <div>
                   <dt>Inicio</dt>

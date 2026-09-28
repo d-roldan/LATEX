@@ -10,7 +10,8 @@ function SkeletonCell() {
         style={{
           height: '0.9rem',
           borderRadius: '0.3rem',
-          background: 'linear-gradient(90deg, var(--panel) 25%, var(--panel-elevated) 50%, var(--panel) 75%)',
+          background:
+            'linear-gradient(90deg, var(--panel) 25%, var(--panel-elevated) 50%, var(--panel) 75%)',
           backgroundSize: '200% 100%',
           animation: 'skeleton-shimmer 1.4s infinite',
           maxWidth: '140px'

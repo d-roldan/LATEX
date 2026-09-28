@@ -70,6 +70,7 @@ La vista `/tv` no selecciona una planta por omisión. Al abrirla sin parámetros
 | Planta | Dirección |
 |---|---|
 | Látex | `/tv?plant=LATEX` |
+| Látex Viejo | `/tv?plant=LATEX_VIEJO` |
 | Terplast | `/tv?plant=TERPLAST` |
 | Slurry | `/tv?plant=SLURRY` |
 | Enduido | `/tv?plant=ENDUIDO` |

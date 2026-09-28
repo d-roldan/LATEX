@@ -37,7 +37,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.31](releases/RELEASE_NOTES_V0.0.31.md): manuales por perfil con capturas reales y aclaración del histórico de pesos en InfluxDB.
+- [Versión vigente · V0.0.32](releases/RELEASE_NOTES_V0.0.32.md): flujo real de análisis de Laboratorio, nuevas plantas, mejoras de interfaz y visualización de sólo lectura para Jefatura.
 
 ## Criterio de actualización
 

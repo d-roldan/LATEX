@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Check, Clock3, Copy, Database, ExternalLink, ShieldAlert, UserRound } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  Clock3,
+  Copy,
+  Database,
+  ExternalLink,
+  ShieldAlert,
+  UserRound
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 export interface AiEvidence {
@@ -52,7 +61,12 @@ export function ChatMessage({ message, onSuggestion, disabled }: ChatMessageProp
         <div className="ai-message__heading">
           <p className="ai-message__author">{isAssistant ? 'Copiloto DISAL' : 'Vos'}</p>
           {isAssistant && (
-            <button type="button" className="ai-message__copy unstyled-button" onClick={() => void copyAnswer()} aria-label="Copiar respuesta">
+            <button
+              type="button"
+              className="ai-message__copy unstyled-button"
+              onClick={() => void copyAnswer()}
+              aria-label="Copiar respuesta"
+            >
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
           )}
@@ -64,7 +78,9 @@ export function ChatMessage({ message, onSuggestion, disabled }: ChatMessageProp
 
         {isAssistant && message.evidence?.length ? (
           <section className="ai-evidence" aria-label="Evidencia consultada">
-            <div className="ai-evidence__title"><Database size={14} /> Evidencia en el sistema</div>
+            <div className="ai-evidence__title">
+              <Database size={14} /> Evidencia en el sistema
+            </div>
             <div className="ai-evidence__grid">
               {message.evidence.map((evidence, index) => {
                 const card = (
@@ -83,13 +99,16 @@ export function ChatMessage({ message, onSuggestion, disabled }: ChatMessageProp
                     state={{
                       tab: evidence.entityType === 'order' ? 'production' : undefined,
                       orderId: evidence.entityType === 'order' ? evidence.entityId : undefined,
-                      highlightOrderId: evidence.entityType === 'order' ? evidence.entityId : undefined
+                      highlightOrderId:
+                        evidence.entityType === 'order' ? evidence.entityId : undefined
                     }}
                   >
                     {card}
                   </Link>
                 ) : (
-                  <div key={`${evidence.label}-${index}`} className="ai-evidence__card">{card}</div>
+                  <div key={`${evidence.label}-${index}`} className="ai-evidence__card">
+                    {card}
+                  </div>
                 );
               })}
             </div>
@@ -99,29 +118,48 @@ export function ChatMessage({ message, onSuggestion, disabled }: ChatMessageProp
         {isAssistant && message.caveats?.length ? (
           <div className="ai-caveats">
             <ShieldAlert size={15} />
-            <div>{message.caveats.map((caveat) => <p key={caveat}>{caveat}</p>)}</div>
+            <div>
+              {message.caveats.map((caveat) => (
+                <p key={caveat}>{caveat}</p>
+              ))}
+            </div>
           </div>
         ) : null}
 
         {isAssistant && message.contextUsed?.length ? (
           <div className="ai-context-used">
             {message.contextUsed.map((context) => (
-              <span key={context.name} title={context.description}>{context.description}</span>
+              <span key={context.name} title={context.description}>
+                {context.description}
+              </span>
             ))}
           </div>
         ) : null}
 
         {isAssistant && (
           <footer className="ai-message__meta">
-            {message.isFallback ? <span>Resumen calculado localmente</span> : message.model ? <span>Analizado con {message.model}</span> : null}
-            {message.latencyMs ? <span><Clock3 size={12} /> {(message.latencyMs / 1000).toFixed(1)} s</span> : null}
+            {message.isFallback ? (
+              <span>Resumen calculado localmente</span>
+            ) : message.model ? (
+              <span>Analizado con {message.model}</span>
+            ) : null}
+            {message.latencyMs ? (
+              <span>
+                <Clock3 size={12} /> {(message.latencyMs / 1000).toFixed(1)} s
+              </span>
+            ) : null}
           </footer>
         )}
 
         {isAssistant && message.suggestions?.length && onSuggestion ? (
           <div className="ai-followups" aria-label="Preguntas relacionadas">
             {message.suggestions.map((suggestion) => (
-              <button key={suggestion} type="button" onClick={() => onSuggestion(suggestion)} disabled={disabled}>
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => onSuggestion(suggestion)}
+                disabled={disabled}
+              >
                 {suggestion}
               </button>
             ))}

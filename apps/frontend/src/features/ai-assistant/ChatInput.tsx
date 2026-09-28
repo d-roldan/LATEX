@@ -36,7 +36,9 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
   return (
     <form className="ai-chat-input" onSubmit={submit}>
       <div className="ai-chat-input__field">
-        <label htmlFor="ai-message-input" className="sr-only">Escribí una pregunta para el Copiloto DISAL</label>
+        <label htmlFor="ai-message-input" className="sr-only">
+          Escribí una pregunta para el Copiloto DISAL
+        </label>
         <textarea
           ref={textareaRef}
           id="ai-message-input"
@@ -53,7 +55,11 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
         />
         <span className="ai-chat-input__hint">
           Enter para enviar · Shift + Enter para nueva línea
-          {value.length > 850 && <em>{value.length}/{MAX_LENGTH}</em>}
+          {value.length > 850 && (
+            <em>
+              {value.length}/{MAX_LENGTH}
+            </em>
+          )}
         </span>
       </div>
       <button type="submit" disabled={disabled || !value.trim()} aria-label="Enviar pregunta">

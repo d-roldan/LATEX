@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -34,6 +35,10 @@ export class VersionedActionDto {
   @IsOptional() @IsString() @MaxLength(500) reason?: string;
 }
 
+export class ReceiveLaboratorySampleDto extends VersionedActionDto {
+  @IsBoolean() startAnalysis!: boolean;
+}
+
 export class QualityAdjustmentItemDto {
   @Matches(/^\d{1,20}$/, { message: 'El número de material debe contener sólo dígitos' })
   materialCode!: string;
@@ -46,22 +51,36 @@ export class QualityDecisionDto extends VersionedActionDto {
   @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.001) specificWeight?: number;
   @IsOptional() @IsString() @MaxLength(180) recoveryAction?: string;
   @ValidateIf((dto: QualityDecisionDto) => dto.result === 'AJUSTE')
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20)
-  @IsString({ each: true }) @IsNotEmpty({ each: true }) @MaxLength(180, { each: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @MaxLength(180, { each: true })
   adjustmentReasons?: string[];
   @ValidateIf((dto: QualityDecisionDto) => dto.result === 'AJUSTE')
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
-  @ValidateNested({ each: true }) @Type(() => QualityAdjustmentItemDto)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => QualityAdjustmentItemDto)
   adjustments?: QualityAdjustmentItemDto[];
 }
 
 export class CorrectQualityAdjustmentDto {
   @IsInt() @Min(0) version!: number;
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20)
-  @IsString({ each: true }) @IsNotEmpty({ each: true }) @MaxLength(180, { each: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @MaxLength(180, { each: true })
   adjustmentReasons!: string[];
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
-  @ValidateNested({ each: true }) @Type(() => QualityAdjustmentItemDto)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => QualityAdjustmentItemDto)
   adjustments!: QualityAdjustmentItemDto[];
 }
 
@@ -70,7 +89,7 @@ export class PackagingDto extends VersionedActionDto {
     message: 'La orden de envasado debe tener 6 u 8 dígitos'
   })
   packagingOrder!: string;
-  @Transform(({ value }) => typeof value === 'string' ? value.replace(/\s+/g, '') : value)
+  @Transform(({ value }) => (typeof value === 'string' ? value.replace(/\s+/g, '') : value))
   @Matches(/^\d{4,5}$/, { message: 'El material de envasado debe tener 4 o 5 dígitos' })
   materialCode!: string;
   @IsString() @MaxLength(80) line!: string;
@@ -130,7 +149,10 @@ export class WeightReadingDto {
 
 export class WeightBatchDto {
   @IsOptional() @IsString() @MaxLength(80) source?: string;
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
-  @ValidateNested({ each: true }) @Type(() => WeightReadingDto)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => WeightReadingDto)
   readings!: WeightReadingDto[];
 }

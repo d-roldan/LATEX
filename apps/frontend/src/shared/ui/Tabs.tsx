@@ -10,5 +10,7 @@ interface TabProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Tab({ active = false, className, ...props }: TabProps) {
-  return <button className={cn('ds-tab', className)} role="tab" aria-selected={active} {...props} />;
+  return (
+    <button className={cn('ds-tab', className)} role="tab" aria-selected={active} {...props} />
+  );
 }

@@ -112,9 +112,9 @@ Laboratorio sólo puede actuar sobre un tanque en estado `LABORATORIO`.
 
 ### 8.1 Recepción de muestra
 
-Mientras la muestra todavía no llegó, la tarjeta indica **Esperando recepción de muestra** y la única acción de calidad disponible es **Recibí la muestra**. La confirmación registra fecha, hora y usuario, cambia el subestado a `RECEIVED` y comienza a medir el tiempo de análisis. No cambia el estado físico `LABORATORIO` del tanque.
+Mientras la muestra todavía no llegó, la tarjeta indica **Esperando recepción de muestra** y la única acción de calidad disponible es **Recibí la muestra**. La confirmación registra fecha, hora y usuario y permite elegir entre **Iniciar análisis** o **Tanque en espera**. En espera, el ciclo queda `RECEIVED` y muestra la acción **Iniciar análisis**. Al comenzar efectivamente el trabajo pasa a `ANALYZING` y recién entonces comienza a medirse el tiempo de análisis. Ninguna de estas acciones cambia el estado físico `LABORATORIO` del tanque.
 
-Laboratorio no puede aprobar, solicitar ajuste ni rechazar antes de confirmar la recepción. Al emitir cualquiera de esos resultados el ciclo queda `RESOLVED`. Si Fabricación realiza un ajuste y vuelve a enviarlo, se abre una nueva iteración de muestra sin sobrescribir las anteriores.
+Laboratorio no puede aprobar, solicitar ajuste ni rechazar antes de iniciar el análisis. Al emitir cualquiera de esos resultados el ciclo queda `RESOLVED`. Si Fabricación realiza un ajuste y vuelve a enviarlo, se abre una nueva iteración de muestra sin sobrescribir las anteriores.
 
 ### 8.2 Aprobación
 
@@ -209,7 +209,7 @@ Los tiempos objetivo se configuran por estado en minutos. El 80 % del objetivo g
 - Botón de menú alineado verticalmente con el título.
 - Botón para entrar y salir de pantalla completa.
 - Planta activa identificada por nombre y código en el encabezado.
-- Vista pública `/tv` sin planta predeterminada: requiere seleccionar o conservar `?plant=LATEX`, `TERPLAST`, `SLURRY` o `ENDUIDO`.
+- Vista pública `/tv` sin planta predeterminada: requiere seleccionar o conservar `?plant=LATEX`, `LATEX_VIEJO`, `TERPLAST`, `SLURRY` o `ENDUIDO`.
 - Nueve tarjetas y reloj visibles en Full HD sin scroll vertical.
 - Controles operativos principales con objetivos táctiles de al menos 44 px y textos secundarios ampliados para lectura a distancia.
 - Hora/minutos principales, segundos secundarios, fecha y zona `America/Buenos_Aires`.

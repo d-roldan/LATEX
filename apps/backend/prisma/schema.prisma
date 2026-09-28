@@ -60,6 +60,7 @@ enum IntegrationInboxStatus {
 enum LaboratorySampleStatus {
   AWAITING_RECEIPT
   RECEIVED
+  ANALYZING
   RESOLVED
 }
 
@@ -251,6 +252,7 @@ model User {
   transferOperationsFinished TransferOperation[] @relation("TransferFinishedBy")
   laboratorySamplesRequested LaboratorySample[] @relation("LaboratorySampleRequestedBy")
   laboratorySamplesReceived  LaboratorySample[] @relation("LaboratorySampleReceivedBy")
+  laboratorySamplesAnalysisStarted LaboratorySample[] @relation("LaboratorySampleAnalysisStartedBy")
 
   @@unique([companyId, email])
   @@unique([companyId, username])
@@ -988,6 +990,8 @@ model LaboratorySample {
   requestedByUserId    String?
   receivedAt           DateTime?              @db.Timestamptz(3)
   receivedByUserId     String?
+  analysisStartedAt    DateTime?              @db.Timestamptz(3)
+  analysisStartedByUserId String?
   resolvedAt           DateTime?              @db.Timestamptz(3)
   qualityDecisionId    String?                @unique
   createdAt            DateTime               @default(now()) @db.Timestamptz(3)
@@ -997,6 +1001,7 @@ model LaboratorySample {
   lot                  ProductionLot          @relation(fields: [lotId], references: [id], onDelete: Cascade)
   requestedBy          User?                  @relation("LaboratorySampleRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
   receivedBy           User?                  @relation("LaboratorySampleReceivedBy", fields: [receivedByUserId], references: [id], onDelete: SetNull)
+  analysisStartedBy    User?                  @relation("LaboratorySampleAnalysisStartedBy", fields: [analysisStartedByUserId], references: [id], onDelete: SetNull)
   qualityDecision      QualityDecision?       @relation(fields: [qualityDecisionId], references: [id], onDelete: SetNull)
 
   @@unique([lotId, iteration])

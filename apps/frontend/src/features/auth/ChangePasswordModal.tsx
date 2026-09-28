@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import { Dialog } from '../../shared/ui/Dialog';
 import { Button } from '../../shared/ui/Button';
 import { Input } from '../../shared/ui/Input';
@@ -41,8 +42,11 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
       });
       setSuccess(true);
       setTimeout(() => clearSessionAndRedirect(), 1800);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al cambiar la contraseña');
+    } catch (err: unknown) {
+      const responseMessage = isAxiosError<{ message?: string }>(err)
+        ? err.response?.data?.message
+        : undefined;
+      setError(responseMessage || 'Error al cambiar la contraseña');
     } finally {
       setLoading(false);
     }
@@ -54,13 +58,15 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
           <h3 className="text-xl font-semibold mb-2">¡Éxito!</h3>
-          <p className="text-muted-foreground">Tu contraseña fue actualizada. Por seguridad, deberás volver a iniciar sesión.</p>
+          <p className="text-muted-foreground">
+            Tu contraseña fue actualizada. Por seguridad, deberás volver a iniciar sesión.
+          </p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm text-amber-200/80 mb-4 flex gap-3">
-             <Lock className="shrink-0 w-4 h-4 mt-0.5" />
-             <p>Por seguridad, ingresá tu contraseña actual antes de definir la nueva.</p>
+            <Lock className="shrink-0 w-4 h-4 mt-0.5" />
+            <p>Por seguridad, ingresá tu contraseña actual antes de definir la nueva.</p>
           </div>
 
           <div className="space-y-1">
@@ -88,7 +94,9 @@ export function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProp
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium text-[var(--ink-soft)]">Confirmar Nueva Contraseña</label>
+            <label className="text-sm font-medium text-[var(--ink-soft)]">
+              Confirmar Nueva Contraseña
+            </label>
             <Input
               type="password"
               value={confirmPassword}

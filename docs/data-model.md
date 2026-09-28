@@ -4,7 +4,7 @@ La fuente de verdad es `apps/backend/prisma/schema.prisma`.
 
 ## Alcance multiplanta vigente
 
-`Company` sigue representando a la empresa. `Plant` identifica Látex, Terplast, Slurry y Enduido, guarda su configuración y operación final. `UserPlantAccess` limita la visibilidad y habilita explícitamente trasvases. Todas las entidades productivas llevan `plantId`; `Tank` conserva sus IDs históricos, admite tipo `TANK`/`DISPERSER`, `scaleKey` nula y modos `AUTOMATIC`, `PENDING` y `NOT_INSTALLED`. `TransferOperation` registra inicio, fin, responsables y duración sin crear una OE. `DailyPlantClosure` es única por planta y fecha.
+`Company` sigue representando a la empresa. `Plant` identifica Látex, Látex Viejo, Terplast, Slurry y Enduido, guarda su configuración y operación final. `UserPlantAccess` limita la visibilidad y habilita explícitamente trasvases. Todas las entidades productivas llevan `plantId`; `Tank` conserva sus IDs históricos, admite tipo `TANK`/`DISPERSER`, `scaleKey` nula y modos `AUTOMATIC`, `PENDING` y `NOT_INSTALLED`. `TransferOperation` registra inicio, fin, responsables y duración sin crear una OE. `DailyPlantClosure` es única por planta y fecha.
 
 ## Entidades productivas
 

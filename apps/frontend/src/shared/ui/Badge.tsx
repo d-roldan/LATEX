@@ -2,9 +2,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { HTMLAttributes } from 'react';
 import { cn } from '../utils/cn';
 
-const badgeVariants = cva(
-  'ds-badge',
-  {
+const badgeVariants = cva('ds-badge', {
   variants: {
     variant: {
       default: 'ds-badge--neutral',

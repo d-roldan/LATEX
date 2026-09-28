@@ -144,18 +144,22 @@ async function main() {
     create: { companyId: COMPANY_ID, code: 'LATEX', name: 'Látex', displayOrder: 10, finalOperation: 'PACKAGING', settings: { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, packagingDispensers: companySettings.packagingDispensers, packagingFilters: companySettings.packagingFilters, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } }
   });
   const additionalPlants = [
-    { code: 'TERPLAST', name: 'Terplast', displayOrder: 20, finalOperation: 'PACKAGING' as const, count: 4 },
-    { code: 'SLURRY', name: 'Slurry', displayOrder: 30, finalOperation: 'TRANSFER' as const, count: 2 },
-    { code: 'ENDUIDO', name: 'Enduido', displayOrder: 40, finalOperation: 'PACKAGING' as const, count: 2 }
+    { code: 'LATEX_VIEJO', name: 'Látex Viejo', displayOrder: 15, finalOperation: 'PACKAGING' as const, count: 4, capacityKg: 30_000, inheritLatexSettings: true },
+    { code: 'TERPLAST', name: 'Terplast', displayOrder: 20, finalOperation: 'PACKAGING' as const, count: 4, capacityKg: null, inheritLatexSettings: false },
+    { code: 'SLURRY', name: 'Slurry', displayOrder: 30, finalOperation: 'TRANSFER' as const, count: 2, capacityKg: null, inheritLatexSettings: false },
+    { code: 'ENDUIDO', name: 'Enduido', displayOrder: 40, finalOperation: 'PACKAGING' as const, count: 2, capacityKg: null, inheritLatexSettings: false },
+    { code: 'SINTETICOS', name: 'Sinteticos', displayOrder: 50, finalOperation: 'PACKAGING' as const, count: 13, capacityKg: null, inheritLatexSettings: true }
   ];
   for (const definition of additionalPlants) {
-    const plant = await prisma.plant.upsert({ where: { companyId_code: { companyId: COMPANY_ID, code: definition.code } }, update: {}, create: { companyId: COMPANY_ID, code: definition.code, name: definition.name, displayOrder: definition.displayOrder, finalOperation: definition.finalOperation } });
+    const plant = await prisma.plant.upsert({ where: { companyId_code: { companyId: COMPANY_ID, code: definition.code } }, update: {}, create: { companyId: COMPANY_ID, code: definition.code, name: definition.name, displayOrder: definition.displayOrder, finalOperation: definition.finalOperation, settings: definition.inheritLatexSettings ? { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, packagingDispensers: companySettings.packagingDispensers, packagingFilters: companySettings.packagingFilters, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } : undefined } });
     for (let number = 1; number <= definition.count; number += 1) {
       const disperser = definition.code === 'SLURRY';
       const terplast = definition.code === 'TERPLAST';
+      const oldLatex = definition.code === 'LATEX_VIEJO';
+      const synthetics = definition.code === 'SINTETICOS';
       const tank = await prisma.tank.upsert({
         where: { plantId_number: { plantId: plant.id, number } }, update: {},
-        create: { companyId: COMPANY_ID, plantId: plant.id, number, name: terplast ? `TANQUE ${number + 2}` : disperser ? `Dispersora ${number}` : `Equipo ${number}`, capacityKg: terplast ? (number <= 2 ? 1500 : 8000) : null, equipmentCode: disperser ? `DISP${number}` : `EQ${number}`, equipmentType: disperser ? 'DISPERSER' : 'TANK', telemetryMode: definition.code === 'ENDUIDO' ? 'NOT_INSTALLED' : 'PENDING', scaleKey: null }
+        create: { companyId: COMPANY_ID, plantId: plant.id, number, name: terplast ? `TANQUE ${number + 2}` : oldLatex || synthetics ? `TANQUE ${number}` : disperser ? `Dispersora ${number}` : `Equipo ${number}`, capacityKg: terplast ? (number <= 2 ? 1500 : 8000) : definition.capacityKg, equipmentCode: disperser ? `DISP${number}` : oldLatex ? `LV${String(number).padStart(2, '0')}` : synthetics ? `SIN${String(number).padStart(2, '0')}` : `EQ${number}`, equipmentType: disperser ? 'DISPERSER' : 'TANK', telemetryMode: definition.code === 'ENDUIDO' ? 'NOT_INSTALLED' : 'PENDING', scaleKey: null }
       });
       const open = await prisma.tankStateHistory.findFirst({ where: { tankId: tank.id, endedAt: null } });
       if (!open) await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, plantId: plant.id, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });

@@ -11,7 +11,7 @@
 | `JEFATURA` | Resumen diario, Monitoreo e Historial | Sólo lectura, cierres y exportaciones |
 | `ADMIN` | Todas | Todas las anteriores, usuarios y auditoría |
 
-Además del rol, cada usuario necesita `UserPlantAccess`. Los usuarios preexistentes conservan solamente Látex; el administrador protegido obtiene las cuatro plantas al ejecutar `security:ensure-system-owner`. Slurry exige además `canTransfer` (ADMIN conserva su facultad administrativa).
+Además del rol, cada usuario necesita `UserPlantAccess`. Al incorporar Látex Viejo, los administradores y dueños reciben acceso inicial; los demás usuarios deben asignarse explícitamente desde Usuarios. El administrador protegido obtiene todas las plantas al ejecutar `security:ensure-system-owner`. Slurry exige además `canTransfer` (ADMIN conserva su facultad administrativa).
 
 Ocultar un botón no constituye seguridad: todos los endpoints operativos usan JWT, roles y validación de estado en backend.
 

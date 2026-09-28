@@ -9,6 +9,7 @@ import {
   Maximize2,
   Menu,
   Minimize2,
+  Monitor,
   Settings,
   ShieldCheck,
   Users,
@@ -24,6 +25,12 @@ const items = [
   { to: '/fabricacion', label: 'Fabricación', icon: Factory, roles: ['FABRICACION', 'ADMIN'] },
   { to: '/laboratorio', label: 'Laboratorio', icon: Beaker, roles: ['LABORATORIO', 'ADMIN'] },
   { to: '/envasado', label: 'Envasado', icon: Boxes, roles: ['ENVASADO', 'ADMIN'] },
+  {
+    to: '/visualizacion',
+    label: 'Visualización',
+    icon: Monitor,
+    roles: ['MONITOREO', 'JEFATURA', 'ADMIN']
+  },
   { to: '/jefatura', label: 'Resumen diario', icon: BarChart3, roles: ['JEFATURA', 'ADMIN'] },
   {
     to: '/historial',

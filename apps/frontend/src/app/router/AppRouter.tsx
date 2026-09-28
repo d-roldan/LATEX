@@ -71,6 +71,7 @@ export function AppRouter() {
             <Route path="/envasado" element={page('envasado')} />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['MONITOREO', 'JEFATURA', 'ADMIN']} />}>
+            <Route path="/visualizacion" element={page('monitoreo')} />
             <Route
               path="/historial"
               element={

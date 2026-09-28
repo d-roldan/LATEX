@@ -8,7 +8,9 @@ export function Tooltip({ content, children }: PropsWithChildren<TooltipProps>) 
   return (
     <span className="ds-tooltip-anchor">
       {children}
-      <span className="ds-tooltip" role="tooltip">{content}</span>
+      <span className="ds-tooltip" role="tooltip">
+        {content}
+      </span>
     </span>
   );
 }

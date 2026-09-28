@@ -40,9 +40,7 @@ function chronologicalDetail(
   periodIndex: number
 ) {
   const periodStart = Date.parse(period.startedAt);
-  const periodEnd = period.endedAt
-    ? Date.parse(period.endedAt) + 5000
-    : Number.POSITIVE_INFINITY;
+  const periodEnd = period.endedAt ? Date.parse(period.endedAt) + 5000 : Number.POSITIVE_INFINITY;
   const weightDetail = `Peso al ingresar: ${formatKilograms(period.weightKg)}`;
 
   if (period.state === 'LABORATORIO') {
@@ -62,9 +60,15 @@ function chronologicalDetail(
           sample.waitingForReceiptSeconds == null
             ? 'en curso'
             : formatDuration(sample.waitingForReceiptSeconds);
+        const waitingForAnalysis =
+          sample.waitingForAnalysisSeconds == null
+            ? sample.receivedAt
+              ? 'en curso'
+              : 'pendiente'
+            : formatDuration(sample.waitingForAnalysisSeconds);
         const analysis =
           sample.analysisSeconds == null ? 'en curso' : formatDuration(sample.analysisSeconds);
-        return `Muestra ${sample.iteration}\nIngreso: ${formatDateTime(sample.requestedAt)}\nRecepción: ${reception} · Espera: ${waiting}\nResolución: ${resolution} · Análisis: ${analysis}`;
+        return `Muestra ${sample.iteration}\nIngreso: ${formatDateTime(sample.requestedAt)}\nRecepción: ${reception} · Demora de muestra: ${waiting}\nEspera para análisis: ${waitingForAnalysis}\nResolución: ${resolution} · Tiempo de análisis: ${analysis}`;
       })
       .join('\n\n');
     return sampleDetail ? `${sampleDetail}\n${weightDetail}` : weightDetail;
@@ -440,7 +444,13 @@ export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = n
     doc,
     'Órdenes de envasado',
     y,
-    ['OE', 'Material / Producto', 'Celda / Formato / Dosificadora / Filtro', 'Inicio / Fin', 'Producción / Merma'],
+    [
+      'OE',
+      'Material / Producto',
+      'Celda / Formato / Dosificadora / Filtro',
+      'Inicio / Fin',
+      'Producción / Merma'
+    ],
     timeline.packagingOrders.map((order) => [
       order.packagingOrder,
       `${safeText(order.materialCode)}\n${safeText(order.description)}`,
