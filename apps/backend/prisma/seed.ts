@@ -143,6 +143,10 @@ async function main() {
     where: { companyId_code: { companyId: COMPANY_ID, code: 'LATEX' } }, update: {},
     create: { companyId: COMPANY_ID, code: 'LATEX', name: 'Látex', displayOrder: 10, finalOperation: 'PACKAGING', settings: { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, packagingDispensers: companySettings.packagingDispensers, packagingFilters: companySettings.packagingFilters, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } }
   });
+  const syntheticsCapacityKg = [
+    6_600, 6_000, 4_800, 7_200, 7_200, 12_000, 12_000,
+    12_000, 12_000, 20_400, 20_400, 24_000, 12_000
+  ];
   const additionalPlants = [
     { code: 'LATEX_VIEJO', name: 'Látex Viejo', displayOrder: 15, finalOperation: 'PACKAGING' as const, count: 4, capacityKg: 30_000, inheritLatexSettings: true },
     { code: 'TERPLAST', name: 'Terplast', displayOrder: 20, finalOperation: 'PACKAGING' as const, count: 4, capacityKg: null, inheritLatexSettings: false },
@@ -159,7 +163,7 @@ async function main() {
       const synthetics = definition.code === 'SINTETICOS';
       const tank = await prisma.tank.upsert({
         where: { plantId_number: { plantId: plant.id, number } }, update: {},
-        create: { companyId: COMPANY_ID, plantId: plant.id, number, name: terplast ? `TANQUE ${number + 2}` : oldLatex || synthetics ? `TANQUE ${number}` : disperser ? `Dispersora ${number}` : `Equipo ${number}`, capacityKg: terplast ? (number <= 2 ? 1500 : 8000) : definition.capacityKg, equipmentCode: disperser ? `DISP${number}` : oldLatex ? `LV${String(number).padStart(2, '0')}` : synthetics ? `SIN${String(number).padStart(2, '0')}` : `EQ${number}`, equipmentType: disperser ? 'DISPERSER' : 'TANK', telemetryMode: definition.code === 'ENDUIDO' ? 'NOT_INSTALLED' : 'PENDING', scaleKey: null }
+        create: { companyId: COMPANY_ID, plantId: plant.id, number, name: terplast ? `TANQUE ${number + 2}` : oldLatex || synthetics ? `TANQUE ${number}` : disperser ? `Dispersora ${number}` : `Equipo ${number}`, capacityKg: terplast ? (number <= 2 ? 1500 : 8000) : synthetics ? syntheticsCapacityKg[number - 1] : definition.capacityKg, equipmentCode: disperser ? `DISP${number}` : oldLatex ? `LV${String(number).padStart(2, '0')}` : synthetics ? `SIN${String(number).padStart(2, '0')}` : `EQ${number}`, equipmentType: disperser ? 'DISPERSER' : 'TANK', telemetryMode: oldLatex || synthetics ? 'AUTOMATIC' : definition.code === 'ENDUIDO' ? 'NOT_INSTALLED' : 'PENDING', scaleKey: oldLatex ? `LV${String(number).padStart(2, '0')}` : synthetics ? `SIN${String(number).padStart(2, '0')}` : null }
       });
       const open = await prisma.tankStateHistory.findFirst({ where: { tankId: tank.id, endedAt: null } });
       if (!open) await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, plantId: plant.id, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });
@@ -198,8 +202,10 @@ async function main() {
     const keyHash = createHash('sha256').update(integrationKey).digest('hex');
     const localTelemetry = [
       { plantCode: 'LATEX', source: 'NODE_RED_LATEX', scaleKeys: tankNumbers.map((number) => `TK${number}`) },
+      { plantCode: 'LATEX_VIEJO', source: 'NODE_RED_LATEX_VIEJO', scaleKeys: Array.from({ length: 4 }, (_, index) => `LV${String(index + 1).padStart(2, '0')}`) },
       { plantCode: 'TERPLAST', source: 'NODE_RED_TERPLAST_LOCAL', scaleKeys: ['TERP01', 'TERP02', 'TERP03', 'TERP04'] },
-      { plantCode: 'SLURRY', source: 'NODE_RED_SLURRY_LOCAL', scaleKeys: ['SLURRY01', 'SLURRY02'] }
+      { plantCode: 'SLURRY', source: 'NODE_RED_SLURRY_LOCAL', scaleKeys: ['SLURRY01', 'SLURRY02'] },
+      { plantCode: 'SINTETICOS', source: 'NODE_RED_SINTETICOS', scaleKeys: Array.from({ length: 13 }, (_, index) => `SIN${String(index + 1).padStart(2, '0')}`) }
     ];
 
     for (const definition of localTelemetry) {
@@ -232,7 +238,7 @@ async function main() {
         }
       });
     }
-    console.log('Telemetría simulada local habilitada para Látex, Terplast y Slurry.');
+    console.log('Telemetría simulada local habilitada para Látex, Látex Viejo, Terplast, Slurry y Sintéticos.');
   }
 
   // No elimina equipos con producción: sólo configuraciones obsoletas vacías.
