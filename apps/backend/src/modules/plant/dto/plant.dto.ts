@@ -94,9 +94,9 @@ export class PackagingDto extends VersionedActionDto {
   materialCode!: string;
   @IsString() @MaxLength(80) line!: string;
   @IsString() @MaxLength(40) format!: string;
-  @IsString() @MaxLength(40) dispenser!: string;
-  @IsString() @MaxLength(40) filter!: string;
-  @IsString() @MaxLength(180) description!: string;
+  @IsOptional() @IsString() @MaxLength(40) dispenser?: string;
+  @IsOptional() @IsString() @MaxLength(40) filter?: string;
+  @IsOptional() @IsString() @MaxLength(180) description?: string;
 }
 
 export class FinishPackagingDto extends VersionedActionDto {

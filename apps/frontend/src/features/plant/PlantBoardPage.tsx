@@ -445,9 +445,13 @@ export function PlantBoardPage({
           materialCode: form.packagingMaterialCode,
           line: form.line,
           format: form.format,
-          dispenser: form.dispenser,
-          filter: form.filter,
-          description: form.description
+          ...(plantCode === 'SINTETICOS'
+            ? {}
+            : {
+                dispenser: form.dispenser,
+                filter: form.filter,
+                description: form.description
+              })
         }
       },
       newOrder: {
@@ -459,9 +463,13 @@ export function PlantBoardPage({
           materialCode: form.packagingMaterialCode,
           line: form.line,
           format: form.format,
-          dispenser: form.dispenser,
-          filter: form.filter,
-          description: form.description,
+          ...(plantCode === 'SINTETICOS'
+            ? {}
+            : {
+                dispenser: form.dispenser,
+                filter: form.filter,
+                description: form.description
+              }),
           reason: form.reason || undefined
         }
       },
@@ -474,9 +482,13 @@ export function PlantBoardPage({
           materialCode: form.packagingMaterialCode,
           line: form.line,
           format: form.format,
-          dispenser: form.dispenser,
-          filter: form.filter,
-          description: form.description,
+          ...(plantCode === 'SINTETICOS'
+            ? {}
+            : {
+                dispenser: form.dispenser,
+                filter: form.filter,
+                description: form.description
+              }),
           reason: form.reason
         }
       },
@@ -834,7 +846,7 @@ export function PlantBoardPage({
           </div>
         ) : (
           <form className="plant-action-form" onSubmit={submit}>
-            {selection && renderFields(selection.action, form, setForm, config.data)}
+            {selection && renderFields(selection.action, form, setForm, config.data, plantCode)}
             {error ? <div className="plant-form-error">{error}</div> : null}
             <div className="plant-form-actions">
               <Button type="button" variant="secondary" onClick={closeDialog}>
@@ -883,7 +895,8 @@ function renderFields(
   action: Action,
   form: typeof emptyForm,
   setForm: (value: typeof emptyForm) => void,
-  config?: Config
+  config: Config | undefined,
+  plantCode: string
 ) {
   const field = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
   const adjustmentField = (index: number, key: 'materialCode' | 'quantityKg', value: string) =>
@@ -1170,7 +1183,7 @@ function renderFields(
           />
         </label>
         <label>
-          Celda
+          {plantCode === 'SINTETICOS' ? 'Línea de envasado' : 'Celda'}
           <select value={form.line} onChange={(e) => field('line', e.target.value)} required>
             {config?.lines.map((line) => (
               <option key={line}>{line}</option>
@@ -1185,35 +1198,43 @@ function renderFields(
             ))}
           </select>
         </label>
-        <label>
-          Dosificadora
-          <select
-            value={form.dispenser}
-            onChange={(e) => field('dispenser', e.target.value)}
-            required
-          >
-            {config?.dispensers.map((dispenser) => (
-              <option key={dispenser}>{dispenser}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Filtro
-          <select value={form.filter} onChange={(e) => field('filter', e.target.value)} required>
-            {config?.filters.map((filter) => (
-              <option key={filter}>{filter}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Descripción de envasado
-          <Input
-            value={form.description}
-            onChange={(e) => field('description', e.target.value)}
-            required
-            maxLength={180}
-          />
-        </label>
+        {plantCode !== 'SINTETICOS' ? (
+          <>
+            <label>
+              Dosificadora
+              <select
+                value={form.dispenser}
+                onChange={(e) => field('dispenser', e.target.value)}
+                required
+              >
+                {config?.dispensers.map((dispenser) => (
+                  <option key={dispenser}>{dispenser}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Filtro
+              <select
+                value={form.filter}
+                onChange={(e) => field('filter', e.target.value)}
+                required
+              >
+                {config?.filters.map((filter) => (
+                  <option key={filter}>{filter}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Descripción de envasado
+              <Input
+                value={form.description}
+                onChange={(e) => field('description', e.target.value)}
+                required
+                maxLength={180}
+              />
+            </label>
+          </>
+        ) : null}
         {action === 'newOrder' || action === 'correctOrder' ? (
           <label>
             Motivo / observación

@@ -142,6 +142,59 @@ describe('PlantService telemetry', () => {
     expect(result.dispensers).toEqual(['A', 'B']);
     expect(result.filters).toEqual(['1', '2', '3']);
   });
+
+  it('usa únicamente las opciones de envasado propias de Sinteticos', async () => {
+    prisma.plant.findUnique.mockResolvedValueOnce({
+      settings: {},
+      code: 'SINTETICOS',
+      finalOperation: 'PACKAGING'
+    });
+    const service = new PlantService(prisma, config, notifications);
+
+    const result = await (service as any).loadConfig('company-1', 'plant-sinteticos');
+
+    expect(result.lines).toEqual(['Linea 1', 'Linea 20', 'Linea 3']);
+    expect(result.formats).toEqual(['0.25L', '0.5L', '1L', '4L', '10L']);
+  });
+
+  it('permite en Sinteticos una OE sin dosificadora, filtro ni descripción', async () => {
+    prisma.plant.findUnique.mockResolvedValueOnce({
+      settings: {},
+      code: 'SINTETICOS',
+      finalOperation: 'PACKAGING'
+    });
+    const service = new PlantService(prisma, config, notifications);
+
+    await expect(
+      (service as any).validatePackaging(
+        'company-1',
+        {
+          packagingOrder: '123456',
+          materialCode: '1234',
+          line: 'Linea 20',
+          format: '0.5L'
+        },
+        'plant-sinteticos'
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('mantiene los campos de envasado obligatorios para Látex', async () => {
+    const service = new PlantService(prisma, config, notifications);
+
+    await expect(
+      (service as any).validatePackaging(
+        'company-1',
+        {
+          packagingOrder: '123456',
+          materialCode: '1234',
+          line: 'A',
+          format: '4 L'
+        },
+        'plant-latex'
+      )
+    ).rejects.toThrow('Dosificadora no configurada');
+  });
 });
 
 describe('PlantService laboratory sample cycle', () => {

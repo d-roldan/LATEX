@@ -1,7 +1,13 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CorrectQualityAdjustmentDto, FinishPackagingDto, PackagingDto, QualityDecisionDto, ServiceDto } from './plant.dto';
+import {
+  CorrectQualityAdjustmentDto,
+  FinishPackagingDto,
+  PackagingDto,
+  QualityDecisionDto,
+  ServiceDto
+} from './plant.dto';
 
 describe('PackagingDto', () => {
   const validDto = () =>
@@ -59,22 +65,13 @@ describe('PackagingDto', () => {
     expect(dto.materialCode).toBe('4321');
   });
 
-  it('requiere una descripción de envasado', async () => {
+  it('delega al servicio los campos que dependen de la planta', async () => {
     const dto = validDto() as Partial<PackagingDto>;
     delete dto.description;
+    delete dto.dispenser;
+    delete dto.filter;
 
-    expect(await validate(dto as object)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ property: 'description' })])
-    );
-  });
-
-  it.each(['dispenser', 'filter'] as const)('requiere el campo %s', async (field) => {
-    const dto = validDto() as Partial<PackagingDto>;
-    delete dto[field];
-
-    expect(await validate(dto as object)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ property: field })])
-    );
+    await expect(validate(dto as object)).resolves.toHaveLength(0);
   });
 });
 
@@ -160,14 +157,15 @@ describe('QualityDecisionDto adjustments', () => {
 });
 
 describe('CorrectQualityAdjustmentDto', () => {
-  const validDto = () => plainToInstance(CorrectQualityAdjustmentDto, {
-    version: 4,
-    adjustmentReasons: ['Viscosidad', 'Color'],
-    adjustments: [
-      { materialCode: '1010', quantityKg: 12.5 },
-      { materialCode: '2020', quantityKg: 3.125 }
-    ]
-  });
+  const validDto = () =>
+    plainToInstance(CorrectQualityAdjustmentDto, {
+      version: 4,
+      adjustmentReasons: ['Viscosidad', 'Color'],
+      adjustments: [
+        { materialCode: '1010', quantityKg: 12.5 },
+        { materialCode: '2020', quantityKg: 3.125 }
+      ]
+    });
 
   it('acepta corregir varios motivos y materiales', async () => {
     await expect(validate(validDto())).resolves.toHaveLength(0);
@@ -179,9 +177,11 @@ describe('CorrectQualityAdjustmentDto', () => {
     dto.adjustments = [];
 
     const errors = await validate(dto);
-    expect(errors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ property: 'adjustmentReasons' }),
-      expect.objectContaining({ property: 'adjustments' })
-    ]));
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'adjustmentReasons' }),
+        expect.objectContaining({ property: 'adjustments' })
+      ])
+    );
   });
 });

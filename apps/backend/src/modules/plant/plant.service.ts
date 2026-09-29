@@ -38,6 +38,8 @@ const LINES = ['A', 'B'];
 const FORMATS = ['1 L', '4 L', '10 L', '20 L'];
 const DISPENSERS = ['A', 'B'];
 const FILTERS = ['1', '2', '3'];
+const SYNTHETICS_LINES = ['Linea 1', 'Linea 20', 'Linea 3'];
+const SYNTHETICS_FORMATS = ['0.25L', '0.5L', '1L', '4L', '10L'];
 const ADJUSTMENT_REASONS = [
   'Nivel del tanque',
   'Viscosidad',
@@ -846,9 +848,9 @@ export class PlantService {
             materialCode: dto.materialCode,
             line: dto.line,
             format: dto.format,
-            dispenser: dto.dispenser,
-            filter: dto.filter,
-            description: dto.description.trim(),
+            dispenser: dto.dispenser ?? null,
+            filter: dto.filter ?? null,
+            description: dto.description?.trim() ?? '',
             startedByUserId: user.sub
           }
         });
@@ -891,9 +893,9 @@ export class PlantService {
             materialCode: dto.materialCode,
             line: dto.line,
             format: dto.format,
-            dispenser: dto.dispenser,
-            filter: dto.filter,
-            description: dto.description.trim(),
+            dispenser: dto.dispenser ?? null,
+            filter: dto.filter ?? null,
+            description: dto.description?.trim() ?? '',
             startedByUserId: user.sub
           }
         });
@@ -946,9 +948,9 @@ export class PlantService {
             materialCode: dto.materialCode,
             line: dto.line,
             format: dto.format,
-            dispenser: dto.dispenser,
-            filter: dto.filter,
-            description: dto.description.trim()
+            dispenser: dto.dispenser ?? null,
+            filter: dto.filter ?? null,
+            description: dto.description?.trim() ?? ''
           }
         });
         const changed = await tx.tank.updateMany({
@@ -1749,10 +1751,13 @@ export class PlantService {
     if (!config.lines.includes(dto.line)) throw new BadRequestException('Celda no configurada');
     if (!config.formats.includes(dto.format))
       throw new BadRequestException('Formato no configurado');
-    if (!config.dispensers.includes(dto.dispenser))
+    if (config.plantCode === 'SINTETICOS') return;
+    if (!config.dispensers.includes(dto.dispenser ?? ''))
       throw new BadRequestException('Dosificadora no configurada');
-    if (!config.filters.includes(dto.filter))
+    if (!config.filters.includes(dto.filter ?? ''))
       throw new BadRequestException('Filtro no configurado');
+    if (!dto.description?.trim())
+      throw new BadRequestException('La descripción de envasado es obligatoria');
   }
 
   private async loadConfig(companyId: string, plantId?: string) {
@@ -1770,17 +1775,23 @@ export class PlantService {
       settings.plantStageTargetsMinutes) as Record<string, unknown> | undefined;
     const plantCode = (source as { code?: string } | null)?.code;
     const isLatex = !plantId || plantCode === 'LATEX' || plantCode === 'LATEX_VIEJO';
+    const isSynthetics = plantCode === 'SINTETICOS';
     return {
-      lines: Array.isArray(settings.packagingLines)
-        ? settings.packagingLines.filter((v): v is string => typeof v === 'string')
-        : isLatex
-          ? LINES
-          : [],
-      formats: Array.isArray(settings.packagingFormats)
-        ? settings.packagingFormats.filter((v): v is string => typeof v === 'string')
-        : isLatex
-          ? FORMATS
-          : [],
+      plantCode,
+      lines: isSynthetics
+        ? SYNTHETICS_LINES
+        : Array.isArray(settings.packagingLines)
+          ? settings.packagingLines.filter((v): v is string => typeof v === 'string')
+          : isLatex
+            ? LINES
+            : [],
+      formats: isSynthetics
+        ? SYNTHETICS_FORMATS
+        : Array.isArray(settings.packagingFormats)
+          ? settings.packagingFormats.filter((v): v is string => typeof v === 'string')
+          : isLatex
+            ? FORMATS
+            : [],
       dispensers: Array.isArray(settings.packagingDispensers)
         ? settings.packagingDispensers.filter((v): v is string => typeof v === 'string')
         : isLatex
