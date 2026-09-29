@@ -137,7 +137,39 @@ export class PlantService {
 
     const plantId = company.plants[0]?.id;
     if (!plantId) throw new NotFoundException('La planta solicitada no está configurada');
-    const tanks = await this.tanks(company.id, plantId);
+    return this.publicTanksForPlant(company.id, plantId);
+  }
+
+  async publicAllTanks() {
+    const companyId = this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') || 'seed_company_disal';
+    const company = await this.prisma.company.findFirst({
+      where: { id: companyId, isActive: true },
+      select: {
+        id: true,
+        plants: {
+          where: { isActive: true },
+          select: { id: true, code: true, name: true },
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
+    });
+    if (!company) throw new NotFoundException('La pantalla de planta no está configurada');
+
+    const rows = await Promise.all(
+      company.plants.map(async (plant) => {
+        const tanks = await this.publicTanksForPlant(company.id, plant.id);
+        return tanks.map((tank) => ({
+          plantCode: plant.code,
+          plantName: plant.name,
+          ...tank
+        }));
+      })
+    );
+    return rows.flat();
+  }
+
+  private async publicTanksForPlant(companyId: string, plantId: string) {
+    const tanks = await this.tanks(companyId, plantId);
     return tanks.map((tank) => ({
       id: tank.id,
       number: tank.number,

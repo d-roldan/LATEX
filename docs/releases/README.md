@@ -6,6 +6,7 @@ Esta carpeta reúne todas las notas de versión disponibles del sistema DISAL Pl
 
 | Versión | Fecha | Contenido principal |
 |---|---|---|
+| [V0.0.34](RELEASE_NOTES_V0.0.34.md) | 29/09/2026 | Endpoint consolidado y microcaché compartido para tableros Grafana multiplanta. |
 | [V0.0.33](RELEASE_NOTES_V0.0.33.md) | 29/09/2026 | Formulario y validaciones de envasado específicos para la planta de Sintéticos. |
 | [V0.0.32](RELEASE_NOTES_V0.0.32.md) | 28/09/2026 | Inicio efectivo del análisis de Laboratorio, Látex Viejo y Sintéticos, mejoras de interfaz y visualización de sólo lectura para Jefatura. |
 | [V0.0.31](RELEASE_NOTES_V0.0.31.md) | 23/09/2026 | Manuales por perfil con capturas reales y aclaración del histórico de pesos en InfluxDB. |

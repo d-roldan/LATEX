@@ -13,6 +13,7 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { JwtUser } from '../../common/auth/jwt-user.interface';
@@ -40,7 +41,8 @@ export class PlantController {
   constructor(private readonly service: PlantService) {}
 
   @Get('tv')
-  @Header('Cache-Control', 'no-store')
+  @Header('Cache-Control', 'public, max-age=2, stale-while-revalidate=5')
+  @Throttle({ default: { ttl: 60000, limit: 600 } })
   tv() {
     return this.service.publicTanks();
   }
@@ -58,8 +60,15 @@ export class PlantController {
 @Controller('plants')
 export class PlantPublicScopedController {
   constructor(private readonly service: PlantService) {}
+  @Get('tv')
+  @Header('Cache-Control', 'public, max-age=2, stale-while-revalidate=5')
+  @Throttle({ default: { ttl: 60000, limit: 600 } })
+  allTv() {
+    return this.service.publicAllTanks();
+  }
   @Get(':plantCode/tv')
-  @Header('Cache-Control', 'no-store')
+  @Header('Cache-Control', 'public, max-age=2, stale-while-revalidate=5')
+  @Throttle({ default: { ttl: 60000, limit: 600 } })
   tv(@Param('plantCode') code: string) {
     return this.service.publicTanks(code);
   }

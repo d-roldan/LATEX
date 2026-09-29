@@ -37,7 +37,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.33](releases/RELEASE_NOTES_V0.0.33.md): formulario y validaciones de envasado específicos para la planta de Sintéticos.
+- [Versión vigente · V0.0.34](releases/RELEASE_NOTES_V0.0.34.md): endpoint consolidado y microcaché compartido para tableros Grafana multiplanta.
 
 ## Criterio de actualización
 

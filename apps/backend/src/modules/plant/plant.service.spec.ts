@@ -83,6 +83,44 @@ describe('PlantService telemetry', () => {
     expect(tank).not.toHaveProperty('version');
   });
 
+  it('publica todas las plantas en una sola respuesta plana para Grafana', async () => {
+    prisma.tank.findMany.mockClear();
+    prisma.company.findFirst.mockResolvedValueOnce({
+      id: 'company-1',
+      plants: [
+        { id: 'plant-latex', code: 'LATEX', name: 'Látex' },
+        { id: 'plant-sinteticos', code: 'SINTETICOS', name: 'Sintéticos' }
+      ]
+    });
+    const service = new PlantService(prisma, config, notifications);
+
+    const tanks = await service.publicAllTanks();
+
+    expect(prisma.company.findFirst).toHaveBeenCalledWith({
+      where: { id: 'company-1', isActive: true },
+      select: {
+        id: true,
+        plants: {
+          where: { isActive: true },
+          select: { id: true, code: true, name: true },
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
+    });
+    expect(tanks).toHaveLength(2);
+    expect(tanks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ plantCode: 'LATEX', plantName: 'Látex', name: 'TK101' }),
+        expect.objectContaining({
+          plantCode: 'SINTETICOS',
+          plantName: 'Sintéticos',
+          name: 'TK101'
+        })
+      ])
+    );
+    expect(prisma.tank.findMany).toHaveBeenCalledTimes(2);
+  });
+
   it('publica únicamente los motivos de ajuste necesarios para la pantalla TV', async () => {
     prisma.tank.findMany.mockResolvedValueOnce([
       {

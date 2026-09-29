@@ -389,3 +389,34 @@ Invoke-RestMethod http://localhost:8081/api/health
 ```
 
 Todos los servicios deben figurar `Up`; la API debe responder con estado `ok`. Si se cambia `.env`, recrear los servicios con `docker compose up -d --build`.
+
+## 9. Lectura consolidada para Grafana
+
+Grafana puede obtener el estado vigente de todas las plantas activas con una única solicitud:
+
+```http
+GET http://IP_DEL_SERVIDOR:8081/api/plants/tv
+```
+
+La respuesta es una lista plana de equipos. Cada fila incluye `plantCode` y `plantName`, además
+de los datos del tanque y su lote activo. Esto permite consultar una sola vez y filtrar por planta
+en Grafana, en lugar de ejecutar una solicitud independiente por panel o por planta.
+
+Campos recomendados para una tabla Infinity:
+
+| Selector | Título |
+|---|---|
+| `plantName` | Planta |
+| `name` | Tanque |
+| `state` | Estado |
+| `activeLot.manufacturingOrder` | OF |
+| `activeLot.materialCode` | Material |
+| `activeLot.description` | Descripción |
+| `stateStartedAt` | Última actualización |
+
+Los endpoints de visualización admiten hasta 600 solicitudes por minuto por instancia del backend.
+Nginx aplica un microcaché compartido de 2 segundos a `/api/plants/tv` y a las variantes por planta:
+las solicitudes simultáneas reciben la misma respuesta y una sola recarga llega al backend. Estas
+rutas tienen un límite específico de 100 solicitudes por segundo y una ráfaga de 200 por IP; el resto
+de la API conserva el límite general de 10 solicitudes por segundo. La cabecera
+`X-Plant-TV-Cache` permite comprobar `MISS`, `HIT`, `UPDATING` o `STALE` durante el diagnóstico.
