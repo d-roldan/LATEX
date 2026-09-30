@@ -15,33 +15,46 @@ export interface WeightHistory {
   lastTimestamp: string | null;
 }
 
+interface WeightSeriesContext {
+  plantCode?: string;
+  tankNumber?: number;
+}
+
+interface WeightSeriesProfile {
+  bucket: string | undefined;
+  measurement: string;
+  tankTag: string;
+  weightField: string;
+}
+
 @Injectable()
 export class InfluxHistoryService {
   private readonly logger = new Logger(InfluxHistoryService.name);
 
   constructor(private readonly config: ConfigService) {}
 
-  async readWeightSeries(scaleKey: string | null, start: Date, stop: Date): Promise<WeightHistory> {
+  async readWeightSeries(
+    scaleKey: string | null,
+    start: Date,
+    stop: Date,
+    context: WeightSeriesContext = {}
+  ): Promise<WeightHistory> {
     const url = this.config.get<string>('INFLUXDB_URL')?.replace(/\/$/, '');
     const token = this.config.get<string>('INFLUXDB_TOKEN');
     const org = this.config.get<string>('INFLUXDB_ORG');
     const orgId = this.config.get<string>('INFLUXDB_ORG_ID');
-    const bucket = this.config.get<string>('INFLUXDB_BUCKET');
+    const profile = this.weightSeriesProfile(scaleKey, context);
 
-    if (!scaleKey) {
+    if (!scaleKey && context.plantCode !== 'SINTETICOS') {
       return this.result('CONFIGURATION_PENDING', 'El tanque no tiene una serie de peso asociada.');
     }
-    if (!url || !token || (!org && !orgId) || !bucket) {
+    if (!url || !token || (!org && !orgId) || !profile.bucket) {
       return this.result(
         'CONFIGURATION_PENDING',
         'La consulta histórica de InfluxDB todavía no está configurada.'
       );
     }
 
-    const measurement = this.config.get<string>('INFLUXDB_WEIGHT_MEASUREMENT', 'tank_weight');
-    const tankTag = this.config.get<string>('INFLUXDB_TANK_TAG', 'scaleKey')?.trim();
-    const weightFieldTemplate = this.config.get<string>('INFLUXDB_WEIGHT_FIELD', 'grossKg');
-    const weightField = weightFieldTemplate.split('{scaleKey}').join(scaleKey);
     const effectiveStop = stop > start ? stop : new Date(start.getTime() + 1000);
     const durationSeconds = Math.max(
       1,
@@ -49,15 +62,15 @@ export class InfluxHistoryService {
     );
     const windowSeconds = Math.max(1, Math.ceil(durationSeconds / 500));
     const query = [
-      `data = from(bucket: "${this.escapeFlux(bucket)}")`,
+      `data = from(bucket: "${this.escapeFlux(profile.bucket)}")`,
       `  |> range(start: time(v: "${start.toISOString()}"), stop: time(v: "${effectiveStop.toISOString()}"))`,
-      `  |> filter(fn: (r) => r._measurement == "${this.escapeFlux(measurement)}")`,
-      ...(tankTag
+      `  |> filter(fn: (r) => r._measurement == "${this.escapeFlux(profile.measurement)}")`,
+      ...(profile.tankTag
         ? [
-            `  |> filter(fn: (r) => r["${this.escapeFlux(tankTag)}"] == "${this.escapeFlux(scaleKey)}")`
+            `  |> filter(fn: (r) => r["${this.escapeFlux(profile.tankTag)}"] == "${this.escapeFlux(scaleKey ?? '')}")`
           ]
         : []),
-      `  |> filter(fn: (r) => r._field == "${this.escapeFlux(weightField)}")`,
+      `  |> filter(fn: (r) => r._field == "${this.escapeFlux(profile.weightField)}")`,
       '',
       'union(tables: [',
       `  data |> aggregateWindow(every: ${windowSeconds}s, fn: mean, createEmpty: false, timeSrc: "_start"),`,
@@ -111,6 +124,40 @@ export class InfluxHistoryService {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private weightSeriesProfile(
+    scaleKey: string | null,
+    context: WeightSeriesContext
+  ): WeightSeriesProfile {
+    if (context.plantCode === 'SINTETICOS') {
+      const paddedTankNumber = String(context.tankNumber ?? '').padStart(2, '0');
+      const measurementTemplate =
+        this.config.get<string>(
+          'INFLUXDB_SINTETICOS_WEIGHT_MEASUREMENT',
+          'TK N° {tankNumberPadded}'
+        ) ?? 'TK N° {tankNumberPadded}';
+      return {
+        bucket: this.config.get<string>('INFLUXDB_SINTETICOS_BUCKET', 'SINTETICO') ?? 'SINTETICO',
+        measurement: measurementTemplate
+          .split('{tankNumberPadded}')
+          .join(paddedTankNumber)
+          .split('{tankNumber}')
+          .join(String(context.tankNumber ?? '')),
+        tankTag: '',
+        weightField: this.config.get<string>('INFLUXDB_SINTETICOS_WEIGHT_FIELD', 'value') ?? 'value'
+      };
+    }
+
+    const weightFieldTemplate =
+      this.config.get<string>('INFLUXDB_WEIGHT_FIELD', 'grossKg') ?? 'grossKg';
+    return {
+      bucket: this.config.get<string>('INFLUXDB_BUCKET'),
+      measurement:
+        this.config.get<string>('INFLUXDB_WEIGHT_MEASUREMENT', 'tank_weight') ?? 'tank_weight',
+      tankTag: this.config.get<string>('INFLUXDB_TANK_TAG', 'scaleKey')?.trim() ?? '',
+      weightField: weightFieldTemplate.split('{scaleKey}').join(scaleKey ?? '')
+    };
   }
 
   private parseCsv(csv: string): WeightHistoryPoint[] {

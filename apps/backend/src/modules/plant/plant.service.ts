@@ -1269,7 +1269,14 @@ export class PlantService {
     const lot = await this.prisma.productionLot.findFirst({
       where: { id: lotId, companyId, plantId },
       include: {
-        tank: { select: { name: true, number: true, scaleKey: true } },
+        tank: {
+          select: {
+            name: true,
+            number: true,
+            scaleKey: true,
+            plant: { select: { code: true } }
+          }
+        },
         stateHistory: {
           include: { user: { select: { fullName: true, username: true } } },
           orderBy: { startedAt: 'asc' }
@@ -1314,7 +1321,8 @@ export class PlantService {
         ? await this.influxHistory.readWeightSeries(
             lot.tank.scaleKey,
             manufacturingStartedAt,
-            lot.finishedAt ?? now
+            lot.finishedAt ?? now,
+            { plantCode: lot.tank.plant.code, tankNumber: lot.tank.number }
           )
         : {
             status: 'CONFIGURATION_PENDING' as const,

@@ -270,7 +270,7 @@ export function PlantManagementPage() {
       <header className="plant-page-head management-head">
         <div>
           <p>REUNIÓN DIARIA · INFORMACIÓN DE LA FECHA SELECCIONADA</p>
-          <h1>Estado de la producción</h1>
+          <h1>Estado de la producción - {active?.code}</h1>
         </div>
         <div className="management-head__actions">
           <input

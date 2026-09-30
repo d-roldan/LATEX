@@ -101,4 +101,36 @@ describe('InfluxHistoryService', () => {
       'http://influx:8086/api/v2/query?orgID=a1ad9773507fd2a6'
     );
   });
+
+  it('consulta Sintéticos por bucket, measurement del tanque y field value', async () => {
+    const values: Record<string, string> = {
+      INFLUXDB_URL: 'http://influx:8086',
+      INFLUXDB_TOKEN: 'secret-token',
+      INFLUXDB_ORG: 'disal'
+    };
+    const config = {
+      get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback)
+    } as never;
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      text: jest
+        .fn()
+        .mockResolvedValue(',result,table,_time,_value\n,_result,0,2026-09-17T10:00:00Z,750.5')
+    } as never);
+    const service = new InfluxHistoryService(config);
+
+    const result = await service.readWeightSeries(
+      'SIN01',
+      new Date('2026-09-17T10:00:00.000Z'),
+      new Date('2026-09-17T11:00:00.000Z'),
+      { plantCode: 'SINTETICOS', tankNumber: 1 }
+    );
+
+    expect(result.status).toBe('AVAILABLE');
+    const query = String(fetchSpy.mock.calls[0][1]?.body);
+    expect(query).toContain('from(bucket: "SINTETICO")');
+    expect(query).toContain('r._measurement == "TK N° 01"');
+    expect(query).toContain('r._field == "value"');
+    expect(query).not.toContain('r["scaleKey"]');
+  });
 });

@@ -59,6 +59,9 @@ const emptyForm = {
   plantIds: [] as string[]
 };
 
+type UserSortKey = 'fullName' | 'email' | 'username' | 'role' | 'plants' | 'status';
+type SortDirection = 'asc' | 'desc';
+
 export function UsersPage() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,6 +69,9 @@ export function UsersPage() {
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [filterRole, setFilterRole] = useState('');
+  const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<UserSortKey>('fullName');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [confirmToggle, setConfirmToggle] = useState<UserItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<UserItem | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -198,6 +204,64 @@ export function UsersPage() {
     () => listQuery.data?.find((u) => u.id === editingId) ?? null,
     [listQuery.data, editingId]
   );
+  const visibleUsers = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('es-AR');
+    const users = (listQuery.data ?? []).filter((user) => {
+      if (!term) return true;
+      return [
+        user.fullName,
+        user.email,
+        user.username,
+        ROLE_LABELS[user.role] ?? user.role,
+        user.isActive ? 'Activo' : 'Inactivo',
+        ...user.plantAccesses.flatMap(({ plant }) => [plant.name, plant.code])
+      ].some((value) => value.toLocaleLowerCase('es-AR').includes(term));
+    });
+
+    const sortValue = (user: UserItem) => {
+      switch (sortKey) {
+        case 'plants':
+          return user.plantAccesses.map(({ plant }) => plant.name).join(', ');
+        case 'status':
+          return user.isActive ? 'Activo' : 'Inactivo';
+        case 'role':
+          return ROLE_LABELS[user.role] ?? user.role;
+        default:
+          return user[sortKey];
+      }
+    };
+
+    return [...users].sort((left, right) => {
+      const comparison = sortValue(left).localeCompare(sortValue(right), 'es-AR', {
+        numeric: true,
+        sensitivity: 'base'
+      });
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [listQuery.data, search, sortDirection, sortKey]);
+
+  const changeSort = (key: UserSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection('asc');
+  };
+
+  const sortButton = (key: UserSortKey, label: string) => (
+    <button
+      type="button"
+      className="users-sort-button"
+      onClick={() => changeSort(key)}
+      aria-label={`Ordenar ${label} ${sortKey === key && sortDirection === 'asc' ? 'descendente' : 'ascendente'}`}
+    >
+      <span>{label}</span>
+      <span aria-hidden="true">
+        {sortKey === key ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
+      </span>
+    </button>
+  );
 
   const openCreate = () => {
     setEditingId(null);
@@ -322,6 +386,15 @@ export function UsersPage() {
       <section className="stagger-2">
         <div className="control-bar">
           <div className="control-bar__filters">
+            <label className="users-search">
+              <span className="sr-only">Buscar usuarios</span>
+              <Input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre, email, usuario, rol o planta…"
+              />
+            </label>
             <select
               className="control-bar__select"
               value={filterRole}
@@ -335,7 +408,7 @@ export function UsersPage() {
               ))}
             </select>
           </div>
-          <div className="dash-period-badge">{listQuery.data?.length ?? 0} usuarios</div>
+          <div className="dash-period-badge">{visibleUsers.length} usuarios</div>
         </div>
 
         {/* ── TABLA ─────────────────────────────────────── */}
@@ -344,12 +417,12 @@ export function UsersPage() {
           <table className="premium-table interactive" id="users-table">
             <thead>
               <tr>
-                <th>Nombre completo</th>
-                <th>Email</th>
-                <th>Usuario</th>
-                <th>Rol</th>
-                <th>Plantas</th>
-                <th>Estado</th>
+                <th>{sortButton('fullName', 'Nombre completo')}</th>
+                <th>{sortButton('email', 'Email')}</th>
+                <th>{sortButton('username', 'Usuario')}</th>
+                <th>{sortButton('role', 'Rol')}</th>
+                <th>{sortButton('plants', 'Plantas')}</th>
+                <th>{sortButton('status', 'Estado')}</th>
                 <th style={{ textAlign: 'right' }}>Acciones</th>
               </tr>
             </thead>
@@ -360,8 +433,8 @@ export function UsersPage() {
                     Cargando usuarios...
                   </td>
                 </tr>
-              ) : listQuery.data?.length ? (
-                listQuery.data.map((user) => (
+              ) : visibleUsers.length ? (
+                visibleUsers.map((user) => (
                   <tr key={user.id} style={!user.isActive ? { opacity: 0.55 } : {}}>
                     <td className="strong-cell">
                       <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

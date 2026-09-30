@@ -554,10 +554,9 @@ export function PlantBoardPage({
     <div className={`plant-page plant-page--${sector} plant-page--${plantCode.toLowerCase()}`}>
       <header className="plant-page-head">
         <div>
-          <p>
-            PLANTA {plantName} · {plantCode}
-          </p>
-          <h1>{titles[sector]}</h1>
+          <h1>
+            {titles[sector]} - {plantCode}
+          </h1>
         </div>
         <div className="plant-health">
           <Radio size={16} />

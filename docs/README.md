@@ -37,7 +37,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.34](releases/RELEASE_NOTES_V0.0.34.md): endpoint consolidado y microcaché compartido para tableros Grafana multiplanta.
+- [Versión vigente · V0.0.35](releases/RELEASE_NOTES_V0.0.35.md): mejoras de interfaz, resumen por OF y gráfico histórico de peso para Sintéticos.
 
 ## Criterio de actualización
 

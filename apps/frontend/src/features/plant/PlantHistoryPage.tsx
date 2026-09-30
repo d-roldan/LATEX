@@ -153,6 +153,7 @@ export function PlantHistoryPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
+  const [collapsedByOrder, setCollapsedByOrder] = useState(false);
   const [selectedLot, setSelectedLot] = useState<string | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -211,6 +212,39 @@ export function PlantHistoryPage() {
       ].some((value) => value?.toLocaleLowerCase('es-AR').includes(term))
     );
   }, [query.data, search]);
+  const orderSummaries = useMemo(() => {
+    const summaries = new Map<
+      string,
+      {
+        lotId: string;
+        manufacturingOrder: string;
+        adjustments: number;
+        packagingOrders: number;
+      }
+    >();
+
+    filteredRows.forEach((row) => {
+      if (!row.lot) return;
+      const current = summaries.get(row.lot.id);
+      if (current) {
+        if (row.state === 'AJUSTE') current.adjustments += 1;
+        return;
+      }
+      summaries.set(row.lot.id, {
+        lotId: row.lot.id,
+        manufacturingOrder: row.lot.manufacturingOrder,
+        adjustments: row.state === 'AJUSTE' ? 1 : 0,
+        packagingOrders: row.lot.packagingOrders.length
+      });
+    });
+
+    return [...summaries.values()].sort((left, right) =>
+      left.manufacturingOrder.localeCompare(right.manufacturingOrder, 'es-AR', {
+        numeric: true,
+        sensitivity: 'base'
+      })
+    );
+  }, [filteredRows]);
 
   const downloadPdf = async () => {
     if (!timeline.data) return;
@@ -233,9 +267,23 @@ export function PlantHistoryPage() {
       <header className="plant-page-head">
         <div>
           <p>TRAZABILIDAD</p>
-          <h1>Historial de estados</h1>
+          <h1>Historial de estados - {active?.code}</h1>
         </div>
-        <span>{filteredRows.length} registros</span>
+        <div className="history-head-actions">
+          <span>
+            {collapsedByOrder
+              ? `${orderSummaries.length} órdenes de fabricación`
+              : `${filteredRows.length} registros`}
+          </span>
+          <button
+            type="button"
+            className="history-collapse-button"
+            aria-pressed={collapsedByOrder}
+            onClick={() => setCollapsedByOrder((current) => !current)}
+          >
+            {collapsedByOrder ? 'Ver todos los estados' : 'Contraer por OF'}
+          </button>
+        </div>
       </header>
       <div className="history-filters">
         <label className="history-search">
@@ -278,59 +326,101 @@ export function PlantHistoryPage() {
       </div>
       <div className="history-table">
         <table>
-          <thead>
-            <tr>
-              <th>Tanque</th>
-              <th>Estado</th>
-              <th>Orden / Material</th>
-              <th>Descripción</th>
-              <th>Responsable</th>
-              <th>Inicio</th>
-              <th>Fin</th>
-              <th>Duración</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRows.map((row) => {
-              const packaging = row.state === 'ENVASANDO' ? row.lot?.packagingOrders[0] : undefined;
-              return (
-                <tr key={row.id}>
-                  <td>{row.tank.name}</td>
-                  <td>
-                    <span className={`history-state state-${row.state.toLowerCase()}`}>
-                      {row.state.replaceAll('_', ' ')}
-                    </span>
-                  </td>
-                  <td>
-                    {row.lot ? (
+          {collapsedByOrder ? (
+            <>
+              <thead>
+                <tr>
+                  <th>Orden de fabricación</th>
+                  <th>Ajustes realizados</th>
+                  <th>Órdenes de envasado asignadas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderSummaries.map((summary) => (
+                  <tr key={summary.lotId}>
+                    <td>
                       <button
                         className="history-lot-link"
+                        type="button"
                         onClick={() => {
                           setPdfError(null);
-                          setSelectedLot(row.lot!.id);
+                          setSelectedLot(summary.lotId);
                         }}
                       >
-                        {packaging
-                          ? `OE ${packaging.packagingOrder} / ${packaging.materialCode ?? 'Sin material'}`
-                          : `${row.lot.manufacturingOrder} / ${row.lot.materialCode}`}
+                        OF {summary.manufacturingOrder}
                       </button>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td>
-                    {packaging?.description ?? row.description ?? row.lot?.description ?? '—'}
-                  </td>
-                  <td>{row.user?.fullName ?? 'Sistema'}</td>
-                  <td>{dateTime(row.startedAt)}</td>
-                  <td>{row.endedAt ? dateTime(row.endedAt) : 'En curso'}</td>
-                  <td>
-                    <strong>{duration(row.durationSeconds)}</strong>
-                  </td>
+                    </td>
+                    <td>{summary.adjustments}</td>
+                    <td>{summary.packagingOrders}</td>
+                  </tr>
+                ))}
+                {!orderSummaries.length ? (
+                  <tr>
+                    <td colSpan={3} className="history-empty-cell">
+                      No hay órdenes de fabricación para los filtros seleccionados.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </>
+          ) : (
+            <>
+              <thead>
+                <tr>
+                  <th>Tanque</th>
+                  <th>Estado</th>
+                  <th>Orden / Material</th>
+                  <th>Descripción</th>
+                  <th>Responsable</th>
+                  <th>Inicio</th>
+                  <th>Fin</th>
+                  <th>Duración</th>
                 </tr>
-              );
-            })}
-          </tbody>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => {
+                  const packaging =
+                    row.state === 'ENVASANDO' ? row.lot?.packagingOrders[0] : undefined;
+                  return (
+                    <tr key={row.id}>
+                      <td>{row.tank.name}</td>
+                      <td>
+                        <span className={`history-state state-${row.state.toLowerCase()}`}>
+                          {row.state.replaceAll('_', ' ')}
+                        </span>
+                      </td>
+                      <td>
+                        {row.lot ? (
+                          <button
+                            className="history-lot-link"
+                            onClick={() => {
+                              setPdfError(null);
+                              setSelectedLot(row.lot!.id);
+                            }}
+                          >
+                            {packaging
+                              ? `OE ${packaging.packagingOrder} / ${packaging.materialCode ?? 'Sin material'}`
+                              : `${row.lot.manufacturingOrder} / ${row.lot.materialCode}`}
+                          </button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>
+                        {packaging?.description ?? row.description ?? row.lot?.description ?? '—'}
+                      </td>
+                      <td>{row.user?.fullName ?? 'Sistema'}</td>
+                      <td>{dateTime(row.startedAt)}</td>
+                      <td>{row.endedAt ? dateTime(row.endedAt) : 'En curso'}</td>
+                      <td>
+                        <strong>{duration(row.durationSeconds)}</strong>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </>
+          )}
         </table>
       </div>
       <Dialog
