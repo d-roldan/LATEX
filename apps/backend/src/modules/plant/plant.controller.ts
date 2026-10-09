@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Headers,
@@ -23,14 +24,20 @@ import {
   CorrectLotDto,
   CorrectPackagingDto,
   CorrectQualityAdjustmentDto,
+  CreatePackagingPlanningCardDto,
+  CreatePlanningCardDto,
   DailyClosureDto,
   FinishPackagingDto,
+  MovePlanningCardDto,
+  MovePackagingPlanningCardDto,
   PackagingDto,
   QualityDecisionDto,
   ReceiveLaboratorySampleDto,
   ServiceDto,
   StageTargetsDto,
   StartManufacturingDto,
+  UpdatePlanningCardDto,
+  UpdatePackagingPlanningCardDto,
   VersionedActionDto,
   WeightBatchDto
 } from './dto/plant.dto';
@@ -100,6 +107,92 @@ export class PlantScopedController {
   @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
   tanks(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {
     return this.service.scopedTanks(u.companyId, u.sub, c);
+  }
+  @Get(':plantCode/planning-board')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  planningBoard(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {
+    return this.service.planningBoard(u.companyId, u.sub, c);
+  }
+  @Post(':plantCode/planning-cards')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  createPlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Body() d: CreatePlanningCardDto
+  ) {
+    return this.service.createPlanningCard(u.companyId, u, c, d);
+  }
+  @Patch(':plantCode/planning-cards/:id')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  updatePlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: UpdatePlanningCardDto
+  ) {
+    return this.service.updatePlanningCard(u.companyId, u, c, id, d);
+  }
+  @Patch(':plantCode/planning-cards/:id/position')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  movePlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: MovePlanningCardDto
+  ) {
+    return this.service.movePlanningCard(u.companyId, u, c, id, d);
+  }
+  @Delete(':plantCode/planning-cards/:id')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  deletePlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string
+  ) {
+    return this.service.deletePlanningCard(u.companyId, u, c, id);
+  }
+  @Get(':plantCode/packaging-planning-board')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  packagingPlanningBoard(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {
+    return this.service.packagingPlanningBoard(u.companyId, u.sub, c);
+  }
+  @Post(':plantCode/packaging-planning-cards')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  createPackagingPlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Body() d: CreatePackagingPlanningCardDto
+  ) {
+    return this.service.createPackagingPlanningCard(u.companyId, u, c, d);
+  }
+  @Patch(':plantCode/packaging-planning-cards/:id')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  updatePackagingPlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: UpdatePackagingPlanningCardDto
+  ) {
+    return this.service.updatePackagingPlanningCard(u.companyId, u, c, id, d);
+  }
+  @Patch(':plantCode/packaging-planning-cards/:id/position')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  movePackagingPlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: MovePackagingPlanningCardDto
+  ) {
+    return this.service.movePackagingPlanningCard(u.companyId, u, c, id, d);
+  }
+  @Delete(':plantCode/packaging-planning-cards/:id')
+  @Roles('FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN')
+  deletePackagingPlanningCard(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string
+  ) {
+    return this.service.deletePackagingPlanningCard(u.companyId, u, c, id);
   }
   @Post(':plantCode/tanks/:id/manufacturing')
   @Roles('FABRICACION', 'ADMIN')

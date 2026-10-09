@@ -3,11 +3,67 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
   CorrectQualityAdjustmentDto,
+  CreatePackagingPlanningCardDto,
+  CreatePlanningCardDto,
   FinishPackagingDto,
   PackagingDto,
   QualityDecisionDto,
   ServiceDto
 } from './plant.dto';
+
+describe('CreatePackagingPlanningCardDto', () => {
+  it('acepta tanque, dosificadora e indicaciones válidas', async () => {
+    const dto = plainToInstance(CreatePackagingPlanningCardDto, {
+      tankId: 'tank-107',
+      dispenser: 'B',
+      hooked: true,
+      notes: 'Filtro 1 y lavado de manifold'
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza dosificadoras distintas de A o B', async () => {
+    const dto = plainToInstance(CreatePackagingPlanningCardDto, {
+      tankId: 'tank-107',
+      dispenser: 'C'
+    });
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'dispenser' })])
+    );
+  });
+});
+
+describe('CreatePlanningCardDto', () => {
+  it('acepta una tarjeta con OF, material, descripción y tanque válidos', async () => {
+    const dto = plainToInstance(CreatePlanningCardDto, {
+      manufacturingOrder: '26100101',
+      materialCode: '600101',
+      description: 'Látex interior blanco',
+      tankId: 'tank-101'
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza OF y material con longitudes inválidas', async () => {
+    const dto = plainToInstance(CreatePlanningCardDto, {
+      manufacturingOrder: '1234',
+      materialCode: '6001',
+      description: 'Látex',
+      tankId: 'tank-101'
+    });
+
+    const errors = await validate(dto);
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'manufacturingOrder' }),
+        expect.objectContaining({ property: 'materialCode' })
+      ])
+    );
+  });
+});
 
 describe('PackagingDto', () => {
   const validDto = () =>

@@ -3,6 +3,7 @@ import {
   BarChart3,
   Beaker,
   Boxes,
+  ClipboardList,
   Factory,
   History,
   LogOut,
@@ -25,6 +26,12 @@ const items = [
   { to: '/fabricacion', label: 'Fabricación', icon: Factory, roles: ['FABRICACION', 'ADMIN'] },
   { to: '/laboratorio', label: 'Laboratorio', icon: Beaker, roles: ['LABORATORIO', 'ADMIN'] },
   { to: '/envasado', label: 'Envasado', icon: Boxes, roles: ['ENVASADO', 'ADMIN'] },
+  {
+    to: '/pizarra',
+    label: 'Pizarra',
+    icon: ClipboardList,
+    roles: ['FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN']
+  },
   {
     to: '/visualizacion',
     label: 'Visualización',

@@ -14,14 +14,20 @@ import {
   CorrectLotDto,
   CorrectPackagingDto,
   CorrectQualityAdjustmentDto,
+  CreatePackagingPlanningCardDto,
+  CreatePlanningCardDto,
   DailyClosureDto,
   FinishPackagingDto,
+  MovePlanningCardDto,
+  MovePackagingPlanningCardDto,
   PackagingDto,
   QualityDecisionDto,
   ReceiveLaboratorySampleDto,
   ServiceDto,
   StartManufacturingDto,
   StageTargetsDto,
+  UpdatePlanningCardDto,
+  UpdatePackagingPlanningCardDto,
   VersionedActionDto,
   WeightBatchDto
 } from './dto/plant.dto';
@@ -114,6 +120,518 @@ export class PlantService {
   async scopedTanks(companyId: string, userId: string, plantCode: string) {
     const plant = await this.assertPlantAccess(companyId, userId, plantCode);
     return this.tanks(companyId, plant.id);
+  }
+
+  async planningBoard(companyId: string, userId: string, plantCode: string) {
+    const plant = await this.assertPlanningPlantAccess(companyId, userId, plantCode);
+    const tanks = await this.prisma.tank.findMany({
+      where: {
+        companyId,
+        plantId: plant.id,
+        isActive: true,
+        equipmentType: 'TANK'
+      },
+      select: {
+        id: true,
+        number: true,
+        name: true,
+        capacityKg: true,
+        state: true,
+        activeLot: {
+          select: {
+            id: true,
+            manufacturingOrder: true,
+            materialCode: true,
+            description: true
+          }
+        },
+        planningCards: {
+          select: {
+            id: true,
+            manufacturingOrder: true,
+            materialCode: true,
+            description: true,
+            position: true,
+            updatedAt: true
+          },
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+        }
+      },
+      orderBy: { number: 'asc' }
+    });
+
+    return {
+      plant: { id: plant.id, code: plant.code, name: plant.name },
+      tanks: tanks.map((tank) => ({
+        ...tank,
+        capacityKg: tank.capacityKg === null ? null : Number(tank.capacityKg)
+      }))
+    };
+  }
+
+  async createPlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    dto: CreatePlanningCardDto
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    if (!dto.description.trim()) throw new BadRequestException('La descripción es obligatoria');
+    return this.prisma.$transaction(
+      async (tx) => {
+        const tank = await tx.tank.findFirst({
+          where: {
+            id: dto.tankId,
+            companyId,
+            plantId: plant.id,
+            isActive: true,
+            equipmentType: 'TANK'
+          },
+          select: { id: true }
+        });
+        if (!tank) throw new NotFoundException('Tanque no encontrado en la pizarra');
+        const last = await tx.planningCard.findFirst({
+          where: { plantId: plant.id, tankId: tank.id },
+          select: { position: true },
+          orderBy: { position: 'desc' }
+        });
+        const card = await tx.planningCard.create({
+          data: {
+            companyId,
+            plantId: plant.id,
+            tankId: tank.id,
+            manufacturingOrder: dto.manufacturingOrder,
+            materialCode: dto.materialCode,
+            description: dto.description.trim(),
+            position: (last?.position ?? -1) + 1,
+            createdByUserId: user.sub
+          }
+        });
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          tank.id,
+          null,
+          'CREATE',
+          'PlanningCard',
+          card.id,
+          null,
+          card,
+          'Tarjeta agregada a la pizarra'
+        );
+        return card;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  async updatePlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    cardId: string,
+    dto: UpdatePlanningCardDto
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    if (!dto.description.trim()) throw new BadRequestException('La descripción es obligatoria');
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.planningCard.findFirst({
+        where: { id: cardId, companyId, plantId: plant.id }
+      });
+      if (!before) throw new NotFoundException('Tarjeta de planificación no encontrada');
+      const after = await tx.planningCard.update({
+        where: { id: cardId },
+        data: {
+          manufacturingOrder: dto.manufacturingOrder,
+          materialCode: dto.materialCode,
+          description: dto.description.trim()
+        }
+      });
+      await this.audit(
+        tx,
+        companyId,
+        user,
+        before.tankId,
+        null,
+        'UPDATE',
+        'PlanningCard',
+        cardId,
+        before,
+        after,
+        'Tarjeta editada en la pizarra'
+      );
+      return after;
+    });
+  }
+
+  async movePlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    cardId: string,
+    dto: MovePlanningCardDto
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const card = await tx.planningCard.findFirst({
+          where: { id: cardId, companyId, plantId: plant.id }
+        });
+        if (!card) throw new NotFoundException('Tarjeta de planificación no encontrada');
+        const targetTank = await tx.tank.findFirst({
+          where: {
+            id: dto.tankId,
+            companyId,
+            plantId: plant.id,
+            isActive: true,
+            equipmentType: 'TANK'
+          },
+          select: { id: true }
+        });
+        if (!targetTank) throw new NotFoundException('Tanque de destino no encontrado');
+
+        const sourceCards = await tx.planningCard.findMany({
+          where: { plantId: plant.id, tankId: card.tankId, id: { not: card.id } },
+          select: { id: true },
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+        });
+        const targetCards =
+          card.tankId === targetTank.id
+            ? sourceCards
+            : await tx.planningCard.findMany({
+                where: { plantId: plant.id, tankId: targetTank.id },
+                select: { id: true },
+                orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+              });
+        const targetPosition = Math.min(dto.position, targetCards.length);
+        targetCards.splice(targetPosition, 0, { id: card.id });
+
+        if (card.tankId !== targetTank.id) {
+          await this.persistPlanningOrder(
+            tx,
+            card.tankId,
+            sourceCards.map((item) => item.id)
+          );
+        }
+        await this.persistPlanningOrder(
+          tx,
+          targetTank.id,
+          targetCards.map((item) => item.id)
+        );
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          targetTank.id,
+          null,
+          'UPDATE',
+          'PlanningCard',
+          card.id,
+          { tankId: card.tankId, position: card.position },
+          { tankId: targetTank.id, position: targetPosition },
+          'Tarjeta reordenada en la pizarra'
+        );
+        return { ok: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  async deletePlanningCard(companyId: string, user: JwtUser, plantCode: string, cardId: string) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const card = await tx.planningCard.findFirst({
+          where: { id: cardId, companyId, plantId: plant.id }
+        });
+        if (!card) throw new NotFoundException('Tarjeta de planificación no encontrada');
+        await tx.planningCard.delete({ where: { id: card.id } });
+        await tx.planningCard.updateMany({
+          where: { plantId: plant.id, tankId: card.tankId, position: { gt: card.position } },
+          data: { position: { decrement: 1 } }
+        });
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          card.tankId,
+          null,
+          'DELETE',
+          'PlanningCard',
+          card.id,
+          card,
+          null,
+          'Tarjeta eliminada de la pizarra'
+        );
+        return { ok: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  async packagingPlanningBoard(companyId: string, userId: string, plantCode: string) {
+    const plant = await this.assertPlanningPlantAccess(companyId, userId, plantCode);
+    const tankSelect = {
+      id: true,
+      number: true,
+      name: true,
+      state: true,
+      activeLot: {
+        select: {
+          id: true,
+          manufacturingOrder: true,
+          materialCode: true,
+          description: true,
+          packagingOrders: {
+            where: { finishedAt: null },
+            select: {
+              packagingOrder: true,
+              materialCode: true,
+              dispenser: true,
+              filter: true,
+              description: true,
+              startedAt: true
+            },
+            orderBy: { startedAt: 'desc' as const },
+            take: 1
+          }
+        }
+      }
+    };
+    const [tanks, cards] = await Promise.all([
+      this.prisma.tank.findMany({
+        where: {
+          companyId,
+          plantId: plant.id,
+          isActive: true,
+          equipmentType: 'TANK'
+        },
+        select: tankSelect,
+        orderBy: { number: 'asc' }
+      }),
+      this.prisma.packagingPlanningCard.findMany({
+        where: { companyId, plantId: plant.id },
+        select: {
+          id: true,
+          dispenser: true,
+          position: true,
+          hooked: true,
+          notes: true,
+          updatedAt: true,
+          tank: { select: tankSelect }
+        },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+      })
+    ]);
+    return {
+      plant: { id: plant.id, code: plant.code, name: plant.name },
+      dispensers: DISPENSERS,
+      tanks,
+      cards
+    };
+  }
+
+  async createPackagingPlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    dto: CreatePackagingPlanningCardDto
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const tank = await tx.tank.findFirst({
+          where: {
+            id: dto.tankId,
+            companyId,
+            plantId: plant.id,
+            isActive: true,
+            equipmentType: 'TANK'
+          },
+          select: { id: true, state: true }
+        });
+        if (!tank) throw new NotFoundException('Tanque no encontrado en la pizarra');
+        if (tank.state === 'ENVASANDO') {
+          throw new ConflictException('El tanque ya se encuentra envasando');
+        }
+        const existing = await tx.packagingPlanningCard.findFirst({
+          where: { plantId: plant.id, tankId: tank.id },
+          select: { id: true }
+        });
+        if (existing) throw new ConflictException('El tanque ya está planificado para envasado');
+        const count = await tx.packagingPlanningCard.count({
+          where: { plantId: plant.id }
+        });
+        if (count >= 4) {
+          throw new ConflictException('Devree ya tiene las cuatro posiciones planificadas');
+        }
+        const card = await tx.packagingPlanningCard.create({
+          data: {
+            companyId,
+            plantId: plant.id,
+            tankId: tank.id,
+            dispenser: dto.dispenser,
+            position: count,
+            hooked: dto.hooked ?? false,
+            notes: dto.notes?.trim() ?? '',
+            createdByUserId: user.sub
+          }
+        });
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          tank.id,
+          null,
+          'CREATE',
+          'PackagingPlanningCard',
+          card.id,
+          null,
+          card,
+          'Tanque agregado a la planificación de envasado'
+        );
+        return card;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  async updatePackagingPlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    cardId: string,
+    dto: UpdatePackagingPlanningCardDto
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const before = await tx.packagingPlanningCard.findFirst({
+          where: { id: cardId, companyId, plantId: plant.id }
+        });
+        if (!before) throw new NotFoundException('Tarjeta de envasado no encontrada');
+        const tank = await tx.tank.findFirst({
+          where: {
+            id: dto.tankId,
+            companyId,
+            plantId: plant.id,
+            isActive: true,
+            equipmentType: 'TANK'
+          },
+          select: { id: true, state: true }
+        });
+        if (!tank) throw new NotFoundException('Tanque no encontrado en la pizarra');
+        if (tank.state === 'ENVASANDO') {
+          throw new ConflictException('El tanque ya se encuentra envasando');
+        }
+        const duplicate = await tx.packagingPlanningCard.findFirst({
+          where: { plantId: plant.id, tankId: tank.id, id: { not: cardId } },
+          select: { id: true }
+        });
+        if (duplicate) throw new ConflictException('El tanque ya está planificado para envasado');
+        const after = await tx.packagingPlanningCard.update({
+          where: { id: cardId },
+          data: { tankId: tank.id, hooked: dto.hooked, notes: dto.notes?.trim() ?? '' }
+        });
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          tank.id,
+          null,
+          'UPDATE',
+          'PackagingPlanningCard',
+          cardId,
+          before,
+          after,
+          'Tarjeta editada en la planificación de envasado'
+        );
+        return after;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  async movePackagingPlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    cardId: string,
+    dto: MovePackagingPlanningCardDto
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const card = await tx.packagingPlanningCard.findFirst({
+          where: { id: cardId, companyId, plantId: plant.id }
+        });
+        if (!card) throw new NotFoundException('Tarjeta de envasado no encontrada');
+        const cards = await tx.packagingPlanningCard.findMany({
+          where: { plantId: plant.id, id: { not: card.id } },
+          select: { id: true, dispenser: true },
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+        });
+        const targetPosition = Math.min(dto.position, cards.length);
+        cards.splice(targetPosition, 0, { id: card.id, dispenser: dto.dispenser });
+        await this.persistPackagingPlanningOrder(tx, cards);
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          card.tankId,
+          null,
+          'UPDATE',
+          'PackagingPlanningCard',
+          card.id,
+          { dispenser: card.dispenser, position: card.position },
+          { dispenser: dto.dispenser, position: targetPosition },
+          'Tarjeta reordenada en la planificación de envasado'
+        );
+        return { ok: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
+  async deletePackagingPlanningCard(
+    companyId: string,
+    user: JwtUser,
+    plantCode: string,
+    cardId: string
+  ) {
+    const plant = await this.assertPlanningPlantAccess(companyId, user.sub, plantCode);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const card = await tx.packagingPlanningCard.findFirst({
+          where: { id: cardId, companyId, plantId: plant.id }
+        });
+        if (!card) throw new NotFoundException('Tarjeta de envasado no encontrada');
+        await tx.packagingPlanningCard.delete({ where: { id: card.id } });
+        await tx.packagingPlanningCard.updateMany({
+          where: {
+            plantId: plant.id,
+            position: { gt: card.position }
+          },
+          data: { position: { decrement: 1 } }
+        });
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          card.tankId,
+          null,
+          'DELETE',
+          'PackagingPlanningCard',
+          card.id,
+          card,
+          null,
+          'Tarjeta eliminada de la planificación de envasado'
+        );
+        return { ok: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
   }
 
   async getConfig(companyId: string) {
@@ -466,6 +984,27 @@ export class PlantService {
             scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined
           }
         });
+        const plannedCard = await tx.planningCard.findFirst({
+          where: {
+            companyId,
+            plantId: tank.plantId,
+            tankId,
+            manufacturingOrder: dto.manufacturingOrder,
+            materialCode: dto.materialCode
+          },
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+        });
+        if (plannedCard) {
+          await tx.planningCard.delete({ where: { id: plannedCard.id } });
+          await tx.planningCard.updateMany({
+            where: {
+              plantId: tank.plantId,
+              tankId,
+              position: { gt: plannedCard.position }
+            },
+            data: { position: { decrement: 1 } }
+          });
+        }
         await this.move(tx, tank, 'FABRICANDO', user, lot.id, `OF ${dto.manufacturingOrder}`);
         await tx.tank.update({ where: { id: tank.id }, data: { activeLotId: lot.id } });
         await this.audit(
@@ -887,6 +1426,19 @@ export class PlantService {
           }
         });
         await this.move(tx, tank, 'ENVASANDO', user, tank.activeLotId, `OE ${dto.packagingOrder}`);
+        const planned = await tx.packagingPlanningCard.findFirst({
+          where: { companyId, plantId: tank.plantId, tankId: tank.id }
+        });
+        if (planned) {
+          await tx.packagingPlanningCard.delete({ where: { id: planned.id } });
+          await tx.packagingPlanningCard.updateMany({
+            where: {
+              plantId: tank.plantId,
+              position: { gt: planned.position }
+            },
+            data: { position: { decrement: 1 } }
+          });
+        }
         await this.audit(
           tx,
           companyId,
@@ -1885,6 +2437,40 @@ export class PlantService {
       if (!tank) throw new NotFoundException('Tanque no encontrado');
       return tank;
     });
+  }
+
+  private async assertPlanningPlantAccess(companyId: string, userId: string, plantCode: string) {
+    const plant = await this.assertPlantAccess(companyId, userId, plantCode);
+    if (plant.code !== 'LATEX') {
+      throw new BadRequestException('La pizarra está habilitada únicamente para la planta Látex');
+    }
+    return plant;
+  }
+
+  private async persistPlanningOrder(
+    tx: Prisma.TransactionClient,
+    tankId: string,
+    cardIds: string[]
+  ) {
+    await Promise.all(
+      cardIds.map((id, position) =>
+        tx.planningCard.update({ where: { id }, data: { tankId, position } })
+      )
+    );
+  }
+
+  private async persistPackagingPlanningOrder(
+    tx: Prisma.TransactionClient,
+    cards: Array<{ id: string; dispenser: string }>
+  ) {
+    await Promise.all(
+      cards.map((card, position) =>
+        tx.packagingPlanningCard.update({
+          where: { id: card.id },
+          data: { dispenser: card.dispenser, position }
+        })
+      )
+    );
   }
 
   private assertTank(

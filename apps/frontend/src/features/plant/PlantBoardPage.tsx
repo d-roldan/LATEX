@@ -111,6 +111,21 @@ interface Config {
   finalOperation: 'PACKAGING' | 'TRANSFER';
 }
 
+interface PlannedManufacturingCard {
+  id: string;
+  manufacturingOrder: string;
+  materialCode: string;
+  description: string;
+  position: number;
+}
+
+interface ManufacturingPlanningBoard {
+  tanks: Array<{
+    id: string;
+    planningCards: PlannedManufacturingCard[];
+  }>;
+}
+
 const stateLabel: Record<TankState, string> = {
   VACIO: 'Vacío',
   FABRICANDO: 'Fabricando',
@@ -140,6 +155,7 @@ const equipmentCountByPlant: Record<string, number> = {
 };
 
 const emptyForm = {
+  planningCardId: '',
   manufacturingOrder: '',
   materialCode: '',
   packagingMaterialCode: '',
@@ -208,11 +224,20 @@ export function PlantBoardPage({
     queryFn: async () => (await api.get<Config>(`${base}/config`)).data,
     enabled: sector !== 'monitoreo'
   });
+  const planning = useQuery({
+    queryKey: ['plant-planning-board', plantCode],
+    queryFn: async () => (await api.get<ManufacturingPlanningBoard>(`${base}/planning-board`)).data,
+    enabled: sector === 'fabricacion' && plantCode === 'LATEX',
+    staleTime: 5_000
+  });
 
   const mutation = useMutation({
     mutationFn: async ({ path, method, payload }: PendingRequest) => api[method](path, payload),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ['plant-tanks'] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['plant-tanks'] }),
+        client.invalidateQueries({ queryKey: ['plant-planning-board', plantCode] })
+      ]);
       setSelection(null);
       setPendingRequest(null);
       setConfirming(false);
@@ -845,7 +870,16 @@ export function PlantBoardPage({
           </div>
         ) : (
           <form className="plant-action-form" onSubmit={submit}>
-            {selection && renderFields(selection.action, form, setForm, config.data, plantCode)}
+            {selection &&
+              renderFields(
+                selection.action,
+                form,
+                setForm,
+                config.data,
+                plantCode,
+                planning.data?.tanks.find((tank) => tank.id === selection.tank.id)?.planningCards ??
+                  []
+              )}
             {error ? <div className="plant-form-error">{error}</div> : null}
             <div className="plant-form-actions">
               <Button type="button" variant="secondary" onClick={closeDialog}>
@@ -895,7 +929,8 @@ function renderFields(
   form: typeof emptyForm,
   setForm: (value: typeof emptyForm) => void,
   config: Config | undefined,
-  plantCode: string
+  plantCode: string,
+  plannedCards: PlannedManufacturingCard[]
 ) {
   const field = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
   const adjustmentField = (index: number, key: 'materialCode' | 'quantityKg', value: string) =>
@@ -915,6 +950,19 @@ function renderFields(
   const adjustmentReasonOptions = [
     ...new Set([...(config?.adjustmentReasons ?? []), ...form.adjustmentReasons])
   ];
+  const normalizedOrder = form.manufacturingOrder.replace(/\D/g, '').slice(0, 8);
+  const plannedMatches =
+    action === 'start' && normalizedOrder && !form.planningCardId
+      ? plannedCards.filter((card) => card.manufacturingOrder.includes(normalizedOrder)).slice(0, 5)
+      : [];
+  const choosePlannedCard = (card: PlannedManufacturingCard) =>
+    setForm({
+      ...form,
+      planningCardId: card.id,
+      manufacturingOrder: card.manufacturingOrder,
+      materialCode: card.materialCode,
+      description: card.description
+    });
   if (action === 'receiveSample')
     return (
       <>
@@ -955,15 +1003,56 @@ function renderFields(
   if (action === 'start' || action === 'correctLot')
     return (
       <>
-        <label>
-          Orden de fabricación (8 dígitos)
-          <Input
-            value={form.manufacturingOrder}
-            onChange={(e) => field('manufacturingOrder', e.target.value)}
-            pattern="\d{8}"
-            required
-          />
-        </label>
+        <div className="planning-order-picker">
+          <label>
+            Orden de fabricación (8 dígitos)
+            <Input
+              value={form.manufacturingOrder}
+              onChange={(e) => {
+                const manufacturingOrder = e.target.value.replace(/\D/g, '').slice(0, 8);
+                setForm({
+                  ...form,
+                  manufacturingOrder,
+                  ...(form.planningCardId
+                    ? { planningCardId: '', materialCode: '', description: '' }
+                    : {})
+                });
+              }}
+              pattern="\d{8}"
+              inputMode="numeric"
+              maxLength={8}
+              autoComplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={plannedMatches.length > 0}
+              aria-controls={plannedMatches.length ? 'planned-manufacturing-orders' : undefined}
+              required
+            />
+          </label>
+          {plannedMatches.length ? (
+            <div
+              id="planned-manufacturing-orders"
+              className="planning-order-options"
+              role="listbox"
+              aria-label="Órdenes planificadas para este tanque"
+            >
+              {plannedMatches.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  onClick={() => choosePlannedCard(card)}
+                >
+                  <strong>OF {card.manufacturingOrder}</strong>
+                  <span>
+                    SEMI {card.materialCode} · {card.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <label>
           SEMI (6 dígitos)
           <Input

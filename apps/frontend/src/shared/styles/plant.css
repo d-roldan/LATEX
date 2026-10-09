@@ -2379,6 +2379,48 @@ body {
   font-size: 0.75rem;
   font-weight: 700;
 }
+.planning-order-picker {
+  position: relative;
+  grid-column: 1/-1;
+  display: grid;
+  gap: 0.4rem;
+}
+.planning-order-options {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border: 1px solid #2b465c;
+  border-radius: 0.55rem;
+  background: #09121b;
+  box-shadow: 0 12px 28px #0008;
+}
+.planning-order-options button {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: #111f2b;
+  color: #f2f5f8;
+  text-align: left;
+}
+.planning-order-options button:hover,
+.planning-order-options button:focus-visible {
+  border-color: #238ec8;
+  background: #162c3d;
+  outline: none;
+  transform: none;
+}
+.planning-order-options strong {
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+.planning-order-options span {
+  color: #aab7c4;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
 .plant-action-form input,
 .plant-action-form select,
 .plant-action-form textarea,
@@ -3552,6 +3594,22 @@ body {
   border-color: #bdcbd8;
   background: #fff;
   color: #000;
+}
+:root[data-theme='light'] .planning-order-options {
+  border-color: #a9c7d8;
+  background: #f7fbfd;
+  box-shadow: 0 12px 28px #27445d24;
+}
+:root[data-theme='light'] .planning-order-options button {
+  background: #eaf4f9;
+  color: #102235;
+}
+:root[data-theme='light'] .planning-order-options button:hover,
+:root[data-theme='light'] .planning-order-options button:focus-visible {
+  background: #dceef7;
+}
+:root[data-theme='light'] .planning-order-options span {
+  color: #526579;
 }
 :root[data-theme='light'] .quality-reasons {
   border-color: #aebfce;

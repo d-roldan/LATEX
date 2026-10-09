@@ -1,6 +1,138 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { PlantService } from './plant.service';
 
+describe('PlantService planning board', () => {
+  const notifications = { notifyTankAction: jest.fn() } as any;
+
+  it('devuelve el lote activo y las tarjetas ordenadas de los tanques de Látex', async () => {
+    const prisma = {
+      plant: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'plant-latex',
+          code: 'LATEX',
+          name: 'Látex',
+          userAccesses: [{ canTransfer: false }]
+        })
+      },
+      tank: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'tank-101',
+            number: 101,
+            name: 'TK101',
+            capacityKg: 60000,
+            state: 'FABRICANDO',
+            activeLot: {
+              id: 'lot-1',
+              manufacturingOrder: '26100101',
+              materialCode: '600101',
+              description: 'Látex en fabricación'
+            },
+            planningCards: [
+              {
+                id: 'card-1',
+                manufacturingOrder: '26100102',
+                materialCode: '600102',
+                description: 'Siguiente lote',
+                position: 0,
+                updatedAt: new Date('2026-10-01T12:00:00.000Z')
+              }
+            ]
+          }
+        ])
+      }
+    } as any;
+    const service = new PlantService(prisma, { get: jest.fn() } as any, notifications);
+
+    const result = await service.planningBoard('company-1', 'user-1', 'latex');
+
+    expect(result.plant).toEqual({ id: 'plant-latex', code: 'LATEX', name: 'Látex' });
+    expect(result.tanks[0]).toMatchObject({
+      name: 'TK101',
+      capacityKg: 60000,
+      activeLot: { manufacturingOrder: '26100101' },
+      planningCards: [{ id: 'card-1', position: 0 }]
+    });
+    expect(prisma.tank.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ plantId: 'plant-latex', equipmentType: 'TANK' }),
+        orderBy: { number: 'asc' }
+      })
+    );
+  });
+
+  it('mantiene la primera versión de la pizarra limitada a Látex', async () => {
+    const prisma = {
+      plant: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'plant-terplast',
+          code: 'TERPLAST',
+          name: 'Terplast',
+          userAccesses: [{ canTransfer: false }]
+        })
+      }
+    } as any;
+    const service = new PlantService(prisma, { get: jest.fn() } as any, notifications);
+
+    await expect(service.planningBoard('company-1', 'user-1', 'TERPLAST')).rejects.toThrow(
+      'únicamente para la planta Látex'
+    );
+  });
+
+  it('reordena una única secuencia de envasado compartida entre A y B', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const tx = {
+      tank: { findUniqueOrThrow: jest.fn().mockResolvedValue({ plantId: 'plant-latex' }) },
+      packagingPlanningCard: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'card-c',
+          tankId: 'tank-107',
+          dispenser: 'B',
+          position: 2
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'card-a', dispenser: 'A' },
+          { id: 'card-b', dispenser: 'B' }
+        ]),
+        update
+      },
+      plantAuditLog: { create: jest.fn().mockResolvedValue({}) }
+    };
+    const prisma = {
+      plant: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'plant-latex',
+          code: 'LATEX',
+          userAccesses: [{ canTransfer: false }]
+        })
+      },
+      $transaction: jest.fn((callback) => callback(tx))
+    } as any;
+    const service = new PlantService(prisma, { get: jest.fn() } as any, notifications);
+
+    await service.movePackagingPlanningCard(
+      'company-1',
+      { sub: 'user-1', companyId: 'company-1', role: 'ENVASADO' } as any,
+      'LATEX',
+      'card-c',
+      { dispenser: 'A', position: 0 }
+    );
+
+    expect(update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'card-c' },
+      data: { dispenser: 'A', position: 0 }
+    });
+    expect(update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'card-a' },
+      data: { dispenser: 'A', position: 1 }
+    });
+    expect(update).toHaveBeenNthCalledWith(3, {
+      where: { id: 'card-b' },
+      data: { dispenser: 'B', position: 2 }
+    });
+  });
+});
+
 describe('PlantService telemetry', () => {
   const prisma = {
     company: {

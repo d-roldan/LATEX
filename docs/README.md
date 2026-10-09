@@ -37,7 +37,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.35](releases/RELEASE_NOTES_V0.0.35.md): mejoras de interfaz, resumen por OF y gráfico histórico de peso para Sintéticos.
+- [Versión vigente · V0.0.36](releases/RELEASE_NOTES_V0.0.36.md): pizarras de fabricación y envasado para Látex, con secuencia global de Devree y autocompletado de OF.
 
 ## Criterio de actualización
 

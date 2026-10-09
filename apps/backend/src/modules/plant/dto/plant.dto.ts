@@ -30,6 +30,42 @@ export class StartManufacturingDto {
   @IsOptional() @IsISO8601() scheduledAt?: string;
 }
 
+export class CreatePlanningCardDto {
+  @Matches(/^\d{8}$/) manufacturingOrder!: string;
+  @Matches(/^\d{6}$/) materialCode!: string;
+  @IsString() @IsNotEmpty() @MaxLength(180) description!: string;
+  @IsString() @IsNotEmpty() tankId!: string;
+}
+
+export class UpdatePlanningCardDto {
+  @Matches(/^\d{8}$/) manufacturingOrder!: string;
+  @Matches(/^\d{6}$/) materialCode!: string;
+  @IsString() @IsNotEmpty() @MaxLength(180) description!: string;
+}
+
+export class MovePlanningCardDto {
+  @IsString() @IsNotEmpty() tankId!: string;
+  @IsInt() @Min(0) position!: number;
+}
+
+export class CreatePackagingPlanningCardDto {
+  @IsString() @IsNotEmpty() tankId!: string;
+  @IsIn(['A', 'B']) dispenser!: string;
+  @IsOptional() @IsBoolean() hooked?: boolean;
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
+}
+
+export class UpdatePackagingPlanningCardDto {
+  @IsString() @IsNotEmpty() tankId!: string;
+  @IsBoolean() hooked!: boolean;
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
+}
+
+export class MovePackagingPlanningCardDto {
+  @IsIn(['A', 'B']) dispenser!: string;
+  @IsInt() @Min(0) @Max(3) position!: number;
+}
+
 export class VersionedActionDto {
   @IsInt() @Min(0) version!: number;
   @IsOptional() @IsString() @MaxLength(500) reason?: string;

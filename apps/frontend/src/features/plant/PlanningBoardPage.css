@@ -1,0 +1,316 @@
+.planning-page {
+  min-width: 0;
+  padding: 1.4rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.planning-state h1 {
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  letter-spacing: -0.04em;
+}
+
+.planning-state p {
+  margin-top: 0.35rem;
+  color: var(--ink-soft);
+}
+
+.planning-page-head {
+  margin-bottom: 0;
+}
+
+.planning-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--panel-soft);
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.planning-tabs button {
+  min-height: 2.6rem;
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 750;
+}
+
+.planning-tabs button.is-active {
+  background: var(--panel);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.planning-board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(17rem, 1fr);
+  gap: 0.9rem;
+  overflow-x: auto;
+  padding: 0.2rem 0.1rem 1rem;
+  scroll-snap-type: x proximity;
+}
+
+.packaging-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(18rem, 1fr));
+  gap: 0.9rem;
+  width: min(76rem, 100%);
+  margin: 0 auto;
+}
+
+.packaging-column__current {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem 0.75rem 0;
+}
+
+.packaging-hook-check {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--panel-soft);
+}
+
+.packaging-hook-check input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: #16a34a;
+  cursor: pointer;
+}
+
+.packaging-card__notes {
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.planning-column {
+  min-height: 34rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 88%, transparent 12%);
+  scroll-snap-align: start;
+  box-shadow: var(--shadow-sm);
+}
+
+.planning-column__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 1rem 1rem 0 0;
+  background: var(--panel);
+}
+
+.planning-column__header h2 {
+  font-size: 1rem;
+}
+.planning-column__header span {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+.planning-column__header button {
+  white-space: nowrap;
+}
+.planning-column__cards {
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.planning-card {
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border) 76%);
+  border-left: 4px solid var(--primary);
+  border-radius: 0.85rem;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.planning-card[draggable='true'] {
+  cursor: grab;
+}
+.planning-card[draggable='true']:active {
+  cursor: grabbing;
+}
+.planning-card.is-dragging {
+  opacity: 0.45;
+}
+.planning-card strong {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+.planning-card > span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.planning-card p {
+  margin-top: 0.15rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.planning-card--current {
+  border-color: color-mix(in srgb, #22c55e 46%, var(--border) 54%);
+  border-left-color: #16a34a;
+  background: color-mix(in srgb, #22c55e 12%, var(--panel) 88%);
+}
+
+.planning-card__status,
+.planning-card__order {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #15803d;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.planning-card__order {
+  color: var(--primary);
+}
+.planning-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.planning-card__actions,
+.planning-card__move {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.planning-card__actions button,
+.planning-card__move button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--panel-soft);
+  color: var(--ink-soft);
+}
+
+.planning-card__move {
+  margin-top: 0.4rem;
+  justify-content: flex-end;
+}
+.planning-card__actions button:hover,
+.planning-card__move button:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.planning-column__empty-current,
+.planning-column__empty {
+  min-height: 3.6rem;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: 0.8rem;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.planning-column__empty {
+  width: 100%;
+  min-height: 5rem;
+}
+.planning-column__empty:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.planning-state {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+}
+.planning-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.planning-select {
+  width: 100%;
+  min-height: 2.75rem;
+  margin-top: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--panel);
+  color: var(--ink);
+}
+.planning-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+.planning-delete {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (max-width: 760px) {
+  .planning-page {
+    padding: 1rem 0.75rem;
+  }
+  .planning-board {
+    grid-auto-columns: minmax(16rem, 88vw);
+  }
+  .packaging-board {
+    grid-template-columns: repeat(2, minmax(16rem, 88vw));
+    min-width: max-content;
+  }
+  .planning-page:has(.packaging-board) {
+    overflow-x: auto;
+  }
+  .planning-tabs {
+    width: 100%;
+  }
+  .planning-tabs button {
+    flex: 1;
+    padding-inline: 0.55rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planning-card {
+    transition: none;
+  }
+}

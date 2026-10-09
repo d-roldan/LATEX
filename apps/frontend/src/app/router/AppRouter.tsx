@@ -21,6 +21,11 @@ const PlantManagementPage = lazy(() =>
     default: module.PlantManagementPage
   }))
 );
+const PlanningBoardPage = lazy(() =>
+  import('../../features/plant/PlanningBoardPage').then((module) => ({
+    default: module.PlanningBoardPage
+  }))
+);
 const PlantTvPage = lazy(() =>
   import('../../features/plant/PlantTvPage').then((module) => ({
     default: module.PlantTvPage
@@ -63,6 +68,20 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route element={<ProtectedRoute allowedRoles={['FABRICACION', 'ADMIN']} />}>
             <Route path="/fabricacion" element={page('fabricacion')} />
+          </Route>
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={['FABRICACION', 'ENVASADO', 'JEFATURA', 'ADMIN']} />
+            }
+          >
+            <Route
+              path="/pizarra"
+              element={
+                <AppLayout>
+                  <PlanningBoardPage />
+                </AppLayout>
+              }
+            />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['LABORATORIO', 'ADMIN']} />}>
             <Route path="/laboratorio" element={page('laboratorio')} />
