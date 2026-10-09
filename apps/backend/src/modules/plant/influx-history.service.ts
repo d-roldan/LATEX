@@ -45,7 +45,7 @@ export class InfluxHistoryService {
     const orgId = this.config.get<string>('INFLUXDB_ORG_ID');
     const profile = this.weightSeriesProfile(scaleKey, context);
 
-    if (!scaleKey && context.plantCode !== 'SINTETICOS') {
+    if (!scaleKey && context.plantCode?.trim().toUpperCase() !== 'SINTETICOS') {
       return this.result('CONFIGURATION_PENDING', 'El tanque no tiene una serie de peso asociada.');
     }
     if (!url || !token || (!org && !orgId) || !profile.bucket) {
@@ -130,34 +130,71 @@ export class InfluxHistoryService {
     scaleKey: string | null,
     context: WeightSeriesContext
   ): WeightSeriesProfile {
-    if (context.plantCode === 'SINTETICOS') {
-      const paddedTankNumber = String(context.tankNumber ?? '').padStart(2, '0');
+    const plantCode = context.plantCode?.trim().toUpperCase();
+    const profilePrefix = plantCode ? `INFLUXDB_${plantCode}` : undefined;
+
+    if (plantCode === 'SINTETICOS') {
       const measurementTemplate =
-        this.config.get<string>(
-          'INFLUXDB_SINTETICOS_WEIGHT_MEASUREMENT',
+        this.firstConfigured(
+          ['INFLUXDB_SINTETICOS_MEASUREMENT', 'INFLUXDB_SINTETICOS_WEIGHT_MEASUREMENT'],
           'TK N° {tankNumberPadded}'
         ) ?? 'TK N° {tankNumberPadded}';
       return {
-        bucket: this.config.get<string>('INFLUXDB_SINTETICOS_BUCKET', 'SINTETICO') ?? 'SINTETICO',
-        measurement: measurementTemplate
-          .split('{tankNumberPadded}')
-          .join(paddedTankNumber)
-          .split('{tankNumber}')
-          .join(String(context.tankNumber ?? '')),
-        tankTag: '',
-        weightField: this.config.get<string>('INFLUXDB_SINTETICOS_WEIGHT_FIELD', 'value') ?? 'value'
+        bucket: this.firstConfigured(['INFLUXDB_SINTETICOS_BUCKET'], 'SINTETICO'),
+        measurement: this.resolveSeriesTemplate(measurementTemplate, scaleKey, context),
+        tankTag: this.firstConfigured(['INFLUXDB_SINTETICOS_TANK_TAG'], '') ?? '',
+        weightField:
+          this.firstConfigured(
+            ['INFLUXDB_SINTETICOS_FIELD', 'INFLUXDB_SINTETICOS_WEIGHT_FIELD'],
+            'value'
+          ) ?? 'value'
       };
     }
 
-    const weightFieldTemplate =
-      this.config.get<string>('INFLUXDB_WEIGHT_FIELD', 'grossKg') ?? 'grossKg';
+    const legacyKeys = !plantCode || plantCode === 'LATEX';
+    const bucketKeys = [profilePrefix ? `${profilePrefix}_BUCKET` : undefined];
+    const measurementKeys = [profilePrefix ? `${profilePrefix}_MEASUREMENT` : undefined];
+    const tankTagKeys = [profilePrefix ? `${profilePrefix}_TANK_TAG` : undefined];
+    const fieldKeys = [profilePrefix ? `${profilePrefix}_FIELD` : undefined];
+    if (legacyKeys) {
+      bucketKeys.push('INFLUXDB_BUCKET');
+      measurementKeys.push('INFLUXDB_WEIGHT_MEASUREMENT');
+      tankTagKeys.push('INFLUXDB_TANK_TAG');
+      fieldKeys.push('INFLUXDB_WEIGHT_FIELD');
+    }
+    const weightFieldTemplate = this.firstConfigured(fieldKeys, 'grossKg') ?? 'grossKg';
+    const measurementTemplate =
+      this.firstConfigured(measurementKeys, 'tank_weight') ?? 'tank_weight';
     return {
-      bucket: this.config.get<string>('INFLUXDB_BUCKET'),
-      measurement:
-        this.config.get<string>('INFLUXDB_WEIGHT_MEASUREMENT', 'tank_weight') ?? 'tank_weight',
-      tankTag: this.config.get<string>('INFLUXDB_TANK_TAG', 'scaleKey')?.trim() ?? '',
-      weightField: weightFieldTemplate.split('{scaleKey}').join(scaleKey ?? '')
+      bucket: this.firstConfigured(bucketKeys),
+      measurement: this.resolveSeriesTemplate(measurementTemplate, scaleKey, context),
+      tankTag: this.firstConfigured(tankTagKeys, '')?.trim() ?? '',
+      weightField: this.resolveSeriesTemplate(weightFieldTemplate, scaleKey, context)
     };
+  }
+
+  private resolveSeriesTemplate(
+    template: string,
+    scaleKey: string | null,
+    context: WeightSeriesContext
+  ): string {
+    const tankNumber = String(context.tankNumber ?? '');
+    return template
+      .split('{scaleKey}')
+      .join(scaleKey ?? '')
+      .split('{tankNumberPadded}')
+      .join(tankNumber.padStart(2, '0'))
+      .split('{tankNumber}')
+      .join(tankNumber);
+  }
+
+  private firstConfigured(keys: Array<string | undefined>, fallback?: string): string | undefined {
+    for (const key of keys) {
+      if (!key) continue;
+      const value = this.config.get<string>(key);
+      if (value !== undefined && value !== '') return value;
+    }
+    return fallback;
   }
 
   private parseCsv(csv: string): WeightHistoryPoint[] {

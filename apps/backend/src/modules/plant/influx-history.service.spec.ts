@@ -102,11 +102,89 @@ describe('InfluxHistoryService', () => {
     );
   });
 
+  it.each([
+    ['LATEX_VIEJO', 'LV01', 'LATEX_VIEJO', 'PESOS_LATEX_VIEJO', 'PESO_LV01'],
+    ['TERPLAST', 'TERP01', 'TERPLAST', 'PESOS_TERPLAST', 'PESO_TERP01'],
+    ['SLURRY', 'SLURRY01', 'SLURRY', 'PESOS_SLURRY', 'PESO_SLURRY01'],
+    ['ENDUIDO', 'END01', 'ENDUIDO', 'PESOS_ENDUIDO', 'PESO_END01']
+  ])(
+    'usa el perfil de InfluxDB específico de %s',
+    async (plantCode, scaleKey, bucket, measurement, field) => {
+      const prefix = `INFLUXDB_${plantCode}`;
+      const values: Record<string, string> = {
+        INFLUXDB_URL: 'http://influx:8086',
+        INFLUXDB_TOKEN: 'secret-token',
+        INFLUXDB_ORG: 'disal',
+        [`${prefix}_BUCKET`]: bucket,
+        [`${prefix}_MEASUREMENT`]: measurement,
+        [`${prefix}_FIELD`]: 'PESO_{scaleKey}'
+      };
+      const config = {
+        get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback)
+      } as never;
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        text: jest
+          .fn()
+          .mockResolvedValue(',result,table,_time,_value\n,_result,0,2026-09-17T10:00:00Z,750.5')
+      } as never);
+      const service = new InfluxHistoryService(config);
+
+      await service.readWeightSeries(
+        scaleKey,
+        new Date('2026-09-17T10:00:00.000Z'),
+        new Date('2026-09-17T11:00:00.000Z'),
+        { plantCode }
+      );
+
+      const query = String(fetchSpy.mock.calls[0][1]?.body);
+      expect(query).toContain(`from(bucket: "${bucket}")`);
+      expect(query).toContain(`r._measurement == "${measurement}"`);
+      expect(query).toContain(`r._field == "${field}"`);
+    }
+  );
+
+  it('resuelve la medición de Látex Viejo desde el número de tanque', async () => {
+    const values: Record<string, string> = {
+      INFLUXDB_URL: 'http://influx:8086',
+      INFLUXDB_TOKEN: 'secret-token',
+      INFLUXDB_ORG: 'disal',
+      INFLUXDB_LATEX_VIEJO_BUCKET: 'LATEX_BLANCO',
+      INFLUXDB_LATEX_VIEJO_MEASUREMENT: 'TK{tankNumber}',
+      INFLUXDB_LATEX_VIEJO_FIELD: 'value'
+    };
+    const config = {
+      get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback)
+    } as never;
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      text: jest
+        .fn()
+        .mockResolvedValue(',result,table,_time,_value\n,_result,0,2026-09-17T10:00:00Z,750.5')
+    } as never);
+    const service = new InfluxHistoryService(config);
+
+    await service.readWeightSeries(
+      'LV03',
+      new Date('2026-09-17T10:00:00.000Z'),
+      new Date('2026-09-17T11:00:00.000Z'),
+      { plantCode: 'LATEX_VIEJO', tankNumber: 3 }
+    );
+
+    const query = String(fetchSpy.mock.calls[0][1]?.body);
+    expect(query).toContain('from(bucket: "LATEX_BLANCO")');
+    expect(query).toContain('r._measurement == "TK3"');
+    expect(query).toContain('r._field == "value"');
+  });
+
   it('consulta Sintéticos por bucket, measurement del tanque y field value', async () => {
     const values: Record<string, string> = {
       INFLUXDB_URL: 'http://influx:8086',
       INFLUXDB_TOKEN: 'secret-token',
-      INFLUXDB_ORG: 'disal'
+      INFLUXDB_ORG: 'disal',
+      INFLUXDB_SINTETICOS_BUCKET: 'SINTETICO',
+      INFLUXDB_SINTETICOS_MEASUREMENT: 'TK N° {tankNumberPadded}',
+      INFLUXDB_SINTETICOS_FIELD: 'value'
     };
     const config = {
       get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback)
