@@ -88,5 +88,8 @@ Si la herramienta de la sesión no expone roles personalizados, leer el TOML per
   `docs/DESPLIEGUE_MULTIPLANTA.md`. Para instalaciones nuevas, recuperación o criterios generales de
   persistencia, leer `docs/DESPLIEGUE_MULTIPLANTA.md`. No aplicar seeds o resets como requisito de una
   validación.
+- En producción, la telemetría llega desde un Node-RED externo alojado en otro Compose y compartido con
+  otros procesos. `disal-node-red` es local/demo: no iniciarlo durante una actualización productiva ni
+  detener o recrear el contenedor externo completo desde este proyecto.
 - Reportar qué se verificó y qué quedó pendiente. Las notas de versiones anteriores no prueban que la versión actual haya pasado pruebas.
 - Mantener secretos, bases de datos, backups y artefactos generados fuera de Git.

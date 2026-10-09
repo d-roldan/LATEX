@@ -10,7 +10,11 @@ Este documento explica qué función cumple cada servicio definido en `docker-co
 - **Servicio permanente**: debe permanecer activo durante la operación normal.
 - **Trabajo de una sola ejecución**: realiza una preparación, termina con código `0` y queda en estado `Exited`. Ese estado es correcto si finalizó sin errores.
 
-El stack tiene cinco servicios permanentes (`disal-db`, `disal-backend`, `disal-frontend`, `disal-nginx` y `disal-node-red`) y dos trabajos de preparación (`disal-uploads-init` y `disal-migrate`).
+El Compose define cuatro servicios permanentes propios de la aplicación (`disal-db`, `disal-backend`,
+`disal-frontend` y `disal-nginx`), un Node-RED opcional para desarrollo/simulación
+(`disal-node-red`) y dos trabajos de preparación (`disal-uploads-init` y `disal-migrate`). En el
+servidor productivo, `disal-node-red` no se utiliza: la telemetría llega desde un Node-RED externo que
+se ejecuta en otro Compose y también presta otros servicios.
 
 ## Vista general del recorrido de datos
 
@@ -27,24 +31,30 @@ Navegador / PWA
                                   |
                                   | lotes de pesos
                                   |
-                            disal-node-red
+                      Node-RED externo de producción
+                      (otro Compose, compartido)
 ```
 
-Todos los servicios comparten la red privada que Docker Compose crea de forma predeterminada, salvo `disal-uploads-init`, que no necesita red. Dentro de esa red los servicios se encuentran por su nombre, por ejemplo `disal-db`, `disal-backend` o `disal-nginx`. Esos nombres no son direcciones válidas fuera de Docker.
+Los servicios definidos por este Compose comparten su red privada de forma predeterminada, salvo
+`disal-uploads-init`, que no necesita red. Dentro de esa red se encuentran por nombres como `disal-db`,
+`disal-backend` o `disal-nginx`. El Node-RED productivo externo no pertenece a esa red y debe usar el
+DNS, protocolo y puerto reales publicados por el servidor; no puede usar esos hostnames internos.
 
-El único punto de entrada de la aplicación para otros equipos es `disal-nginx`. La base de datos y el editor de Node-RED se publican únicamente en `127.0.0.1`, por lo que de forma predeterminada sólo son accesibles desde el host.
+El único punto de entrada de esta aplicación para otros equipos es `disal-nginx`. La base de datos se
+publica únicamente en `127.0.0.1`. El puerto `1880` del Compose corresponde sólo al Node-RED local/demo;
+no describe la exposición ni la administración del Node-RED productivo externo.
 
 ## Resumen de servicios
 
-| Servicio | Tecnología principal | Tipo | Función |
-| --- | --- | --- | --- |
-| `disal-db` | PostgreSQL 16 Alpine | Permanente | Persistencia transaccional de usuarios, plantas, lotes, estados, auditoría y demás datos del sistema. |
-| `disal-uploads-init` | Nginx 1.27 Alpine usado como utilidad mínima | Una ejecución | Prepara propietario y permisos del volumen compartido de archivos. |
-| `disal-migrate` | Node.js 20, NestJS/Prisma CLI | Una ejecución | Aplica migraciones Prisma pendientes antes de iniciar la API. |
-| `disal-backend` | Node.js 20, NestJS 10, Prisma 5 | Permanente | Expone la API, aplica reglas operativas, autenticación, autorización y acceso a datos. |
-| `disal-frontend` | React 18, TypeScript, Vite y Nginx 1.27 | Permanente | Sirve la interfaz web/PWA ya compilada. |
-| `disal-nginx` | Nginx 1.27 Alpine | Permanente | Es el proxy inverso y punto de entrada; dirige interfaz y API, limita tráfico y agrega cabeceras. |
-| `disal-node-red` | Node-RED 4.0.9 | Permanente | Integra o simula las lecturas de peso y las envía a la API. |
+| Servicio             | Tecnología principal                         | Tipo                | Función                                                                                               |
+| -------------------- | -------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `disal-db`           | PostgreSQL 16 Alpine                         | Permanente          | Persistencia transaccional de usuarios, plantas, lotes, estados, auditoría y demás datos del sistema. |
+| `disal-uploads-init` | Nginx 1.27 Alpine usado como utilidad mínima | Una ejecución       | Prepara propietario y permisos del volumen compartido de archivos.                                    |
+| `disal-migrate`      | Node.js 20, NestJS/Prisma CLI                | Una ejecución       | Aplica migraciones Prisma pendientes antes de iniciar la API.                                         |
+| `disal-backend`      | Node.js 20, NestJS 10, Prisma 5              | Permanente          | Expone la API, aplica reglas operativas, autenticación, autorización y acceso a datos.                |
+| `disal-frontend`     | React 18, TypeScript, Vite y Nginx 1.27      | Permanente          | Sirve la interfaz web/PWA ya compilada.                                                               |
+| `disal-nginx`        | Nginx 1.27 Alpine                            | Permanente          | Es el proxy inverso y punto de entrada; dirige interfaz y API, limita tráfico y agrega cabeceras.     |
+| `disal-node-red`     | Node-RED 4.0.9                               | Opcional local/demo | Simula o sirve como referencia de integración; no es la fuente productiva actual.                     |
 
 InfluxDB es un historiador externo al Compose descripto en este documento. El sistema industrial almacena allí la señal continua de peso segundo a segundo. LATEX no escribe esa señal en InfluxDB desde su endpoint de telemetría: conserva el último valor en memoria para la vista en vivo y consulta el historiador para recuperar la evolución de peso de una orden.
 
@@ -220,6 +230,10 @@ El proxy espera que backend y frontend hayan iniciado, aunque la condición `ser
 
 ## `disal-node-red`: integración de pesos
 
+> **Importante:** esta sección describe el servicio local/demo incluido en el repositorio. El servidor
+> productivo recibe telemetría desde un Node-RED externo alojado en otro Compose y compartido con otros
+> procesos. Ese servicio externo no debe administrarse con los comandos de este proyecto.
+
 ### Para qué sirve
 
 Representa la capa de integración con las balanzas y equipos de planta. Construye lotes de lecturas y los envía por HTTP al backend, incluyendo una clave compartida en `X-Node-Red-Key`.
@@ -234,35 +248,42 @@ Representa la capa de integración con las balanzas y equipos de planta. Constru
 - Espera que `disal-nginx` haya iniciado y envía a direcciones internas como `http://disal-nginx/api/plants/LATEX/telemetry/weights`.
 - Tiene límites configurables de memoria y CPU, además de un máximo de procesos.
 
-El flujo incluido puede simular Látex, Terplast y Slurry; Enduido se declara sin sensores. La simulación sólo transmite cuando `DISAL_ENABLE_WEIGHT_SIMULATOR=true`. El valor predeterminado es `false`, por lo que no debe habilitarse en un entorno conectado a señales reales.
+El flujo incluido puede simular Látex, Terplast y Slurry; Enduido se declara sin sensores. La
+simulación sólo transmite cuando `DISAL_ENABLE_WEIGHT_SIMULATOR=true`. El valor predeterminado es
+`false`, por lo que no debe habilitarse en un entorno conectado a señales reales ni iniciarse como parte
+de la actualización del servidor productivo.
 
 Las modificaciones realizadas desde el editor pueden cambiar archivos de `infra/node-red/data`. Antes de desplegar un flujo debe revisarse que no contenga credenciales, direcciones privadas no deseadas o nodos de prueba habilitados.
 
 ## Red, puertos y exposición
 
-| Componente | Puerto interno | Publicación predeterminada | Alcance |
-| --- | ---: | --- | --- |
-| PostgreSQL | `5432` | `127.0.0.1:${POSTGRES_PORT}` | Sólo host |
-| Backend | `${BACKEND_PORT}` / normalmente `3000` | Sin publicación | Sólo red Compose |
-| Frontend | `80` | Sin publicación | Sólo red Compose |
-| Proxy HTTP | `80` | `0.0.0.0:${HTTP_PORT}` | Red accesible al host |
-| Proxy HTTPS opcional | `443` | `0.0.0.0:${HTTPS_PORT:-443}` | Red accesible al host |
-| Node-RED | `1880` | `127.0.0.1:${NODE_RED_PORT:-1880}` | Sólo host |
+| Componente           |                         Puerto interno | Publicación predeterminada         | Alcance                           |
+| -------------------- | -------------------------------------: | ---------------------------------- | --------------------------------- |
+| PostgreSQL           |                                 `5432` | `127.0.0.1:${POSTGRES_PORT}`       | Sólo host                         |
+| Backend              | `${BACKEND_PORT}` / normalmente `3000` | Sin publicación                    | Sólo red Compose                  |
+| Frontend             |                                   `80` | Sin publicación                    | Sólo red Compose                  |
+| Proxy HTTP           |                                   `80` | `0.0.0.0:${HTTP_PORT}`             | Red accesible al host             |
+| Proxy HTTPS opcional |                                  `443` | `0.0.0.0:${HTTPS_PORT:-443}`       | Red accesible al host             |
+| Node-RED local/demo  |                                 `1880` | `127.0.0.1:${NODE_RED_PORT:-1880}` | Sólo host; no usado en producción |
 
 Los puertos concretos se obtienen de `.env`; no debe asumirse que `HTTP_PORT` es siempre `80` o `8081`.
 
 ## Volúmenes y persistencia
 
-| Volumen o montaje | Consumidor | Contenido | Consideración |
-| --- | --- | --- | --- |
-| `postgres_data` | `disal-db` | Archivos de PostgreSQL | Es el dato persistente principal; requiere backup. |
-| `uploads_data` | `disal-uploads-init`, `disal-backend` | Archivos cargados por funciones de la API | El inicializador ajusta permisos antes del backend. |
-| `./infra/node-red/data:/data` | `disal-node-red` | Flujos y configuración de Node-RED | Es una carpeta del repositorio/host, no un volumen nombrado. |
-| `./infra/nginx/default.conf` | `disal-nginx` | Configuración HTTP | Montaje de sólo lectura. |
-| `./infra/nginx/https.conf` | `disal-nginx` con overlay HTTPS | Configuración TLS | Reemplaza la configuración HTTP dentro del contenedor. |
-| `./infra/nginx/certs` | `disal-nginx` con overlay HTTPS | Certificado y clave | Sólo lectura y excluido de Git. |
+| Volumen o montaje             | Consumidor                            | Contenido                                 | Consideración                                                              |
+| ----------------------------- | ------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| `postgres_data`               | `disal-db`                            | Archivos de PostgreSQL                    | Es el dato persistente principal; requiere backup.                         |
+| `uploads_data`                | `disal-uploads-init`, `disal-backend` | Archivos cargados por funciones de la API | El inicializador ajusta permisos antes del backend.                        |
+| `./infra/node-red/data:/data` | `disal-node-red` local/demo           | Flujos de simulación y referencia         | Es una carpeta del repositorio; no contiene el runtime productivo externo. |
+| `./infra/nginx/default.conf`  | `disal-nginx`                         | Configuración HTTP                        | Montaje de sólo lectura.                                                   |
+| `./infra/nginx/https.conf`    | `disal-nginx` con overlay HTTPS       | Configuración TLS                         | Reemplaza la configuración HTTP dentro del contenedor.                     |
+| `./infra/nginx/certs`         | `disal-nginx` con overlay HTTPS       | Certificado y clave                       | Sólo lectura y excluido de Git.                                            |
 
-Un backup completo de LATEX debe contemplar PostgreSQL, archivos cargados, datos de Node-RED, `.env` y certificados locales cuando corresponda. La estrategia integral de planta también debe incluir la retención y el respaldo de InfluxDB, aunque ese historiador no sea un volumen administrado por este Compose.
+Un backup completo de esta aplicación debe contemplar PostgreSQL, archivos cargados, `.env` y
+certificados locales cuando corresponda. El Node-RED externo y sus otros usos requieren su propia
+política de backup, independiente de este checkout. La estrategia integral de planta también debe
+incluir la retención y el respaldo de InfluxDB, aunque ese historiador no sea un volumen administrado
+por este Compose.
 
 ## Orden de inicio
 
@@ -275,7 +296,8 @@ Al ejecutar `docker compose up -d --build`, Compose coordina aproximadamente est
 5. Inicia `disal-backend` cuando base, permisos y migraciones están listos.
 6. Inicia `disal-frontend`.
 7. Inicia `disal-nginx` cuando backend y frontend están iniciados.
-8. Inicia `disal-node-red` cuando el proxy está iniciado.
+8. En un entorno local, inicia `disal-node-red` cuando el proxy está iniciado. Este paso se omite en la
+   actualización productiva porque la fuente real está en otro Compose.
 
 Los pasos independientes pueden solaparse; la lista expresa las dependencias, no una serialización absoluta.
 
@@ -299,17 +321,17 @@ Los certificados y claves privadas no se versionan. La preparación de nombres, 
 
 ## Variables que conectan los servicios
 
-| Variable | Uso principal |
-| --- | --- |
-| `DATABASE_URL` | Conexión de backend y migrador con PostgreSQL. |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Inicialización y acceso a PostgreSQL. |
-| `JWT_SECRET`, `JWT_EXPIRES_IN` | Firma y duración de sesiones del backend. |
-| `CORS_ORIGIN` | Orígenes admitidos por la API. |
-| `NODE_RED_API_KEY` | Autenticación de Node-RED ante los endpoints de telemetría. |
-| `DISAL_ENABLE_WEIGHT_SIMULATOR` | Habilita explícitamente la generación local de pesos simulados. |
-| `VITE_API_BASE_URL` | URL base de API incorporada al compilar el frontend. |
-| `HTTP_PORT`, `HTTPS_PORT`, `POSTGRES_PORT`, `NODE_RED_PORT` | Puertos publicados en el host. |
-| `*_MEMORY_LIMIT`, `*_CPU_LIMIT` | Límites de recursos de los servicios permanentes configurados. |
+| Variable                                                    | Uso principal                                                   |
+| ----------------------------------------------------------- | --------------------------------------------------------------- |
+| `DATABASE_URL`                                              | Conexión de backend y migrador con PostgreSQL.                  |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`         | Inicialización y acceso a PostgreSQL.                           |
+| `JWT_SECRET`, `JWT_EXPIRES_IN`                              | Firma y duración de sesiones del backend.                       |
+| `CORS_ORIGIN`                                               | Orígenes admitidos por la API.                                  |
+| `NODE_RED_API_KEY`                                          | Autenticación de Node-RED ante los endpoints de telemetría.     |
+| `DISAL_ENABLE_WEIGHT_SIMULATOR`                             | Habilita explícitamente la generación local de pesos simulados. |
+| `VITE_API_BASE_URL`                                         | URL base de API incorporada al compilar el frontend.            |
+| `HTTP_PORT`, `HTTPS_PORT`, `POSTGRES_PORT`, `NODE_RED_PORT` | Puertos publicados en el host.                                  |
+| `*_MEMORY_LIMIT`, `*_CPU_LIMIT`                             | Límites de recursos de los servicios permanentes configurados.  |
 
 Los valores sensibles deben residir en `.env`, que está excluido de Git. No deben copiarse contraseñas, JWT, claves de integración ni certificados dentro de Compose o de este documento.
 
@@ -329,15 +351,19 @@ docker compose logs --tail 100 disal-db
 docker compose logs --tail 100 disal-migrate
 docker compose logs --tail 100 disal-backend
 docker compose logs --tail 100 disal-nginx
+# Sólo para desarrollo o simulación local:
 docker compose logs --tail 100 disal-node-red
 ```
 
 Interpretación esperada:
 
-- servicios permanentes: `Up`;
+- servicios productivos propios (`disal-db`, `disal-backend`, `disal-frontend` y `disal-nginx`): `Up`;
 - `disal-db` y `disal-backend`: `healthy` después del arranque;
 - `disal-uploads-init` y `disal-migrate`: `Exited (0)`;
 - API: respuesta HTTP 200 en `http://localhost:<HTTP_PORT>/api/auth/status`.
+
+El estado de `disal-node-red` no determina la salud del servidor productivo. La recepción desde el
+Node-RED externo se comprueba por separado y sin reiniciar su contenedor compartido.
 
 Para detener sin borrar datos:
 

@@ -24,6 +24,11 @@ mantenimiento aprobada.
 - No continuar después de un error de backup, build o migración. Conservar la evidencia y reportar el
   punto exacto de fallo.
 - Usar siempre el mismo conjunto de archivos Compose durante toda la intervención.
+- En el servidor productivo, la telemetría proviene de un Node-RED externo ubicado en otro Compose y
+  compartido con otros procesos. No detener, recrear, respaldar ni modificar ese contenedor completo
+  desde este procedimiento. Coordinar únicamente el flujo que envía datos a esta aplicación.
+- El servicio `disal-node-red` definido en este repositorio es local/demo y no forma parte del runtime
+  productivo actual. No iniciarlo como parte de una actualización del servidor.
 
 ## Datos que se deben solicitar o confirmar
 
@@ -34,7 +39,8 @@ Antes de comenzar deben estar definidos:
 - si el servidor usa HTTP o el overlay `docker-compose.https.yml`;
 - URL de comprobación accesible desde el servidor;
 - ventana de mantenimiento y responsable que valida el resultado;
-- existencia de integraciones Node-RED externas al Compose y forma aprobada de detenerlas;
+- ubicación lógica, responsable y forma aprobada de pausar sólo el flujo del Node-RED externo que
+  envía telemetría a esta aplicación, sin afectar sus otros usos;
 - ubicación de backups fuera del checkout y con permisos restringidos.
 
 Si falta alguno de estos datos y no puede obtenerse mediante una comprobación de sólo lectura, el
@@ -77,8 +83,8 @@ dc config --services | Set-Content "$DirectorioBackup/servicios-antes.txt"
 dc ps -a | Set-Content "$DirectorioBackup/contenedores-antes.txt"
 ```
 
-Si el estado Git no está limpio, no corregirlo automáticamente. En especial, respaldar y revisar
-`infra/node-red/data` antes de decidir cómo tratar sus cambios.
+Si el estado Git no está limpio, no corregirlo automáticamente. `infra/node-red/data` pertenece al
+servicio local/demo del repositorio y no debe confundirse con el runtime productivo externo.
 
 ## 2. Obtener y verificar la versión sin desplegarla
 
@@ -132,13 +138,12 @@ Get-FileHash "$DirectorioBackup/postgres.dump" -Algorithm SHA256 |
 
 El archivo debe tener tamaño mayor que cero y permanecer fuera del repositorio.
 
-### Configuración, Node-RED y certificados
+### Configuración y certificados
 
 Copiar sin imprimir el contenido:
 
 ```powershell
 Copy-Item .env "$DirectorioBackup/.env"
-Compress-Archive -Path infra/node-red/data -DestinationPath "$DirectorioBackup/node-red.zip"
 
 if (Test-Path infra/nginx/certs) {
   Compress-Archive -Path infra/nginx/certs -DestinationPath "$DirectorioBackup/nginx-certs.zip"
@@ -146,7 +151,19 @@ if (Test-Path infra/nginx/certs) {
 ```
 
 El directorio de backup contiene secretos y debe quedar protegido por permisos del sistema operativo.
-Si existe un Node-RED externo, respaldarlo mediante su procedimiento propio antes de continuar.
+
+### Node-RED externo de producción
+
+El Node-RED productivo no pertenece a este checkout ni a este Compose. Antes de continuar:
+
+1. Registrar el Compose/servicio externo y su responsable sin copiar credenciales al repositorio.
+2. Confirmar que ese servicio tiene su propio backup vigente.
+3. Exportar o respaldar el flujo específico que envía telemetría a DISAL mediante el procedimiento de
+   ese Node-RED.
+4. Acordar cómo pausar y reactivar únicamente ese flujo durante la ventana.
+
+No ejecutar `docker compose stop`, `down`, `up`, `pull` o `restart` sobre el Compose externo desde este
+runbook. Detener el contenedor completo podría afectar otros sistemas del servidor.
 
 ### Uploads
 
@@ -195,20 +212,23 @@ explícitamente después de guardar los logs; no continuar con producción.
 
 ## 5. Abrir la ventana y detener escrituras
 
-Confirmar que los usuarios fueron notificados. Detener los escritores administrados por este Compose,
-manteniendo PostgreSQL activo para la migración:
+Confirmar que los usuarios fueron notificados. Solicitar al responsable del Node-RED externo que pause
+únicamente el flujo que apunta a los endpoints de telemetría de esta aplicación. Después detener el
+backend, manteniendo PostgreSQL activo para el backup final y la migración:
 
 ```powershell
-dc stop disal-node-red disal-backend
+dc stop disal-backend
 ```
 
-Detener también cualquier Node-RED, PLC/SCADA o integrador externo mediante el procedimiento acordado.
-No basta con detener el Node-RED incluido si existen emisores externos.
+No detener `disal-node-red`: no es el emisor productivo y puede no estar iniciado. No detener el
+contenedor Node-RED externo completo. Si no existe una forma aprobada de pausar sólo el flujo dirigido a
+DISAL, registrar esa limitación y acordar con el responsable si se acepta la pérdida temporal de
+telemetría mientras el backend está detenido.
 
-Después de detener escrituras, repetir los backups de PostgreSQL, uploads y Node-RED si cualquiera pudo
-cambiar desde la copia preliminar. Validar el dump final con `pg_restore --list` y repetir el ensayo
-aislado de la sección anterior. Usar esas copias finales como punto oficial de recuperación. Registrar
-inventarios o conteos relevantes antes de migrar.
+Después de detener escrituras, repetir los backups de PostgreSQL y uploads si cualquiera pudo cambiar
+desde la copia preliminar. Validar el dump final con `pg_restore --list` y repetir el ensayo aislado de
+la sección anterior. Usar esas copias finales como punto oficial de recuperación. Registrar inventarios
+o conteos relevantes antes de migrar.
 
 ## 6. Cambiar al tag y validar configuración
 
@@ -236,8 +256,9 @@ dc build disal-backend disal-frontend disal-migrate
 if ($LASTEXITCODE -ne 0) { throw "Falló la construcción; no se aplicaron migraciones" }
 ```
 
-Si la versión modifica Nginx o Node-RED, confirmar también que sus imágenes y configuraciones se
-resuelvan correctamente antes de continuar.
+Si la versión modifica Nginx, confirmar que su imagen y configuración se resuelvan correctamente. Los
+cambios bajo `infra/node-red/` corresponden al entorno local/demo y no deben aplicarse automáticamente
+al Node-RED externo; cualquier adaptación de ese flujo requiere una intervención separada y autorizada.
 
 ## 8. Aplicar migraciones una sola vez
 
@@ -257,12 +278,10 @@ Preparar permisos del volumen y recrear únicamente los servicios permanentes af
 ```powershell
 dc run --rm --no-deps disal-uploads-init
 dc up -d --no-deps --force-recreate disal-backend disal-frontend disal-nginx
-dc up -d --no-deps --force-recreate disal-node-red
 ```
 
-Si Node-RED es externo o su runtime no debe recrearse, omitir la última línea y reactivarlo mediante su
-procedimiento propio. No ejecutar inmediatamente `dc up -d` sobre todo el stack: esa forma puede volver
-a crear el trabajo `disal-migrate`, aunque una segunda ejecución sea normalmente idempotente.
+No ejecutar `dc up -d` sobre todo el stack: además de poder volver a crear el trabajo `disal-migrate`,
+iniciaría el `disal-node-red` local/demo que no se utiliza en producción.
 
 ## 10. Verificación técnica
 
@@ -272,7 +291,6 @@ Esperar hasta que los servicios permanentes alcancen su estado esperado y compro
 dc ps -a
 dc logs --tail 100 disal-backend
 dc logs --tail 100 disal-nginx
-dc logs --tail 100 disal-node-red
 dc port disal-nginx 80
 dc port disal-nginx 443
 ```
@@ -280,10 +298,14 @@ dc port disal-nginx 443
 Resultado esperado:
 
 - `disal-db` y `disal-backend`: `healthy`;
-- `disal-frontend`, `disal-nginx` y el Node-RED administrado: `Up`;
+- `disal-frontend` y `disal-nginx`: `Up`;
 - `disal-uploads-init`: finalización correcta;
 - el `disal-migrate` ejecutado manualmente: código `0`, conservado en `migracion.log`;
 - ausencia de errores nuevos y repetidos en los logs.
+
+El estado de `disal-node-red` no forma parte de la aceptación productiva. Debe permanecer sin iniciar
+si no se usa para pruebas locales. Verificar el Node-RED externo mediante su propio procedimiento y sin
+alterar los demás flujos que aloja.
 
 Usar el puerto y protocolo obtenidos de Compose, sin asumir `80`, `443` o `8081`. Verificar desde el
 host:
@@ -313,7 +335,8 @@ Con una cuenta operativa obtenida del gestor seguro, sin escribir credenciales e
 3. Ejecutar las comprobaciones específicas de `RELEASE_NOTES_Vx.x.x.md`.
 4. Confirmar que los datos anteriores continúan visibles y que los conteos críticos coinciden con el
    inventario previo.
-5. Verificar recepción de telemetría sólo después de reactivar el integrador correspondiente.
+5. Solicitar la reactivación del flujo específico en el Node-RED externo y verificar que vuelva a
+   recibirse telemetría, sin reiniciar ni alterar sus demás flujos.
 6. Confirmar actualización de la PWA o hacer una recarga completa si la nota lo solicita.
 
 No crear OF/OE, finalizar lotes ni alterar producción real como smoke test sin autorización específica.
@@ -332,8 +355,8 @@ Registrar en un archivo de evidencia fuera del repositorio:
 - endpoints y pruebas funcionales verificadas;
 - incidentes, decisiones manuales y responsable que aceptó el resultado.
 
-Reactivar integraciones externas sólo después de las verificaciones. Comunicar el resultado y conservar
-el backup según la política de retención de la organización.
+Solicitar la reactivación del flujo externo sólo después de las verificaciones. Comunicar el resultado
+y conservar el backup según la política de retención de la organización.
 
 ## Rollback
 
@@ -347,14 +370,14 @@ $CommitAnterior = Get-Content "$DirectorioBackup/commit-anterior.txt"
 git switch --detach $CommitAnterior
 dc build disal-backend disal-frontend disal-migrate
 dc up -d --no-deps --force-recreate disal-backend disal-frontend disal-nginx
-dc up -d --no-deps --force-recreate disal-node-red
 ```
 
 ### Si la migración ya se ejecutó
 
 No iniciar código anterior contra el esquema nuevo suponiendo compatibilidad. Mantener escritores
 detenidos, volver al commit anterior, restaurar PostgreSQL desde el dump final comprobado, restaurar
-uploads/Node-RED si fueron modificados y reconstruir los servicios anteriores.
+uploads si fueron modificados y reconstruir los servicios anteriores. El Node-RED externo no se
+restaura desde este proyecto; su flujo dirigido a DISAL permanece pausado hasta completar el rollback.
 
 La restauración de producción es una acción destructiva y debe contar con autorización explícita del
 responsable. Si hubo escrituras posteriores al backup, detenerse y definir cómo conciliarlas antes de

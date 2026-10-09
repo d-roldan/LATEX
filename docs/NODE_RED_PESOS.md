@@ -1,5 +1,18 @@
 # Contrato de pesos Node-RED → DISAL multiplanta
 
+## Topología productiva actual
+
+En el servidor productivo, los datos llegan desde un Node-RED externo que se ejecuta en otro Compose.
+Ese Node-RED existe desde antes de este proyecto, aloja otros procesos y fue la integración a la que se
+adaptó DISAL. No debe detenerse, recrearse, actualizarse ni respaldarse como parte del despliegue de
+este repositorio.
+
+El servicio `disal-node-red` de `docker-compose.yml` y los archivos bajo `infra/node-red/` se conservan
+para simulación, desarrollo y referencia local. No constituyen la fuente productiva actual y no deben
+iniciarse automáticamente al actualizar el servidor. Una intervención sobre producción debe coordinar
+únicamente el flujo externo que envía a los endpoints documentados aquí, sin afectar los demás usos de
+ese Node-RED.
+
 ## Contrato vigente
 
 ```text
@@ -11,13 +24,28 @@ Content-Type: application/json
 `plantCode` admite `LATEX`, `LATEX_VIEJO`, `TERPLAST`, `SLURRY` o `SINTETICOS`. Enduido no tiene sensores. La credencial se guarda únicamente como SHA-256 en `PlantIntegration.keyHash`, está limitada a una planta/fuente y nunca se entrega al frontend. Una integración nueva queda deshabilitada hasta confirmar tags y habilitar `PlantIntegration.isActive`.
 
 ```json
-{"source":"NODE_RED_LATEX","readings":[{"scaleKey":"TK101","grossKg":18542.7,"measuredAt":"2026-09-08T14:32:10.000Z"}]}
+{
+  "source": "NODE_RED_LATEX",
+  "readings": [
+    {
+      "scaleKey": "TK101",
+      "grossKg": 18542.7,
+      "measuredAt": "2026-09-08T14:32:10.000Z"
+    }
+  ]
+}
 ```
 
 `grossKg` y `netKg` son números finitos en kg. `measuredAt`, si se envía, debe ser ISO-8601 válido. La API responde un resultado por lectura. El lote tiene aceptación parcial: una clave desconocida o no habilitada se informa `REJECTED`; una muestra igual o anterior a la vigente se informa `IGNORED_OLDER` y no reemplaza el valor actual.
 
 ```json
-{"accepted":1,"rejected":0,"ignored":0,"persisted":false,"results":[{"scaleKey":"TK101","status":"ACCEPTED"}]}
+{
+  "accepted": 1,
+  "rejected": 0,
+  "ignored": 0,
+  "persisted": false,
+  "results": [{ "scaleKey": "TK101", "status": "ACCEPTED" }]
+}
 ```
 
 El backend conserva en memoria sólo la última lectura de cada equipo. Tras reiniciarlo, el equipo aparece sin comunicación hasta recibir una lectura nueva; las fotografías tomadas al cambiar estados sí quedan en `TankStateHistory`. La señal continua de peso se almacena por separado en InfluxDB. `persisted: false` indica que este endpoint no escribe la solicitud en PostgreSQL ni en InfluxDB, no que el histórico de alta frecuencia sea exclusivamente volátil.
@@ -28,14 +56,14 @@ El backend conserva en memoria sólo la última lectura de cada equipo. Tras rei
 
 ## Mapa de integración
 
-| Planta | Equipo | `scaleKey` | Tag/variable origen | Unidad/transformación | Disponibilidad | Emisor/ruta |
-|---|---|---|---|---|---|---|
-| Látex | TK101–TK109 | TK101–TK109 | Flujo vigente; confirmar nombre de tag in situ | kg, sin transformación confirmada | Disponible | NODE_RED_LATEX → `/plants/LATEX/...` |
-| Látex Viejo | TANQUE 1–4 | LV01–LV04 | LV01–LV04 | kg, sin transformación confirmada | Disponible | NODE_RED_LATEX_VIEJO → `/plants/LATEX_VIEJO/...` |
-| Terplast | TANQUE 3 y TANQUE 4 (1.500 kg); TANQUE 5 y TANQUE 6 (8.000 kg) | Pendiente | Pendiente de relevamiento | Pendiente | Deshabilitada (`PENDING`) | NODE_RED_TERPLAST → `/plants/TERPLAST/...` |
-| Slurry | Dispersora 1–2 (provisorio) | Pendiente | Pendiente de relevamiento | Pendiente | Deshabilitada (`PENDING`) | NODE_RED_SLURRY → `/plants/SLURRY/...` |
-| Sintéticos | TANQUE 1–13 | SIN01–SIN13 | SIN01–SIN13 | kg, sin transformación confirmada | Disponible | NODE_RED_SINTETICOS → `/plants/SINTETICOS/...` |
-| Enduido | Equipo 1–2 (provisorio) | No aplica | No aplica | No aplica | Sensor no instalado | No aplica |
+| Planta      | Equipo                                                         | `scaleKey`  | Tag/variable origen                            | Unidad/transformación             | Disponibilidad            | Emisor/ruta                                      |
+| ----------- | -------------------------------------------------------------- | ----------- | ---------------------------------------------- | --------------------------------- | ------------------------- | ------------------------------------------------ |
+| Látex       | TK101–TK109                                                    | TK101–TK109 | Flujo vigente; confirmar nombre de tag in situ | kg, sin transformación confirmada | Disponible                | NODE_RED_LATEX → `/plants/LATEX/...`             |
+| Látex Viejo | TANQUE 1–4                                                     | LV01–LV04   | LV01–LV04                                      | kg, sin transformación confirmada | Disponible                | NODE_RED_LATEX_VIEJO → `/plants/LATEX_VIEJO/...` |
+| Terplast    | TANQUE 3 y TANQUE 4 (1.500 kg); TANQUE 5 y TANQUE 6 (8.000 kg) | Pendiente   | Pendiente de relevamiento                      | Pendiente                         | Deshabilitada (`PENDING`) | NODE_RED_TERPLAST → `/plants/TERPLAST/...`       |
+| Slurry      | Dispersora 1–2 (provisorio)                                    | Pendiente   | Pendiente de relevamiento                      | Pendiente                         | Deshabilitada (`PENDING`) | NODE_RED_SLURRY → `/plants/SLURRY/...`           |
+| Sintéticos  | TANQUE 1–13                                                    | SIN01–SIN13 | SIN01–SIN13                                    | kg, sin transformación confirmada | Disponible                | NODE_RED_SINTETICOS → `/plants/SINTETICOS/...`   |
+| Enduido     | Equipo 1–2 (provisorio)                                        | No aplica   | No aplica                                      | No aplica                         | Sensor no instalado       | No aplica                                        |
 
 Los nombres provisorios no son tags físicos. Antes de operar se deben confirmar códigos reales, actualizar `equipmentCode`/`scaleKey`, cambiar `telemetryMode` a `AUTOMATIC` y recién entonces habilitar la integración.
 
@@ -43,14 +71,14 @@ Los nombres provisorios no son tags físicos. Antes de operar se deben confirmar
 
 La instalación Docker local incluye la pestaña `Pesos multiplanta DISAL` en Node-RED. Con `DISAL_ENABLE_WEIGHT_SIMULATOR=true`, cada tres segundos envía lotes independientes por la ruta multiplanta. El valor predeterminado de Compose y del archivo de ejemplo es `false` para impedir que un despliegue nuevo active simuladores accidentalmente.
 
-| Planta | Fuente local | Claves simuladas | Resultado esperado |
-|---|---|---|---|
-| Látex | `NODE_RED_LATEX` | `TK101`–`TK109` | 9 lecturas aceptadas |
-| Látex Viejo | `NODE_RED_LATEX_VIEJO` | `LV01`–`LV04` | 4 lecturas aceptadas |
-| Terplast | `NODE_RED_TERPLAST_LOCAL` | `TERP01`–`TERP04` | 4 lecturas aceptadas |
-| Slurry | `NODE_RED_SLURRY_LOCAL` | `SLURRY01`–`SLURRY02` | 2 lecturas aceptadas |
-| Sintéticos | `NODE_RED_SINTETICOS` | `SIN01`–`SIN13` | 13 lecturas aceptadas |
-| Enduido | No aplica | No aplica | No se hace POST; conserva `NOT_INSTALLED` |
+| Planta      | Fuente local              | Claves simuladas      | Resultado esperado                        |
+| ----------- | ------------------------- | --------------------- | ----------------------------------------- |
+| Látex       | `NODE_RED_LATEX`          | `TK101`–`TK109`       | 9 lecturas aceptadas                      |
+| Látex Viejo | `NODE_RED_LATEX_VIEJO`    | `LV01`–`LV04`         | 4 lecturas aceptadas                      |
+| Terplast    | `NODE_RED_TERPLAST_LOCAL` | `TERP01`–`TERP04`     | 4 lecturas aceptadas                      |
+| Slurry      | `NODE_RED_SLURRY_LOCAL`   | `SLURRY01`–`SLURRY02` | 2 lecturas aceptadas                      |
+| Sintéticos  | `NODE_RED_SINTETICOS`     | `SIN01`–`SIN13`       | 13 lecturas aceptadas                     |
+| Enduido     | No aplica                 | No aplica             | No se hace POST; conserva `NOT_INSTALLED` |
 
 Correspondencia local Terplast: `TERP01` → TANQUE 3 (1.500 kg), `TERP02` → TANQUE 4 (1.500 kg), `TERP03` → TANQUE 5 (8.000 kg), `TERP04` → TANQUE 6 (8.000 kg). Las claves de integración e IDs se conservan; los nombres y capacidades fueron confirmados el 9 de septiembre de 2026. Los tags físicos siguen pendientes.
 
