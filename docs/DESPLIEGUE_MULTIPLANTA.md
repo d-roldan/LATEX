@@ -1,5 +1,9 @@
 # Instalación, actualización y recuperación multiplanta
 
+Para ejecutar una actualización concreta sobre un servidor existente, seguir el runbook
+[Actualización controlada del servidor](ACTUALIZACION_SERVIDOR.md). Este documento conserva los
+criterios generales de instalación, persistencia, baseline y recuperación.
+
 ## Datos persistentes
 
 Compose usa `postgres_data` para PostgreSQL y `uploads_data` para adjuntos. En el host de desarrollo inspeccionado el 8/9/2026, los nombres resueltos son `planta-latex_postgres_data` y `planta-latex_uploads_data`; PostgreSQL estaba montado sobre el primero. Node-RED usa el bind mount `infra/node-red/data`; sus credenciales y flujos runtime deben respaldarse por separado y no reemplazarse con un checkout. En cualquier otro host se deben volver a obtener los nombres con `docker volume ls` y `docker volume inspect`; no cambiar uno sin copiar y verificar los datos.

@@ -84,6 +84,9 @@ Si la herramienta de la sesión no expone roles personalizados, leer el TOML per
 
 - Ejecutar comandos desde la raíz del repositorio o el directorio de trabajo indicado; adaptar ejemplos de shell a PowerShell.
 - Consultar los scripts actuales de cada `package.json` antes de ejecutarlos. Distinguir comprobaciones de comandos que modifican archivos o datos.
-- Para despliegues y migraciones, leer `docs/DESPLIEGUE_MULTIPLANTA.md`. No aplicar seeds o resets como requisito de una validación.
+- Para actualizar un servidor existente, leer primero `docs/ACTUALIZACION_SERVIDOR.md` y después
+  `docs/DESPLIEGUE_MULTIPLANTA.md`. Para instalaciones nuevas, recuperación o criterios generales de
+  persistencia, leer `docs/DESPLIEGUE_MULTIPLANTA.md`. No aplicar seeds o resets como requisito de una
+  validación.
 - Reportar qué se verificó y qué quedó pendiente. Las notas de versiones anteriores no prueban que la versión actual haya pasado pruebas.
 - Mantener secretos, bases de datos, backups y artefactos generados fuera de Git.

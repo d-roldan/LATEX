@@ -21,6 +21,8 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [Contrato de pesos con Node-RED](NODE_RED_PESOS.md): formato y comportamiento de la telemetría actual.
 - [Matriz PLC / SCADA / Node-RED / InfluxDB](MATRIZ_INTEGRACION_INDUSTRIAL.md): responsabilidades, inbox idempotente y relevamiento pendiente por señal.
 - [Despliegue multiplanta](DESPLIEGUE_MULTIPLANTA.md): instalación vacía, baseline, actualización, backups y recuperación.
+- [Actualización controlada del servidor](ACTUALIZACION_SERVIDOR.md): runbook para seleccionar un tag,
+  respaldar, migrar, verificar y aplicar rollback en una instalación existente.
 - [Arquitectura de contenedores](ARQUITECTURA_CONTENEDORES.md): función, tecnología, comunicación, puertos, persistencia y operación de cada servicio Docker.
 - [Consultas históricas](CONSULTAS_HISTORICAS.md): ejemplos de consulta sobre PostgreSQL.
 - [PWA](PWA.md): instalación y comportamiento sin conexión.
