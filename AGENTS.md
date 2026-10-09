@@ -11,6 +11,27 @@ Responder en español. Este repositorio contiene la aplicación industrial multi
 
 Conservar esta distinción en futuras tareas. Si el usuario pide publicar en ambos, subir el mismo commit a cada destino y verificar ambas ramas remotas. Si especifica uno, usar sólo ese destino. No confundir las credenciales o cuentas ni hacer push forzado para resolver divergencias.
 
+## Publicación de versiones y notas en tags
+
+Cuando se publique una versión, la nota completa es parte obligatoria del tag y no sólo un archivo
+del repositorio:
+
+1. Crear `docs/releases/RELEASE_NOTES_Vx.x.x.md` siguiendo la convención del historial y actualizar
+   `docs/releases/README.md` y la versión vigente de `docs/README.md`.
+2. Incluir la nota y los índices actualizados en el mismo commit de la versión.
+3. Crear siempre un tag anotado usando el archivo completo como mensaje y conservando literalmente
+   los encabezados Markdown:
+   `git tag -a Vx.x.x --cleanup=verbatim -F docs/releases/RELEASE_NOTES_Vx.x.x.md`.
+4. No usar un mensaje abreviado con `git tag -m` como reemplazo de la nota. El título, resumen,
+   cambios, migraciones, actualización y verificaciones deben quedar visibles en la anotación.
+5. Antes de subir, comparar el contenido del tag con el archivo Markdown y confirmar que no se haya
+   reducido a una sola línea.
+6. Publicar la rama y el mismo tag en los remotos solicitados, y verificar que ambos apunten al mismo
+   commit. No reescribir un tag ya publicado salvo pedido explícito del usuario para corregirlo.
+
+Si la plataforma utiliza además objetos GitHub Release, copiar allí la misma nota completa; el tag,
+el archivo Markdown y la descripción de la release no deben contradecirse.
+
 ## Skills del proyecto
 
 Las skills están en `.agents/skills/`. Antes de trabajar en un área de la tabla, leer su `SKILL.md` y aplicar las instrucciones pertinentes sin que el usuario deba invocarla por nombre. Leer sólo las skills relevantes; una tarea de documentación o Git no exige ejecutar todas las validaciones.

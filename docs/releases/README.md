@@ -35,3 +35,7 @@ Los tags `V0.0.21` y `V0.0.25` existen en Git, pero no tienen una nota Markdown 
 - Cada nota debe enlazar nuevamente a este índice.
 - El índice de `docs/` mantiene sólo el acceso al historial completo y a la versión vigente.
 - La nota debe distinguir funcionalidad incorporada, migraciones, verificación y consideraciones de actualización.
+- El tag anotado debe usar el contenido completo de la nota mediante
+  `git tag -a Vx.x.x --cleanup=verbatim -F docs/releases/RELEASE_NOTES_Vx.x.x.md`; un título
+  resumido no reemplaza la nota del tag. `--cleanup=verbatim` es obligatorio para que Git no elimine
+  los encabezados Markdown que comienzan con `#`.
