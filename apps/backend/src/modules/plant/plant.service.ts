@@ -41,7 +41,7 @@ type Telemetry = { grossKg: number; netKg?: number; measuredAt: string; received
 type PackagingSpeed = { containersPerMinute: number; measuredAt: string; receivedAt: string };
 
 // Margen para emisores Node-RED con un pulso de lectura cada 10 segundos.
-const WEIGHT_SIGNAL_TIMEOUT_MS = 30_000;
+const WEIGHT_SIGNAL_TIMEOUT_MS = 60_000;
 
 const LINES = ['A', 'B'];
 const FORMATS = ['1 L', '4 L', '10 L', '20 L'];
