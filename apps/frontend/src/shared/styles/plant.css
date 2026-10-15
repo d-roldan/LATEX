@@ -3510,6 +3510,12 @@ body {
 :root[data-theme='light'] .tank-card dd {
   color: #005f91;
 }
+:root[data-theme='light'] .plant-tv .tank-card--tv-featured dd {
+  color: #07324d;
+}
+:root[data-theme='light'] .plant-tv .tank-card--tv-featured .tank-elapsed dd {
+  color: #5a3700;
+}
 :root[data-theme='light'] .tank-card dl .tank-adjustment-list {
   border-color: #788b9b;
   background: #f7fafc;
@@ -4642,8 +4648,13 @@ body {
 /* El tanque que se envasa usa el alto completo de su tarjeta para sus datos. */
 @media (min-width: 1100px) and (min-height: 650px) {
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-card__content {
-    padding: clamp(0.65rem, 1.2vh, 1.5rem) clamp(4.25rem, 5.2vw, 6rem) clamp(0.65rem, 1.2vh, 1.5rem)
+    padding: clamp(0.65rem, 1.2vh, 1.5rem) clamp(1rem, 1.6vw, 1.75rem) clamp(0.65rem, 1.2vh, 1.5rem)
       clamp(1rem, 1.6vw, 1.75rem);
+  }
+  .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-state,
+  .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-weight,
+  .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-card__content > small {
+    margin-right: clamp(4.25rem, 5.2vw, 6rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured h2 {
     font-size: clamp(1.7rem, min(2.5vw, 4.5vh), 3rem);
@@ -4696,21 +4707,21 @@ body {
     -webkit-line-clamp: 2;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dt {
-    font-size: clamp(0.85rem, min(1.25vw, 2.3vh), 1.4rem);
+    font-size: clamp(0.9rem, min(1.4vw, 2.5vh), 1.6rem);
     line-height: 1.15;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dd,
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl .tank-description dd {
-    font-size: clamp(1rem, min(1.8vw, 2.7vh), 2.2rem);
+    font-size: clamp(1.05rem, min(2vw, 3vh), 2.3rem);
     line-height: 1.15;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-gauge {
-    top: 5.5rem;
+    top: 1.2rem;
     right: 1.35rem;
-    height: clamp(7rem, 14vh, 11rem);
+    height: clamp(6rem, 11vh, 8rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-capacity {
-    top: clamp(13rem, 23vh, 18rem);
+    top: calc(1.2rem + clamp(6rem, 11vh, 8rem) + 0.5rem);
     right: 0.65rem;
     font-size: 0.75rem;
   }
@@ -4744,7 +4755,7 @@ body {
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card.has-packaging.tank-card--tv-featured
     dt {
-    font-size: clamp(0.85rem, min(1.25vw, 2.3vh), 1.5rem);
+    font-size: clamp(0.9rem, min(1.4vw, 2.5vh), 1.6rem);
     line-height: 1.15;
   }
   .plant-tv
@@ -4757,7 +4768,7 @@ body {
     dl
     .tank-description
     dd {
-    font-size: clamp(1rem, min(1.8vw, 2.7vh), 2.25rem);
+    font-size: clamp(1.05rem, min(2vw, 3vh), 2.3rem);
     line-height: 1.15;
   }
 }

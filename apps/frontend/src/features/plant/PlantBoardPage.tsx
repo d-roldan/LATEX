@@ -160,6 +160,12 @@ const equipmentCountByPlant: Record<string, number> = {
   SINTETICOS: 13
 };
 
+function formatPackagingSpeed(value: number) {
+  // El contrato admite tres decimales: se descarta el tercero sin redondear.
+  const truncated = Number(value.toFixed(3).slice(0, -1));
+  return `${truncated.toLocaleString('es-AR', { maximumFractionDigits: 2 })} Env/min`;
+}
+
 const emptyForm = {
   planningCardId: '',
   manufacturingOrder: '',
@@ -790,7 +796,7 @@ export function PlantBoardPage({
                           <dd>
                             {tank.packagingSpeed?.online &&
                             tank.packagingSpeed.containersPerMinute !== null
-                              ? `${tank.packagingSpeed.containersPerMinute.toLocaleString('es-AR', { maximumFractionDigits: 3 })} envases/min`
+                              ? formatPackagingSpeed(tank.packagingSpeed.containersPerMinute)
                               : 'Sin señal'}
                           </dd>
                         </div>

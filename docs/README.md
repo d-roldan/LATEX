@@ -40,7 +40,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.37](releases/RELEASE_NOTES_V0.0.37.md): velocidad Devree, filtros en la pizarra, pantallas TV por sector y perfiles de InfluxDB por planta.
+- [Versión vigente · V0.0.38](releases/RELEASE_NOTES_V0.0.38.md): mejor distribución y contraste del tanque destacado en TV, con velocidad en Env/min truncada a dos decimales.
 
 ## Criterio de actualización
 
