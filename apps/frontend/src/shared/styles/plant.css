@@ -2310,15 +2310,6 @@ body {
   background: #0e141a;
   text-align: center;
 }
-.plant-clock__icon {
-  color: #68a1ff;
-}
-.plant-clock__label {
-  margin-top: 0.2rem;
-  color: #78a7ff;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-}
 .plant-clock__time {
   display: flex;
   max-width: 100%;
@@ -2349,12 +2340,6 @@ body {
   font-size: clamp(0.72rem, 0.8vw, 0.84rem);
   line-height: 1.25;
   text-transform: capitalize;
-}
-.plant-clock em {
-  margin-top: 0.3rem;
-  color: #728293;
-  font-size: 0.72rem;
-  font-style: normal;
 }
 .tank-card.skeleton {
   animation: pulse 1.4s infinite;
@@ -4080,9 +4065,6 @@ body {
   .plant-tv .plant-clock small {
     font-size: 0.64rem;
   }
-  .plant-tv .plant-clock em {
-    font-size: 0.58rem;
-  }
 }
 
 /* Full HD: 9 tanques + reloj ocupan exactamente una grilla 5×2 dentro
@@ -4347,7 +4329,7 @@ body {
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card:not(.tank-card--tv-featured)
     h2 {
-    font-size: clamp(0.95rem, 1.1vw, 1.3rem);
+    font-size: clamp(0.9rem, min(1.1vw, 2.3vh), 1.3rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
@@ -4356,7 +4338,7 @@ body {
     width: 100%;
     margin: 0.15rem 0 0;
     padding: 0.25rem 0.4rem;
-    font-size: clamp(0.78rem, 0.95vw, 1.15rem);
+    font-size: clamp(0.75rem, min(0.95vw, 2vh), 1.15rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
@@ -4364,7 +4346,7 @@ body {
     .tank-weight {
     width: 100%;
     margin: 0.1rem 0 0;
-    font-size: clamp(1.85rem, 2.45vw, 3rem);
+    font-size: clamp(1.5rem, min(2.45vw, 4.5vh), 3rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
@@ -4373,7 +4355,7 @@ body {
     > small {
     width: 100%;
     margin: 0;
-    font-size: clamp(0.72rem, 0.85vw, 1rem);
+    font-size: clamp(0.7rem, min(0.85vw, 1.6vh), 1rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
@@ -4423,33 +4405,33 @@ body {
 
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     .tank-card__content {
     justify-content: space-evenly;
     padding: clamp(0.7rem, 1.2vh, 1rem) clamp(0.6rem, 0.9vw, 1rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     h2 {
     font-size: clamp(1.3rem, 1.5vw, 1.85rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     .tank-state {
     padding: 0.4rem 0.5rem;
     font-size: clamp(1rem, 1.1vw, 1.4rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     .tank-weight {
     font-size: clamp(2.5rem, 3.1vw, 4rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     dl {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4457,7 +4439,7 @@ body {
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     dl
     div {
     min-width: 0;
@@ -4472,20 +4454,20 @@ body {
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     dl
     div:first-child {
     grid-column: 1 / -1;
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     dt {
     font-size: clamp(0.8rem, 0.95vw, 1.1rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(n + 8)
+    .tank-card:not(.tank-card--tv-featured):nth-child(8)
     dd {
     font-size: clamp(1rem, 1.25vw, 1.5rem);
   }
@@ -4556,7 +4538,9 @@ body {
 }
 
 @media (min-width: 1100px) and (min-height: 650px) {
-  .plant-tv .plant-page--tv-packaging-active .tank-grid {
+  .plant-tv .plant-page--monitoreo.plant-page--tv-packaging-active .tank-grid {
+    min-height: 0;
+    flex: 1 1 auto;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     grid-template-rows: repeat(4, minmax(0, 1fr));
   }
@@ -4565,10 +4549,10 @@ body {
     grid-row: 1 / span 4;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured):nth-child(2) {
-    grid-area: 3 / 3;
+    grid-area: 1 / 3 / span 2;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured):nth-child(3) {
-    grid-area: 4 / 3;
+    grid-area: 3 / 3 / span 2;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured):nth-child(4) {
     grid-area: 1 / 4;
@@ -4586,10 +4570,12 @@ body {
     grid-area: 3 / 4 / span 2;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured):nth-child(9) {
-    grid-area: 3 / 5 / span 2;
+    grid-area: 3 / 5;
   }
   .plant-tv .plant-page--tv-packaging-active .plant-clock {
-    grid-area: 1 / 3 / span 2;
+    grid-area: 4 / 5;
+    height: 100%;
+    align-content: space-evenly;
   }
   .plant-tv
     .plant-page--tv-packaging-active
@@ -4656,34 +4642,34 @@ body {
 /* El tanque que se envasa usa el alto completo de su tarjeta para sus datos. */
 @media (min-width: 1100px) and (min-height: 650px) {
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-card__content {
-    padding: clamp(1rem, 1.5vw, 1.75rem) clamp(4.25rem, 5.2vw, 6rem) clamp(1rem, 1.5vw, 1.75rem)
+    padding: clamp(0.65rem, 1.2vh, 1.5rem) clamp(4.25rem, 5.2vw, 6rem) clamp(0.65rem, 1.2vh, 1.5rem)
       clamp(1rem, 1.6vw, 1.75rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured h2 {
-    font-size: clamp(2rem, 2.5vw, 3rem);
+    font-size: clamp(1.7rem, min(2.5vw, 4.5vh), 3rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-state {
-    margin-top: clamp(0.65rem, 1.1vh, 1rem);
-    padding: 0.55rem 0.8rem;
-    font-size: clamp(1.1rem, 1.5vw, 1.7rem);
+    margin-top: clamp(0.3rem, 0.75vh, 0.8rem);
+    padding: clamp(0.25rem, 0.5vh, 0.55rem) 0.8rem;
+    font-size: clamp(1rem, min(1.5vw, 2.5vh), 1.7rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-weight {
-    margin-top: clamp(0.75rem, 1.3vh, 1.2rem);
-    font-size: clamp(4rem, 5.3vw, 6.5rem);
+    margin-top: clamp(0.35rem, 0.8vh, 0.9rem);
+    font-size: clamp(3.4rem, min(5.3vw, 9vh), 6.5rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-card__content > small {
-    margin-top: 0.25rem;
-    font-size: clamp(0.95rem, 1.1vw, 1.25rem);
+    margin-top: 0.15rem;
+    font-size: clamp(0.8rem, min(1.1vw, 1.8vh), 1.25rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl {
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(5, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr)) minmax(0, 1.65fr) repeat(2, minmax(0, 1fr));
     align-content: stretch;
-    gap: clamp(0.35rem, 0.7vh, 0.75rem);
-    margin-top: clamp(0.75rem, 1.3vh, 1.25rem);
+    gap: clamp(0.2rem, 0.5vh, 0.65rem);
+    margin-top: clamp(0.35rem, 0.8vh, 0.8rem);
     padding-top: 0;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl div {
@@ -4692,8 +4678,8 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: flex-start;
-    gap: clamp(0.15rem, 0.35vh, 0.4rem);
-    padding: clamp(0.3rem, 0.55vh, 0.7rem) clamp(0.45rem, 0.7vw, 0.85rem);
+    gap: clamp(0.1rem, 0.2vh, 0.3rem);
+    padding: clamp(0.2rem, 0.35vh, 0.5rem) clamp(0.45rem, 0.7vw, 0.85rem);
     border: 1px solid color-mix(in srgb, var(--state) 48%, transparent);
     border-radius: 0.55rem;
     background: color-mix(in srgb, var(--state) 11%, transparent);
@@ -4701,13 +4687,21 @@ body {
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl .tank-description {
     grid-column: 1 / -1;
   }
+  .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-description dd {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dt {
-    font-size: clamp(0.9rem, min(1.25vw, 2.2vh), 1.4rem);
+    font-size: clamp(0.85rem, min(1.25vw, 2.3vh), 1.4rem);
     line-height: 1.15;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dd,
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl .tank-description dd {
-    font-size: clamp(1.25rem, min(1.8vw, 3vh), 2.2rem);
+    font-size: clamp(1rem, min(1.8vw, 2.7vh), 2.2rem);
     line-height: 1.15;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-gauge {
@@ -4727,30 +4721,30 @@ body {
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card.has-packaging.tank-card--tv-featured
     .tank-state {
-    margin-top: 0.75rem;
-    padding-block: 0.6rem;
-    font-size: clamp(1.5rem, 1.6vw, 2.1rem);
+    margin-top: clamp(0.3rem, 0.75vh, 0.75rem);
+    padding-block: clamp(0.25rem, 0.5vh, 0.6rem);
+    font-size: clamp(1rem, min(1.6vw, 2.5vh), 2.1rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card.has-packaging.tank-card--tv-featured
     .tank-weight {
-    margin-top: 0.75rem;
-    font-size: clamp(5rem, 5.5vw, 7.5rem);
+    margin-top: clamp(0.35rem, 0.8vh, 0.75rem);
+    font-size: clamp(3.5rem, min(5.5vw, 9vh), 7.5rem);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card.has-packaging.tank-card--tv-featured
     dl {
-    gap: clamp(0.4rem, 0.7vh, 0.8rem);
-    margin-top: 1rem;
+    gap: clamp(0.2rem, 0.5vh, 0.7rem);
+    margin-top: clamp(0.35rem, 0.8vh, 0.8rem);
     padding-top: 0;
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card.has-packaging.tank-card--tv-featured
     dt {
-    font-size: clamp(1.1rem, 1.25vw, 1.5rem);
+    font-size: clamp(0.85rem, min(1.25vw, 2.3vh), 1.5rem);
     line-height: 1.15;
   }
   .plant-tv
@@ -4763,7 +4757,7 @@ body {
     dl
     .tank-description
     dd {
-    font-size: clamp(1.6rem, 1.8vw, 2.25rem);
+    font-size: clamp(1rem, min(1.8vw, 2.7vh), 2.25rem);
     line-height: 1.15;
   }
 }

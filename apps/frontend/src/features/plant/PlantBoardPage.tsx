@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Clock3, Radio, RefreshCw, WifiOff } from 'lucide-react';
+import { AlertTriangle, Radio, RefreshCw, WifiOff } from 'lucide-react';
 import { api } from '../../shared/api/http';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
@@ -926,9 +926,7 @@ export function PlantBoardPage({
               );
             })}
         {tvSector !== 'laboratorio' ? (
-          <article className="plant-clock">
-            <Clock3 className="plant-clock__icon" size={20} />
-            <strong className="plant-clock__label">Reloj</strong>
+          <article className="plant-clock" aria-label="Hora actual">
             <div className="plant-clock__time">
               <span>
                 {clockHours}:{clockMinutes}
@@ -936,7 +934,6 @@ export function PlantBoardPage({
               <b>{clockSeconds}</b>
             </div>
             <small>{dateFormatter.format(now)}</small>
-            <em>America/Buenos_Aires</em>
           </article>
         ) : null}
       </section>
