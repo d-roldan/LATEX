@@ -54,6 +54,40 @@ El backend conserva en memoria sólo la última lectura de cada equipo. Tras rei
 
 `POST /api/plant/telemetry/weights` con `NODE_RED_API_KEY` continúa disponible exclusivamente para Látex. No acepta otro código de planta. Se puede retirar cuando todos los emisores de Látex usen la ruta nueva y se haya observado un ciclo operativo completo sin cruces.
 
+## Velocidad de envasado de LATEX
+
+Para enviar peso y velocidad en **una sola solicitud**, agregar `speeds` al mensaje actual de pesos de LATEX. Se mantiene `readings` con los pesos, la misma ruta `POST /api/plants/LATEX/telemetry/weights` y los encabezados `X-Node-Red-Key` y `Content-Type: application/json`:
+
+```json
+{
+  "source": "NODE_RED_LATEX",
+  "readings": [
+    { "scaleKey": "TK101", "grossKg": 18542.7 }
+  ],
+  "speeds": [
+    { "line": "DEVREE", "containersPerMinute": 42 }
+  ]
+}
+```
+
+Devree es una sola línea de envasado: enviar **una única lectura** con `line: "DEVREE"`. Las letras A/B de la aplicación identifican opciones de la OE y dosificadoras, no dos máquinas cuya velocidad deba duplicarse. `speeds` es opcional. La respuesta conserva el resultado de los pesos y, si se incluyó `speeds`, agrega `speeds.accepted`, `speeds.ignored` y `speeds.results` con el resultado de Devree. El endpoint legado `POST /api/plant/telemetry/weights` también acepta este campo con `NODE_RED_API_KEY`. Sólo LATEX acepta velocidades; las demás plantas deben continuar enviando únicamente pesos.
+Si se omite `measuredAt`, el backend usa la hora de recepción. Si Node-RED lo envía, debe ser la hora real de esa lectura en ISO-8601; una velocidad anterior a la última aceptada se ignora.
+
+La máquina también puede enviar la velocidad por separado del peso. La ruta con integración por planta es `POST /api/plants/LATEX/telemetry/speeds`; también está disponible `POST /api/plant/telemetry/speeds` con `NODE_RED_API_KEY` para el emisor legado. Ambas usan `X-Node-Red-Key` como el mensaje de peso. La primera exige una integración activa de LATEX y, si se informa `source`, que coincida con su fuente. Las demás plantas no aceptan velocidades por esta ruta.
+
+```json
+{
+  "source": "NODE_RED_LATEX",
+  "readings": [
+    { "line": "DEVREE", "containersPerMinute": 42 }
+  ]
+}
+```
+
+`line` debe ser `DEVREE` para el emisor actual; `A` y `B` siguen aceptándose sólo por compatibilidad con emisores anteriores. `containersPerMinute` es un número entre 0 y 10000, con hasta tres decimales. Cero representa la máquina detenida. `measuredAt` es ISO-8601 opcional; una lectura con marca igual o anterior a la última aceptada se ignora. La respuesta incluye `accepted`, `ignored`, `receivedAt`, `persisted: false` y un resultado por lectura. El backend sólo conserva la última lectura en memoria y la considera sin señal después de 30 segundos.
+
+El cartel del tanque muestra **VELOCIDAD** en envases/min únicamente cuando LATEX está `ENVASANDO`, hay una OE activa y la lectura de Devree es posterior al inicio de esa OE. Si no llegó una lectura reciente, muestra «Sin señal». La velocidad no se guarda como peso ni se agrega al histórico de InfluxDB mediante este endpoint.
+
 ## Mapa de integración
 
 | Planta      | Equipo                                                         | `scaleKey`  | Tag/variable origen                            | Unidad/transformación             | Disponibilidad            | Emisor/ruta                                      |

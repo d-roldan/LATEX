@@ -72,28 +72,16 @@
   padding: 0.75rem 0.75rem 0;
 }
 
-.packaging-hook-check {
-  display: inline-grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid var(--border);
-  border-radius: 0.55rem;
-  background: var(--panel-soft);
-}
-
-.packaging-hook-check input {
-  width: 1.05rem;
-  height: 1.05rem;
-  accent-color: #16a34a;
-  cursor: pointer;
-}
-
 .packaging-card__notes {
   padding-top: 0.45rem;
   border-top: 1px dashed var(--border);
   color: var(--ink-soft);
   font-size: 0.8rem;
+}
+
+.planning-card > .packaging-card__filter {
+  color: var(--primary);
+  font-weight: 750;
 }
 
 .planning-column {

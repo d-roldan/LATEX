@@ -17,6 +17,7 @@ import { Dialog } from '../../shared/ui/Dialog';
 import { Textarea } from '../../shared/ui/Input';
 
 type Dispenser = 'A' | 'B';
+type PackagingPlanningFilter = '1' | '2' | '3' | '4' | '5' | 'RECIRCULACION';
 
 interface PackagingOrderSummary {
   packagingOrder: string;
@@ -44,7 +45,7 @@ interface PackagingPlanningCard {
   id: string;
   dispenser: Dispenser;
   position: number;
-  hooked: boolean;
+  filter: PackagingPlanningFilter | null;
   notes: string;
   updatedAt: string;
   tank: PackagingTank;
@@ -53,6 +54,7 @@ interface PackagingPlanningCard {
 interface PackagingPlanningBoardData {
   plant: { id: string; code: string; name: string };
   dispensers: Dispenser[];
+  filters: PackagingPlanningFilter[];
   tanks: PackagingTank[];
   cards: PackagingPlanningCard[];
 }
@@ -60,7 +62,12 @@ interface PackagingPlanningBoardData {
 interface PackagingForm {
   tankId: string;
   dispenser: Dispenser;
+  filter: PackagingPlanningFilter;
   notes: string;
+}
+
+function filterLabel(filter: PackagingPlanningFilter) {
+  return filter === 'RECIRCULACION' ? 'Filtro de recirculación' : `Filtro ${filter}`;
 }
 
 function apiError(error: unknown) {
@@ -75,7 +82,12 @@ function apiError(error: unknown) {
 
 export function PackagingPlanningBoard() {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<PackagingForm>({ tankId: '', dispenser: 'A', notes: '' });
+  const [form, setForm] = useState<PackagingForm>({
+    tankId: '',
+    dispenser: 'A',
+    filter: '1',
+    notes: ''
+  });
   const [editing, setEditing] = useState<PackagingPlanningCard | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteCard, setDeleteCard] = useState<PackagingPlanningCard | null>(null);
@@ -115,7 +127,9 @@ export function PackagingPlanningBoard() {
         .map((card) => card.tank.id)
     );
     return (board.data?.tanks ?? []).filter(
-      (tank) => tank.state !== 'ENVASANDO' && !plannedTankIds.has(tank.id)
+      (tank) =>
+        !['ENVASANDO', 'VACIO', 'FUERA_DE_SERVICIO'].includes(tank.state) &&
+        !plannedTankIds.has(tank.id)
     );
   }, [board.data?.cards, board.data?.tanks, editing?.id]);
 
@@ -124,7 +138,7 @@ export function PackagingPlanningBoard() {
       if (editing) {
         await api.patch(`/plants/LATEX/packaging-planning-cards/${editing.id}`, {
           tankId: form.tankId,
-          hooked: editing.hooked,
+          filter: form.filter,
           notes: form.notes
         });
       } else {
@@ -165,26 +179,21 @@ export function PackagingPlanningBoard() {
     }
   });
 
-  const toggleHooked = useMutation({
-    mutationFn: async (card: PackagingPlanningCard) =>
-      api.patch(`/plants/LATEX/packaging-planning-cards/${card.id}`, {
-        tankId: card.tank.id,
-        hooked: !card.hooked,
-        notes: card.notes
-      }),
-    onSuccess: refresh
-  });
-
   const openCreate = (dispenser: Dispenser) => {
     setEditing(null);
-    setForm({ tankId: '', dispenser, notes: '' });
+    setForm({ tankId: '', dispenser, filter: board.data?.filters[0] ?? '1', notes: '' });
     setMessage(null);
     setDialogOpen(true);
   };
 
   const openEdit = (card: PackagingPlanningCard) => {
     setEditing(card);
-    setForm({ tankId: card.tank.id, dispenser: card.dispenser, notes: card.notes });
+    setForm({
+      tankId: card.tank.id,
+      dispenser: card.dispenser,
+      filter: card.filter ?? board.data?.filters[0] ?? '1',
+      notes: card.notes
+    });
     setMessage(null);
     setDialogOpen(true);
   };
@@ -208,9 +217,7 @@ export function PackagingPlanningBoard() {
   return (
     <>
       {message ? <Alert variant="success">{message}</Alert> : null}
-      {move.isError || toggleHooked.isError ? (
-        <Alert variant="danger">{apiError(move.error ?? toggleHooked.error)}</Alert>
-      ) : null}
+      {move.isError ? <Alert variant="danger">{apiError(move.error)}</Alert> : null}
 
       <div className="packaging-board" aria-label="Planificación de envasado Devree">
         {(['A', 'B'] as const).map((dispenser) => {
@@ -275,15 +282,6 @@ export function PackagingPlanningBoard() {
                         <GripVertical size={16} /> {card.position + 1}° posición
                       </span>
                       <div className="planning-card__actions">
-                        <label className="packaging-hook-check">
-                          <input
-                            type="checkbox"
-                            checked={card.hooked}
-                            disabled={toggleHooked.isPending}
-                            onChange={() => toggleHooked.mutate(card)}
-                            aria-label={`${card.hooked ? 'Desmarcar' : 'Marcar'} ${card.tank.name} como enganchado`}
-                          />
-                        </label>
                         <button
                           onClick={() => openEdit(card)}
                           aria-label={`Editar ${card.tank.name}`}
@@ -309,6 +307,11 @@ export function PackagingPlanningBoard() {
                       </>
                     ) : (
                       <span>Sin lote activo</span>
+                    )}
+                    {card.filter ? (
+                      <span className="packaging-card__filter">{filterLabel(card.filter)}</span>
+                    ) : (
+                      <span className="packaging-card__filter">Filtro pendiente</span>
                     )}
                     {card.notes ? <p className="packaging-card__notes">{card.notes}</p> : null}
                     <div className="planning-card__move" aria-label="Mover tarjeta">
@@ -368,7 +371,7 @@ export function PackagingPlanningBoard() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={editing ? 'Editar tanque planificado' : `Agregar a dosificadora ${form.dispenser}`}
-        description="Elegí el tanque y agregá sólo las indicaciones operativas necesarias."
+        description="Elegí el tanque, el filtro y las indicaciones operativas necesarias."
         disableClose={save.isPending}
       >
         <form className="planning-form" onSubmit={submit}>
@@ -386,6 +389,23 @@ export function PackagingPlanningBoard() {
                 <option key={tank.id} value={tank.id}>
                   {tank.name} ·{' '}
                   {tank.activeLot ? `OF ${tank.activeLot.manufacturingOrder}` : tank.state}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Filtro
+            <select
+              className="planning-select"
+              required
+              value={form.filter}
+              onChange={(event) =>
+                setForm({ ...form, filter: event.target.value as PackagingPlanningFilter })
+              }
+            >
+              {(board.data?.filters ?? []).map((filter) => (
+                <option key={filter} value={filter}>
+                  {filterLabel(filter)}
                 </option>
               ))}
             </select>

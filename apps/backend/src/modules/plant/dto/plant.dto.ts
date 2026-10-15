@@ -48,16 +48,20 @@ export class MovePlanningCardDto {
   @IsInt() @Min(0) position!: number;
 }
 
+export const PACKAGING_PLANNING_FILTERS = ['1', '2', '3', '4', '5', 'RECIRCULACION'] as const;
+
 export class CreatePackagingPlanningCardDto {
   @IsString() @IsNotEmpty() tankId!: string;
   @IsIn(['A', 'B']) dispenser!: string;
+  @IsIn(PACKAGING_PLANNING_FILTERS) filter!: string;
   @IsOptional() @IsBoolean() hooked?: boolean;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }
 
 export class UpdatePackagingPlanningCardDto {
   @IsString() @IsNotEmpty() tankId!: string;
-  @IsBoolean() hooked!: boolean;
+  @IsIn(PACKAGING_PLANNING_FILTERS) filter!: string;
+  @IsOptional() @IsBoolean() hooked?: boolean;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }
 
@@ -183,6 +187,12 @@ export class WeightReadingDto {
   @IsOptional() @IsString() @MaxLength(40) measuredAt?: string;
 }
 
+export class PackagingSpeedReadingDto {
+  @IsIn(['DEVREE', 'A', 'B']) line!: string;
+  @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(10000) containersPerMinute!: number;
+  @IsOptional() @IsISO8601() measuredAt?: string;
+}
+
 export class WeightBatchDto {
   @IsOptional() @IsString() @MaxLength(80) source?: string;
   @IsArray()
@@ -191,4 +201,21 @@ export class WeightBatchDto {
   @ValidateNested({ each: true })
   @Type(() => WeightReadingDto)
   readings!: WeightReadingDto[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => PackagingSpeedReadingDto)
+  speeds?: PackagingSpeedReadingDto[];
+}
+
+export class PackagingSpeedBatchDto {
+  @IsOptional() @IsString() @MaxLength(80) source?: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => PackagingSpeedReadingDto)
+  readings!: PackagingSpeedReadingDto[];
 }

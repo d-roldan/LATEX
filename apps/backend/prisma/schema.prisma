@@ -967,6 +967,7 @@ model PackagingPlanningCard {
   dispenser       String
   position        Int
   hooked          Boolean  @default(false)
+  filter          String?
   notes           String   @default("")
   createdByUserId String
   createdAt       DateTime @default(now()) @db.Timestamptz(3)

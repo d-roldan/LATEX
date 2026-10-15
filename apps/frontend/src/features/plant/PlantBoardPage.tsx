@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Clock3, Radio, RefreshCw, WifiOff } from 'lucide-react';
 import { api } from '../../shared/api/http';
@@ -11,6 +11,7 @@ import { useActivePlant } from './useActivePlant';
 import type { PublicPlant } from './plantCatalog';
 
 type Sector = 'fabricacion' | 'laboratorio' | 'envasado' | 'monitoreo';
+type TvSector = Exclude<Sector, 'monitoreo'>;
 type TankState =
   | 'VACIO'
   | 'FABRICANDO'
@@ -61,6 +62,11 @@ interface Tank {
     measuredAt: string | null;
     online: boolean | null;
     status: string;
+  };
+  packagingSpeed: {
+    containersPerMinute: number | null;
+    measuredAt: string | null;
+    online: boolean;
   };
   activeLot: null | {
     id: string;
@@ -180,16 +186,18 @@ const emptyForm = {
 
 export function PlantBoardPage({
   sector,
-  publicPlant
+  publicPlant,
+  tvSector
 }: {
   sector: Sector;
   publicPlant?: PublicPlant;
+  tvSector?: TvSector;
 }) {
   const location = useLocation();
   const isPublicMonitoring = sector === 'monitoreo' && Boolean(publicPlant);
   const { active } = useActivePlant({ enabled: !isPublicMonitoring });
-  const plantCode = active?.code ?? publicPlant?.code ?? 'LATEX';
-  const plantName = active?.name ?? publicPlant?.name ?? plantCode;
+  const plantCode = isPublicMonitoring ? publicPlant!.code : (active?.code ?? 'LATEX');
+  const plantName = isPublicMonitoring ? publicPlant!.name : (active?.name ?? plantCode);
   const base = `/plants/${plantCode}`;
   const navigationState = location.state as {
     highlightTankId?: string;
@@ -205,6 +213,10 @@ export function PlantBoardPage({
   const [confirming, setConfirming] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [latestLabArrival, setLatestLabArrival] = useState<string | null>(null);
+  const previousLabIds = useRef<Set<string> | null>(null);
+  const audioContext = useRef<AudioContext | null>(null);
   useEffect(() => {
     setSelection(null);
     setPendingRequest(null);
@@ -255,6 +267,92 @@ export function PlantBoardPage({
   });
 
   const onlineCount = tanks.data?.filter((tank) => tank.telemetry.online).length ?? 0;
+  const tvTanks = useMemo(() => {
+    const all = tanks.data ?? [];
+    if (!isPublicMonitoring) return all;
+    if (tvSector === 'laboratorio') {
+      return all
+        .filter((tank) => tank.state === 'LABORATORIO' || tank.state === 'AJUSTE')
+        .sort((a, b) => {
+          const aTime =
+            a.state === 'LABORATORIO'
+              ? (a.activeLot?.laboratorySamples?.[0]?.requestedAt ?? a.stateStartedAt)
+              : a.stateStartedAt;
+          const bTime =
+            b.state === 'LABORATORIO'
+              ? (b.activeLot?.laboratorySamples?.[0]?.requestedAt ?? b.stateStartedAt)
+              : b.stateStartedAt;
+          return Date.parse(bTime) - Date.parse(aTime);
+        });
+    }
+    if (tvSector === 'envasado' && plantCode === 'LATEX') {
+      return [...all].sort(
+        (a, b) => Number(b.state === 'ENVASANDO') - Number(a.state === 'ENVASANDO')
+      );
+    }
+    return all;
+  }, [tanks.data, isPublicMonitoring, tvSector, plantCode]);
+  const arrivingLabIds = useMemo(
+    () =>
+      tvSector === 'laboratorio' && isPublicMonitoring
+        ? tanks.data?.filter((tank) => tank.state === 'LABORATORIO').map((tank) => tank.id)
+        : undefined,
+    [tvSector, isPublicMonitoring, tanks.data]
+  );
+
+  useEffect(() => {
+    previousLabIds.current = null;
+    setLatestLabArrival(null);
+  }, [plantCode, tvSector]);
+
+  useEffect(() => {
+    if (!arrivingLabIds) return;
+    const previous = previousLabIds.current;
+    previousLabIds.current = new Set(arrivingLabIds);
+    setLatestLabArrival((current) =>
+      current && !arrivingLabIds.includes(current) ? null : current
+    );
+    if (!previous) return;
+    const arrivals = arrivingLabIds.filter((id) => !previous.has(id));
+    if (!arrivals.length) return;
+    setLatestLabArrival(arrivals[0]);
+    if (!soundEnabled || !audioContext.current) return;
+    const context = audioContext.current;
+    const start = context.currentTime;
+    for (const [index, frequency] of [660, 880, 660].entries()) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, start + index * 0.22);
+      gain.gain.exponentialRampToValueAtTime(0.18, start + index * 0.22 + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + index * 0.22 + 0.18);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(start + index * 0.22);
+      oscillator.stop(start + index * 0.22 + 0.2);
+    }
+  }, [arrivingLabIds, soundEnabled]);
+
+  useEffect(
+    () => () => {
+      void audioContext.current?.close();
+    },
+    []
+  );
+
+  const toggleLabSound = async () => {
+    if (soundEnabled) {
+      setSoundEnabled(false);
+      return;
+    }
+    try {
+      audioContext.current ??= new AudioContext();
+      await audioContext.current.resume();
+      setSoundEnabled(true);
+    } catch {
+      setSoundEnabled(false);
+    }
+  };
   const openAction = (tank: Tank, action: Action) => {
     setSelection({ tank, action });
     setPendingRequest(null);
@@ -576,11 +674,15 @@ export function PlantBoardPage({
   };
 
   return (
-    <div className={`plant-page plant-page--${sector} plant-page--${plantCode.toLowerCase()}`}>
+    <div
+      className={`plant-page plant-page--${sector} plant-page--${plantCode.toLowerCase()}${tvSector ? ` plant-page--tv-${tvSector}` : ''}${tvSector === 'envasado' && plantCode === 'LATEX' && tvTanks.some((tank) => tank.state === 'ENVASANDO') ? ' plant-page--tv-packaging-active' : ''}`}
+    >
       <header className="plant-page-head">
         <div>
           <h1>
-            {titles[sector]} - {plantCode}
+            {tvSector && tvSector !== 'fabricacion'
+              ? `TV ${tvSector === 'laboratorio' ? 'Laboratorio' : 'Envasado'} - ${plantCode}`
+              : `${titles[sector]} - ${plantCode}`}
           </h1>
         </div>
         <div className="plant-health">
@@ -604,12 +706,27 @@ export function PlantBoardPage({
           <AlertTriangle /> No se pudo leer el estado de la planta.
         </div>
       ) : null}
+      {isPublicMonitoring && tvSector === 'laboratorio' ? (
+        <div className="plant-tv-lab-status">
+          <span role="status" aria-live="polite">
+            {latestLabArrival
+              ? `Ingresó a laboratorio: ${tanks.data?.find((tank) => tank.id === latestLabArrival)?.name ?? 'tanque'}`
+              : tvTanks.length
+                ? `${tvTanks.length} tanque${tvTanks.length === 1 ? '' : 's'} en laboratorio o ajuste`
+                : 'Sin tanques en laboratorio o ajuste'}
+          </span>
+          <button type="button" onClick={toggleLabSound} aria-pressed={soundEnabled}>
+            {soundEnabled ? 'Aviso sonoro activado' : 'Activar aviso sonoro'}
+          </button>
+        </div>
+      ) : null}
       <section className="tank-grid">
         {tanks.isLoading
-          ? Array.from({ length: equipmentCountByPlant[plantCode] ?? 9 }, (_, i) => (
-              <div className="tank-card skeleton" key={i} />
-            ))
-          : tanks.data?.map((tank) => {
+          ? Array.from(
+              { length: tvSector === 'laboratorio' ? 0 : (equipmentCountByPlant[plantCode] ?? 9) },
+              (_, i) => <div className="tank-card skeleton" key={i} />
+            )
+          : tvTanks.map((tank) => {
               const weight = tank.telemetry.grossKg;
               const fill = tank.capacityKg
                 ? Math.max(0, Math.min(100, ((weight ?? 0) / tank.capacityKg) * 100))
@@ -626,7 +743,7 @@ export function PlantBoardPage({
               return (
                 <article
                   id={`tank-${tank.id}`}
-                  className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}`}
+                  className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}${isPublicMonitoring && tvSector === 'envasado' && plantCode === 'LATEX' && tank.state === 'ENVASANDO' ? ' tank-card--tv-featured' : ''}${isPublicMonitoring && tvSector === 'laboratorio' && tank.state === 'LABORATORIO' ? ' tank-card--tv-lab' : ''}${tank.id === latestLabArrival ? ' tank-card--tv-arrival' : ''}`}
                   key={tank.id}
                 >
                   <div className="tank-card__content">
@@ -667,6 +784,17 @@ export function PlantBoardPage({
                         <dt>En estado</dt>
                         <dd>{formatDuration(tank.stateElapsedSeconds)}</dd>
                       </div>
+                      {plantCode === 'LATEX' && tank.state === 'ENVASANDO' && order ? (
+                        <div>
+                          <dt>Velocidad</dt>
+                          <dd>
+                            {tank.packagingSpeed?.online &&
+                            tank.packagingSpeed.containersPerMinute !== null
+                              ? `${tank.packagingSpeed.containersPerMinute.toLocaleString('es-AR', { maximumFractionDigits: 3 })} envases/min`
+                              : 'Sin señal'}
+                          </dd>
+                        </div>
+                      ) : null}
                       {tank.activeLot ? (
                         tank.state === 'ENVASANDO' && order ? (
                           <>
@@ -678,7 +806,7 @@ export function PlantBoardPage({
                               <dt>Material</dt>
                               <dd>{order.materialCode ?? 'Sin informar'}</dd>
                             </div>
-                            <div>
+                            <div className="tank-description">
                               <dt>Descripción</dt>
                               <dd>{order.description}</dd>
                             </div>
@@ -693,7 +821,7 @@ export function PlantBoardPage({
                               <dt>SEMI</dt>
                               <dd>{tank.activeLot.materialCode}</dd>
                             </div>
-                            <div>
+                            <div className="tank-description">
                               <dt>Descripción</dt>
                               <dd>{tank.activeLot.description}</dd>
                             </div>
@@ -797,18 +925,20 @@ export function PlantBoardPage({
                 </article>
               );
             })}
-        <article className="plant-clock">
-          <Clock3 className="plant-clock__icon" size={20} />
-          <strong className="plant-clock__label">Reloj</strong>
-          <div className="plant-clock__time">
-            <span>
-              {clockHours}:{clockMinutes}
-            </span>
-            <b>{clockSeconds}</b>
-          </div>
-          <small>{dateFormatter.format(now)}</small>
-          <em>America/Buenos_Aires</em>
-        </article>
+        {tvSector !== 'laboratorio' ? (
+          <article className="plant-clock">
+            <Clock3 className="plant-clock__icon" size={20} />
+            <strong className="plant-clock__label">Reloj</strong>
+            <div className="plant-clock__time">
+              <span>
+                {clockHours}:{clockMinutes}
+              </span>
+              <b>{clockSeconds}</b>
+            </div>
+            <small>{dateFormatter.format(now)}</small>
+            <em>America/Buenos_Aires</em>
+          </article>
+        ) : null}
       </section>
 
       <Dialog

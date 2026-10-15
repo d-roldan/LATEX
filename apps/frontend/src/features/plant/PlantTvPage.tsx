@@ -5,11 +5,20 @@ import { PlantBoardPage } from './PlantBoardPage';
 import { ThemeToggle } from '../../shared/components/ThemeToggle';
 import { findPublicPlant, publicPlants } from './plantCatalog';
 
+const sectors = ['fabricacion', 'laboratorio', 'envasado'] as const;
+const sectorLabels = {
+  fabricacion: 'Fabricación',
+  laboratorio: 'Laboratorio',
+  envasado: 'Envasado'
+};
+
 export function PlantTvPage() {
   const [searchParams] = useSearchParams();
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const requestedCode = searchParams.get('plant');
   const selectedPlant = findPublicPlant(requestedCode);
+  const requestedSector = searchParams.get('sector');
+  const selectedSector = sectors.find((sector) => sector === requestedSector);
 
   useEffect(() => {
     const updateFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -18,13 +27,13 @@ export function PlantTvPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedPlant) return;
+    if (!selectedPlant || !selectedSector) return;
     const previousTitle = document.title;
-    document.title = `${selectedPlant.name} · Visualización de planta`;
+    document.title = `${sectorLabels[selectedSector]} · ${selectedPlant.name} · TV`;
     return () => {
       document.title = previousTitle;
     };
-  }, [selectedPlant]);
+  }, [selectedPlant, selectedSector]);
 
   const toggleFullscreen = async () => {
     try {
@@ -35,26 +44,34 @@ export function PlantTvPage() {
     }
   };
 
-  if (!selectedPlant) {
+  if (!selectedPlant || !selectedSector) {
     return (
       <main className="plant-main plant-tv plant-tv-setup">
         <ThemeToggle className="plant-theme-toggle plant-tv-setup__theme" />
         <section className="plant-tv-setup__panel" aria-labelledby="tv-setup-title">
           <p className="plant-tv-setup__eyebrow">Pantalla de monitoreo</p>
           <h1 id="tv-setup-title">
-            {requestedCode ? 'La planta indicada no existe' : 'Elegí la planta de esta pantalla'}
+            {!selectedPlant
+              ? requestedCode
+                ? 'La planta indicada no existe'
+                : 'Elegí la planta de esta pantalla'
+              : 'Elegí el sector de esta pantalla'}
           </h1>
-          <p>
-            Cada televisor debe conservar una planta explícita en su dirección para evitar mostrar
-            información de otra operación.
-          </p>
+          <p>Cada televisor conserva una planta y un sector explícitos en su dirección.</p>
           <nav className="plant-tv-setup__options" aria-label="Plantas disponibles">
-            {publicPlants.map((plant) => (
-              <Link key={plant.code} to={`/tv?plant=${plant.code}`}>
-                <strong>{plant.name}</strong>
-                <span>{plant.code}</span>
-              </Link>
-            ))}
+            {selectedPlant
+              ? sectors.map((sector) => (
+                  <Link key={sector} to={`/tv?plant=${selectedPlant.code}&sector=${sector}`}>
+                    <strong>{sectorLabels[sector]}</strong>
+                    <span>{selectedPlant.code}</span>
+                  </Link>
+                ))
+              : publicPlants.map((plant) => (
+                  <Link key={plant.code} to={`/tv?plant=${plant.code}`}>
+                    <strong>{plant.name}</strong>
+                    <span>{plant.code}</span>
+                  </Link>
+                ))}
           </nav>
         </section>
       </main>
@@ -75,7 +92,7 @@ export function PlantTvPage() {
         </button>
         <ThemeToggle className="plant-theme-toggle plant-tv__theme-toggle" />
       </div>
-      <PlantBoardPage sector="monitoreo" publicPlant={selectedPlant} />
+      <PlantBoardPage sector="monitoreo" publicPlant={selectedPlant} tvSector={selectedSector} />
     </main>
   );
 }

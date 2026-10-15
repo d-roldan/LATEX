@@ -29,6 +29,7 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [HTTPS local](HTTPS_LOCAL.md): configuración de acceso seguro en la red interna.
 - [Ejemplo de accesos](accesses.example.md): plantilla sin credenciales reales.
 - [Agentes de Codex](AGENTES_CODEX.md): roles en español para planificación, generación y diagnóstico de pruebas, revisión de planta y telemetría.
+- [Validación proporcional al cambio](ESTRATEGIA_VALIDACION.md): cómo elegir pruebas, builds y comprobaciones de integración según el riesgo sin repetir verificaciones innecesarias.
 
 Los documentos maestros que describen el producto completo permanecen en la raíz del proyecto:
 

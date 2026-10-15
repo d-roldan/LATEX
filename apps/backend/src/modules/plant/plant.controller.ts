@@ -30,6 +30,7 @@ import {
   FinishPackagingDto,
   MovePlanningCardDto,
   MovePackagingPlanningCardDto,
+  PackagingSpeedBatchDto,
   PackagingDto,
   QualityDecisionDto,
   ReceiveLaboratorySampleDto,
@@ -62,6 +63,15 @@ export class PlantController {
   ) {
     return this.service.ingestWeights(key, companyId, dto);
   }
+
+  @Post('telemetry/speeds')
+  speeds(
+    @Headers('x-node-red-key') key: string | undefined,
+    @Headers('x-company-id') companyId: string | undefined,
+    @Body() dto: PackagingSpeedBatchDto
+  ) {
+    return this.service.ingestPackagingSpeeds(key, companyId, dto);
+  }
 }
 
 @Controller('plants')
@@ -86,6 +96,14 @@ export class PlantPublicScopedController {
     @Body() dto: WeightBatchDto
   ) {
     return this.service.ingestPlantWeights(code, key, dto);
+  }
+  @Post(':plantCode/telemetry/speeds')
+  speeds(
+    @Param('plantCode') code: string,
+    @Headers('x-node-red-key') key: string | undefined,
+    @Body() dto: PackagingSpeedBatchDto
+  ) {
+    return this.service.ingestPlantPackagingSpeeds(code, key, dto);
   }
 }
 

@@ -25,10 +25,12 @@ export function useActivePlant({ enabled = true }: { enabled?: boolean } = {}) {
   const requested = params.get('plant')?.toUpperCase();
   const active = useMemo(
     () =>
-      plants.data?.find((p) => p.code === requested) ??
-      plants.data?.find((p) => p.code === localStorage.getItem('disal.activePlant')) ??
-      plants.data?.[0],
-    [plants.data, requested]
+      enabled
+        ? (plants.data?.find((p) => p.code === requested) ??
+          plants.data?.find((p) => p.code === localStorage.getItem('disal.activePlant')) ??
+          plants.data?.[0])
+        : undefined,
+    [enabled, plants.data, requested]
   );
 
   useEffect(() => {

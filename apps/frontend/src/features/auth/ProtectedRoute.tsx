@@ -26,7 +26,7 @@ export function ProtectedRoute({ allowedRoles, systemOwnerOnly = false }: Props)
       LABORATORIO: '/laboratorio',
       ENVASADO: '/envasado',
       MONITOREO: '/historial',
-      JEFATURA: '/jefatura',
+      JEFATURA: '/visualizacion',
       ADMIN: '/admin',
       OPERARIO: '/fabricacion'
     };

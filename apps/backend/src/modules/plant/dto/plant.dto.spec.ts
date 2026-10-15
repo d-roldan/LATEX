@@ -6,16 +6,64 @@ import {
   CreatePackagingPlanningCardDto,
   CreatePlanningCardDto,
   FinishPackagingDto,
+  PackagingSpeedBatchDto,
   PackagingDto,
   QualityDecisionDto,
-  ServiceDto
+  ServiceDto,
+  WeightBatchDto
 } from './plant.dto';
 
+describe('WeightBatchDto', () => {
+  it('acepta pesos y velocidades juntos', async () => {
+    const dto = plainToInstance(WeightBatchDto, {
+      readings: [{ scaleKey: 'TK101', grossKg: 5070.125 }],
+      speeds: [{ line: 'DEVREE', containersPerMinute: 42 }]
+    });
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza una velocidad inválida en el lote de pesos', async () => {
+    const dto = plainToInstance(WeightBatchDto, {
+      readings: [{ scaleKey: 'TK101', grossKg: 5070.125 }],
+      speeds: [{ line: 'C', containersPerMinute: -1 }]
+    });
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'speeds' })])
+    );
+  });
+});
+
+describe('PackagingSpeedBatchDto', () => {
+  it('acepta una única velocidad cero para Devree', async () => {
+    const dto = plainToInstance(PackagingSpeedBatchDto, {
+      readings: [{ line: 'DEVREE', containersPerMinute: 0 }]
+    });
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('acepta velocidad cero en envases por minuto para la línea A', async () => {
+    const dto = plainToInstance(PackagingSpeedBatchDto, {
+      readings: [{ line: 'A', containersPerMinute: 0 }]
+    });
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza líneas desconocidas y velocidades negativas', async () => {
+    const dto = plainToInstance(PackagingSpeedBatchDto, {
+      readings: [{ line: 'C', containersPerMinute: -1 }]
+    });
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'readings' })])
+    );
+  });
+});
+
 describe('CreatePackagingPlanningCardDto', () => {
-  it('acepta tanque, dosificadora e indicaciones válidas', async () => {
+  it('acepta tanque, dosificadora, filtro e indicaciones válidas', async () => {
     const dto = plainToInstance(CreatePackagingPlanningCardDto, {
       tankId: 'tank-107',
       dispenser: 'B',
+      filter: 'RECIRCULACION',
       hooked: true,
       notes: 'Filtro 1 y lavado de manifold'
     });
@@ -26,11 +74,24 @@ describe('CreatePackagingPlanningCardDto', () => {
   it('rechaza dosificadoras distintas de A o B', async () => {
     const dto = plainToInstance(CreatePackagingPlanningCardDto, {
       tankId: 'tank-107',
-      dispenser: 'C'
+      dispenser: 'C',
+      filter: '1'
     });
 
     expect(await validate(dto)).toEqual(
       expect.arrayContaining([expect.objectContaining({ property: 'dispenser' })])
+    );
+  });
+
+  it('rechaza filtros que no pertenecen a la planificación de envasado', async () => {
+    const dto = plainToInstance(CreatePackagingPlanningCardDto, {
+      tankId: 'tank-107',
+      dispenser: 'A',
+      filter: '6'
+    });
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'filter' })])
     );
   });
 });

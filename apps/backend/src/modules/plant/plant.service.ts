@@ -20,6 +20,8 @@ import {
   FinishPackagingDto,
   MovePlanningCardDto,
   MovePackagingPlanningCardDto,
+  PACKAGING_PLANNING_FILTERS,
+  PackagingSpeedBatchDto,
   PackagingDto,
   QualityDecisionDto,
   ReceiveLaboratorySampleDto,
@@ -36,6 +38,7 @@ import { createHash, timingSafeEqual } from 'crypto';
 import { InfluxHistoryService } from './influx-history.service';
 
 type Telemetry = { grossKg: number; netKg?: number; measuredAt: string; receivedAt: string };
+type PackagingSpeed = { containersPerMinute: number; measuredAt: string; receivedAt: string };
 
 // Margen para emisores Node-RED con un pulso de lectura cada 10 segundos.
 const WEIGHT_SIGNAL_TIMEOUT_MS = 30_000;
@@ -76,6 +79,7 @@ const BUENOS_AIRES_OFFSET_MS = 3 * 60 * 60 * 1000;
 @Injectable()
 export class PlantService {
   private readonly weights = new Map<string, Telemetry>();
+  private readonly packagingSpeeds = new Map<string, PackagingSpeed>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -416,7 +420,7 @@ export class PlantService {
           id: true,
           dispenser: true,
           position: true,
-          hooked: true,
+          filter: true,
           notes: true,
           updatedAt: true,
           tank: { select: tankSelect }
@@ -427,6 +431,7 @@ export class PlantService {
     return {
       plant: { id: plant.id, code: plant.code, name: plant.name },
       dispensers: DISPENSERS,
+      filters: PACKAGING_PLANNING_FILTERS,
       tanks,
       cards
     };
@@ -452,9 +457,7 @@ export class PlantService {
           select: { id: true, state: true }
         });
         if (!tank) throw new NotFoundException('Tanque no encontrado en la pizarra');
-        if (tank.state === 'ENVASANDO') {
-          throw new ConflictException('El tanque ya se encuentra envasando');
-        }
+        this.assertPackagingPlanningTankState(tank.state);
         const existing = await tx.packagingPlanningCard.findFirst({
           where: { plantId: plant.id, tankId: tank.id },
           select: { id: true }
@@ -474,6 +477,7 @@ export class PlantService {
             dispenser: dto.dispenser,
             position: count,
             hooked: dto.hooked ?? false,
+            filter: dto.filter,
             notes: dto.notes?.trim() ?? '',
             createdByUserId: user.sub
           }
@@ -522,9 +526,7 @@ export class PlantService {
           select: { id: true, state: true }
         });
         if (!tank) throw new NotFoundException('Tanque no encontrado en la pizarra');
-        if (tank.state === 'ENVASANDO') {
-          throw new ConflictException('El tanque ya se encuentra envasando');
-        }
+        this.assertPackagingPlanningTankState(tank.state);
         const duplicate = await tx.packagingPlanningCard.findFirst({
           where: { plantId: plant.id, tankId: tank.id, id: { not: cardId } },
           select: { id: true }
@@ -532,7 +534,12 @@ export class PlantService {
         if (duplicate) throw new ConflictException('El tanque ya está planificado para envasado');
         const after = await tx.packagingPlanningCard.update({
           where: { id: cardId },
-          data: { tankId: tank.id, hooked: dto.hooked, notes: dto.notes?.trim() ?? '' }
+          data: {
+            tankId: tank.id,
+            hooked: dto.hooked ?? before.hooked,
+            filter: dto.filter,
+            notes: dto.notes?.trim() ?? ''
+          }
         });
         await this.audit(
           tx,
@@ -707,6 +714,7 @@ export class PlantService {
         measuredAt: tank.telemetry.measuredAt,
         online: tank.telemetry.online
       },
+      packagingSpeed: tank.packagingSpeed,
       activeLot: tank.activeLot
         ? {
             id: tank.activeLot.id,
@@ -777,6 +785,17 @@ export class PlantService {
 
     return tanks.map((tank) => {
       const reading = tank.scaleKey ? this.weights.get(`${plantId}:${tank.scaleKey}`) : undefined;
+      const activeOrder = tank.activeLot?.packagingOrders[0];
+      const speed =
+        tank.state === 'ENVASANDO' && activeOrder
+          ? (this.packagingSpeeds.get(`${plantId}:DEVREE`) ??
+            this.packagingSpeeds.get(`${plantId}:${activeOrder.line}`))
+          : undefined;
+      const speedOnline =
+        !!speed &&
+        Date.now() - Date.parse(speed.receivedAt) <= WEIGHT_SIGNAL_TIMEOUT_MS &&
+        !!activeOrder &&
+        Date.parse(speed.measuredAt) >= activeOrder.startedAt.getTime();
       const age = reading
         ? Date.now() - new Date(reading.receivedAt).getTime()
         : Number.POSITIVE_INFINITY;
@@ -817,6 +836,11 @@ export class PlantService {
                 ? 'WARNING'
                 : 'OK'
             : 'OK',
+        packagingSpeed: {
+          containersPerMinute: speedOnline && speed ? speed.containersPerMinute : null,
+          measuredAt: speedOnline && speed ? speed.measuredAt : null,
+          online: speedOnline
+        },
         telemetry:
           tank.telemetryMode === 'NOT_INSTALLED'
             ? {
@@ -892,7 +916,15 @@ export class PlantService {
         receivedAt: now
       });
     }
-    return { accepted: dto.readings.length, receivedAt: now, persisted: false };
+    const speeds = dto.speeds
+      ? this.acceptPackagingSpeeds(plant.id, { readings: dto.speeds })
+      : undefined;
+    return {
+      accepted: dto.readings.length,
+      receivedAt: now,
+      persisted: false,
+      ...(speeds ? { speeds } : {})
+    };
   }
 
   async ingestPlantWeights(plantCode: string, apiKey: string | undefined, dto: WeightBatchDto) {
@@ -912,6 +944,8 @@ export class PlantService {
         })()
     );
     if (!integration) throw new UnauthorizedException('Clave de integración inválida');
+    if (dto.speeds && plant.code !== 'LATEX')
+      throw new BadRequestException('La velocidad de envasado sólo está habilitada para LATEX');
     const now = new Date().toISOString();
     const results: Array<{ scaleKey: string; status: string; message?: string }> = [];
     for (const reading of dto.readings) {
@@ -954,10 +988,85 @@ export class PlantService {
       });
       results.push({ scaleKey: reading.scaleKey, status: 'ACCEPTED' });
     }
+    const speeds = dto.speeds
+      ? this.acceptPackagingSpeeds(plant.id, { readings: dto.speeds })
+      : undefined;
     return {
       accepted: results.filter((r) => r.status === 'ACCEPTED').length,
       rejected: results.filter((r) => r.status === 'REJECTED').length,
       ignored: results.filter((r) => r.status === 'IGNORED_OLDER').length,
+      receivedAt: now,
+      persisted: false,
+      results,
+      ...(speeds ? { speeds } : {})
+    };
+  }
+
+  async ingestPackagingSpeeds(
+    apiKey: string | undefined,
+    companyId: string | undefined,
+    dto: PackagingSpeedBatchDto
+  ) {
+    const expected = this.config.get<string>('NODE_RED_API_KEY');
+    if (!expected || apiKey !== expected)
+      throw new UnauthorizedException('Clave de integración inválida');
+    const targetCompany =
+      companyId?.trim() ||
+      this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') ||
+      'seed_company_disal';
+    const plant = await this.prisma.plant.findFirstOrThrow({
+      where: { companyId: targetCompany, code: 'LATEX', isActive: true }
+    });
+    return this.acceptPackagingSpeeds(plant.id, dto);
+  }
+
+  async ingestPlantPackagingSpeeds(
+    plantCode: string,
+    apiKey: string | undefined,
+    dto: PackagingSpeedBatchDto
+  ) {
+    if (!apiKey) throw new UnauthorizedException('Clave de integración inválida');
+    if (plantCode.toUpperCase() !== 'LATEX')
+      throw new BadRequestException('La velocidad de envasado sólo está habilitada para LATEX');
+    const plant = await this.prisma.plant.findFirst({
+      where: { code: 'LATEX', isActive: true },
+      include: { integrations: { where: { isActive: true } } }
+    });
+    if (!plant) throw new NotFoundException('Planta no encontrada');
+    const supplied = createHash('sha256').update(apiKey).digest();
+    const integration = plant.integrations.find(
+      (candidate) =>
+        (!dto.source || candidate.source === dto.source) &&
+        (() => {
+          const stored = Buffer.from(candidate.keyHash, 'hex');
+          return stored.length === supplied.length && timingSafeEqual(stored, supplied);
+        })()
+    );
+    if (!integration) throw new UnauthorizedException('Clave de integración inválida');
+    return this.acceptPackagingSpeeds(plant.id, dto);
+  }
+
+  private acceptPackagingSpeeds(plantId: string, dto: PackagingSpeedBatchDto) {
+    const now = new Date().toISOString();
+    const results: Array<{ line: string; status: string }> = [];
+    for (const reading of dto.readings) {
+      const measuredAt = reading.measuredAt ?? now;
+      const cacheKey = `${plantId}:${reading.line}`;
+      const previous = this.packagingSpeeds.get(cacheKey);
+      if (previous && Date.parse(measuredAt) <= Date.parse(previous.measuredAt)) {
+        results.push({ line: reading.line, status: 'IGNORED_OLDER' });
+        continue;
+      }
+      this.packagingSpeeds.set(cacheKey, {
+        containersPerMinute: reading.containersPerMinute,
+        measuredAt,
+        receivedAt: now
+      });
+      results.push({ line: reading.line, status: 'ACCEPTED' });
+    }
+    return {
+      accepted: results.filter((result) => result.status === 'ACCEPTED').length,
+      ignored: results.filter((result) => result.status === 'IGNORED_OLDER').length,
       receivedAt: now,
       persisted: false,
       results
@@ -2445,6 +2554,17 @@ export class PlantService {
       throw new BadRequestException('La pizarra está habilitada únicamente para la planta Látex');
     }
     return plant;
+  }
+
+  private assertPackagingPlanningTankState(state: TankState) {
+    if (state === TankState.ENVASANDO) {
+      throw new ConflictException('El tanque ya se encuentra envasando');
+    }
+    if (state === TankState.VACIO || state === TankState.FUERA_DE_SERVICIO) {
+      throw new ConflictException(
+        'Los tanques vacíos o fuera de servicio no se pueden planificar para envasado'
+      );
+    }
   }
 
   private async persistPlanningOrder(

@@ -36,6 +36,8 @@ el archivo Markdown y la descripción de la release no deben contradecirse.
 
 Las skills están en `.agents/skills/`. Antes de trabajar en un área de la tabla, leer su `SKILL.md` y aplicar las instrucciones pertinentes sin que el usuario deba invocarla por nombre. Leer sólo las skills relevantes; una tarea de documentación o Git no exige ejecutar todas las validaciones.
 
+Antes de validar cambios, leer `docs/ESTRATEGIA_VALIDACION.md`: evaluar alcance y riesgo, elegir pruebas que demuestren el comportamiento afectado y ampliar sólo cuando haya un motivo concreto. No ejecutar suites completas por rutina ni omitir una comprobación necesaria para afirmar que el cambio funciona. Documentar la cobertura real y las limitaciones.
+
 | Trabajo | Skill que se debe consultar |
 | --- | --- |
 | Cambios o validación de backend | `.agents/skills/backend-validate/SKILL.md` |
@@ -84,6 +86,8 @@ Si la herramienta de la sesión no expone roles personalizados, leer el TOML per
 
 - Ejecutar comandos desde la raíz del repositorio o el directorio de trabajo indicado; adaptar ejemplos de shell a PowerShell.
 - Consultar los scripts actuales de cada `package.json` antes de ejecutarlos. Distinguir comprobaciones de comandos que modifican archivos o datos.
+- En el entorno local del usuario, después de cada cambio de la aplicación reconstruir y actualizar en Docker Compose los servicios afectados para que pueda revisarlo; verificar que respondan. No reconstruir servicios ajenos al cambio ni aplicar esta regla al servidor productivo. Los cambios sólo de documentación no requieren reconstrucción.
+- Evitar repeticiones de pruebas y logs extensos: resumir la evidencia sin perder fallos relevantes. Una suite completa se ejecuta cuando lo exige el riesgo, un fallo o una entrega, conforme a `docs/ESTRATEGIA_VALIDACION.md`.
 - Para actualizar un servidor existente, leer primero `docs/ACTUALIZACION_SERVIDOR.md` y después
   `docs/DESPLIEGUE_MULTIPLANTA.md`. Para instalaciones nuevas, recuperación o criterios generales de
   persistencia, leer `docs/DESPLIEGUE_MULTIPLANTA.md`. No aplicar seeds o resets como requisito de una

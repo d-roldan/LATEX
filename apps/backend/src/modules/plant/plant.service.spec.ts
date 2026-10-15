@@ -1,5 +1,6 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { PlantService } from './plant.service';
+import { createHash } from 'crypto';
 
 describe('PlantService planning board', () => {
   const notifications = { notifyTankAction: jest.fn() } as any;
@@ -78,6 +79,44 @@ describe('PlantService planning board', () => {
       'únicamente para la planta Látex'
     );
   });
+
+  it.each(['VACIO', 'FUERA_DE_SERVICIO'])(
+    'no permite planificar un tanque con estado %s para envasado',
+    async (state) => {
+      const create = jest.fn();
+      const tx = {
+        tank: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'tank-107', state })
+        },
+        packagingPlanningCard: {
+          findFirst: jest.fn(),
+          count: jest.fn(),
+          create
+        }
+      };
+      const prisma = {
+        plant: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'plant-latex',
+            code: 'LATEX',
+            userAccesses: [{ canTransfer: false }]
+          })
+        },
+        $transaction: jest.fn((callback) => callback(tx))
+      } as any;
+      const service = new PlantService(prisma, { get: jest.fn() } as any, notifications);
+
+      await expect(
+        service.createPackagingPlanningCard(
+          'company-1',
+          { sub: 'user-1', companyId: 'company-1', role: 'ENVASADO' } as any,
+          'LATEX',
+          { tankId: 'tank-107', dispenser: 'A', filter: '1' }
+        )
+      ).rejects.toThrow('Los tanques vacíos o fuera de servicio no se pueden planificar');
+      expect(create).not.toHaveBeenCalled();
+    }
+  );
 
   it('reordena una única secuencia de envasado compartida entre A y B', async () => {
     const update = jest.fn().mockResolvedValue({});
@@ -187,6 +226,177 @@ describe('PlantService telemetry', () => {
     expect(result.persisted).toBe(false);
     expect(tanks[0].telemetry.grossKg).toBe(5070.125);
     expect(tanks[0].telemetry.online).toBe(true);
+  });
+
+  it('recibe peso y velocidad juntos con la integración de LATEX', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const keyHash = createHash('sha256').update('integration-secret').digest('hex');
+    prisma.plant.findFirst.mockResolvedValueOnce({
+      id: 'plant-latex',
+      code: 'LATEX',
+      integrations: [{ source: 'NODE_RED_LATEX', keyHash }]
+    });
+
+    const result = await service.ingestPlantWeights('LATEX', 'integration-secret', {
+      source: 'NODE_RED_LATEX',
+      readings: [{ scaleKey: 'TK101', grossKg: 5070.125 }],
+      speeds: [{ line: 'DEVREE', containersPerMinute: 42 }]
+    });
+    const [tank] = await service.tanks('company-1');
+
+    expect(result).toMatchObject({
+      accepted: 1,
+      results: [{ scaleKey: 'TK101', status: 'ACCEPTED' }],
+      speeds: { accepted: 1, results: [{ line: 'DEVREE', status: 'ACCEPTED' }] }
+    });
+    expect(tank.telemetry.grossKg).toBe(5070.125);
+  });
+
+  it('acepta velocidad opcional en el endpoint legado de pesos de LATEX', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const result = await service.ingestWeights('integration-secret', 'company-1', {
+      readings: [{ scaleKey: 'TK101', grossKg: 5070.125 }],
+      speeds: [{ line: 'DEVREE', containersPerMinute: 0 }]
+    });
+
+    expect(result).toMatchObject({ accepted: 1, speeds: { accepted: 1, ignored: 0 } });
+  });
+
+  it('muestra la única velocidad de Devree en el tanque con OE activa', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const now = new Date();
+    const tank = {
+      id: 'tank-101',
+      companyId: 'company-1',
+      plantId: 'plant-latex',
+      number: 101,
+      name: 'TK101',
+      capacityKg: null,
+      scaleKey: 'TK101',
+      telemetryMode: 'AUTOMATIC',
+      state: 'ENVASANDO',
+      version: 0,
+      activeLot: {
+        packagingOrders: [{ line: 'B', startedAt: new Date(now.getTime() - 1000) }],
+        qualityDecisions: []
+      },
+      stateHistory: []
+    };
+    await service.ingestPackagingSpeeds('integration-secret', 'company-1', {
+      readings: [{ line: 'DEVREE', containersPerMinute: 0, measuredAt: now.toISOString() }]
+    });
+    prisma.tank.findMany.mockResolvedValueOnce([
+      tank,
+      { ...tank, id: 'tank-102', state: 'APROBADO' }
+    ]);
+
+    const [packagingTank, approvedTank] = await service.tanks('company-1');
+
+    expect(packagingTank.packagingSpeed).toMatchObject({ containersPerMinute: 0, online: true });
+    expect(approvedTank.packagingSpeed).toMatchObject({ containersPerMinute: null, online: false });
+  });
+
+  it('rechaza velocidades dentro del lote de pesos de otra planta', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const keyHash = createHash('sha256').update('integration-secret').digest('hex');
+    prisma.plant.findFirst.mockResolvedValueOnce({
+      id: 'plant-sinteticos',
+      code: 'SINTETICOS',
+      integrations: [{ source: 'NODE_RED_SINTETICOS', keyHash }]
+    });
+
+    await expect(
+      service.ingestPlantWeights('SINTETICOS', 'integration-secret', {
+        source: 'NODE_RED_SINTETICOS',
+        readings: [{ scaleKey: 'SIN01', grossKg: 100 }],
+        speeds: [{ line: 'A', containersPerMinute: 42 }]
+      })
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.tank.findFirst).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ scaleKey: 'SIN01' }) })
+    );
+  });
+
+  it('muestra la velocidad de la línea sólo en un tanque con OE activa envasando', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const now = new Date();
+    const result = await service.ingestPackagingSpeeds('integration-secret', 'company-1', {
+      readings: [
+        { line: 'A', containersPerMinute: 42, measuredAt: now.toISOString() },
+        { line: 'B', containersPerMinute: 0, measuredAt: now.toISOString() }
+      ]
+    });
+    const tank = {
+      id: 'tank-101',
+      companyId: 'company-1',
+      plantId: 'plant-latex',
+      number: 101,
+      name: 'TK101',
+      capacityKg: null,
+      scaleKey: 'TK101',
+      telemetryMode: 'AUTOMATIC',
+      state: 'ENVASANDO',
+      version: 0,
+      activeLot: {
+        packagingOrders: [{ line: 'A', startedAt: new Date(now.getTime() - 1000) }],
+        qualityDecisions: []
+      },
+      stateHistory: []
+    };
+    prisma.tank.findMany.mockResolvedValueOnce([
+      tank,
+      {
+        ...tank,
+        id: 'tank-102',
+        activeLot: {
+          ...tank.activeLot,
+          packagingOrders: [{ line: 'B', startedAt: new Date(now.getTime() - 1000) }]
+        }
+      }
+    ]);
+    const [packagingTank, stoppedLineTank] = await service.tanks('company-1');
+    prisma.tank.findMany.mockResolvedValueOnce([{ ...tank, state: 'APROBADO' }]);
+    const [approvedTank] = await service.tanks('company-1');
+
+    expect(result.persisted).toBe(false);
+    expect(packagingTank.packagingSpeed).toMatchObject({
+      containersPerMinute: 42,
+      online: true
+    });
+    expect(stoppedLineTank.packagingSpeed.containersPerMinute).toBe(0);
+    expect(approvedTank.packagingSpeed.containersPerMinute).toBeNull();
+    await expect(
+      service.ingestPackagingSpeeds('integration-secret', 'company-1', {
+        readings: [
+          {
+            line: 'A',
+            containersPerMinute: 99,
+            measuredAt: new Date(now.getTime() - 1000).toISOString()
+          }
+        ]
+      })
+    ).resolves.toMatchObject({ accepted: 0, ignored: 1 });
+  });
+
+  it('requiere una integración de LATEX para recibir la velocidad por planta', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const keyHash = createHash('sha256').update('integration-secret').digest('hex');
+    prisma.plant.findFirst.mockResolvedValueOnce({
+      id: 'plant-latex',
+      integrations: [{ source: 'NODE_RED_LATEX', keyHash }]
+    });
+
+    await expect(
+      service.ingestPlantPackagingSpeeds('LATEX', 'integration-secret', {
+        source: 'NODE_RED_LATEX',
+        readings: [{ line: 'B', containersPerMinute: 0 }]
+      })
+    ).resolves.toMatchObject({ accepted: 1, persisted: false });
+    await expect(
+      service.ingestPlantPackagingSpeeds('SINTETICOS', 'integration-secret', {
+        readings: [{ line: 'B', containersPerMinute: 1 }]
+      })
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('rejects a batch with an invalid integration key', async () => {

@@ -1,40 +1,51 @@
 ---
 name: frontend-validate
-description: Valida el código del frontend React — ejecuta lint, formato y verificación del build de producción. Usar esta skill cuando el código en apps/frontend haya cambiado, o cuando se pida validar, buildear o revisar el frontend.
+description: Valida cambios del frontend React con lint, formato, compilación y comprobación de pantalla según el riesgo y alcance. Usar cuando cambie apps/frontend o se pida validarlo.
 ---
 
 # Skill: Validar Frontend
 
-Validar los cambios del frontend. Ejecutar cada comando desde apps/frontend, sin acumular cambios de directorio.
+Leer primero [Validación proporcional al cambio](../../../docs/ESTRATEGIA_VALIDACION.md). Antes de ejecutar comandos, distinguir un cambio de texto o estilo de uno de lógica, navegación, tipos o contrato. Ejecutar cada comando desde `apps/frontend`.
 
-## Pasos a ejecutar (en orden):
+## Comprobaciones disponibles
 
-1. **Verificación de lint**
+Para un cambio acotado, verificar los archivos modificados y el comportamiento visual o interactivo afectado. Un texto estático puede requerir sólo revisión del diff y de la pantalla; un cambio en TSX, tipos, imports o rutas puede requerir lint y build.
+
+```bash
+npx --no-install eslint src/features/plant/PlantBoardPage.tsx
+npx --no-install prettier --check src/features/plant/PlantBoardPage.tsx
+npm run build
+```
+
+Sustituir el archivo del ejemplo por el afectado y elegir los comandos conforme a la política. Para una comprobación general justificada:
+
+1. **Lint general**
    ```bash
-   cd apps/frontend && npm run lint
+   npm run lint
    ```
 
-2. **Verificación de formato**
+2. **Formato general**
    ```bash
-   cd apps/frontend && npx --no-install prettier --check "src/**/*.{ts,tsx,css,md}"
+   npx --no-install prettier --check "src/**/*.{ts,tsx,css,md}"
    ```
 
 3. **Build de producción** (verificación de tipos + bundle Vite)
    ```bash
-   cd apps/frontend && npm run build
+   npm run build
    ```
 
 ## Cómo reportar resultados:
 
-- Mostrar una tabla resumen: Lint ✓/✗ | Formato ✓/✗ | Build ✓/✗
-- Si algún paso falla, mostrar el error exacto y sugerir una corrección específica
-- Si todo pasa: confirmar que el frontend está listo para commitear
+- Informar qué archivos y pantallas se verificaron, comandos ejecutados y limitaciones del entorno.
+- Si algo falla, resumir el error relevante y distinguir un problema nuevo de uno preexistente.
+- No presentar un build como prueba de una interacción o de una integración externa.
 
 ## Idioma:
 - Toda comunicación, explicación y reporte debe ser en **español**. Esto incluye mensajes de error traducidos, sugerencias de corrección y confirmaciones.
 
 ## Notas:
 - El modo estricto de TypeScript está habilitado — los errores de tipos fallarán el build
+- No ejecutar el build sólo por rutina ante un cambio documental o de texto estático, salvo que otro riesgo lo justifique.
 - Se usa Tailwind CSS — verificar clases rotas o sin uso si los estilos se ven mal
 - El output del build queda en `apps/frontend/dist/` — no commitear esa carpeta
 - El servidor de desarrollo Vite corre en 0.0.0.0:5173 — para desarrollo usar `npm run dev`

@@ -36,7 +36,7 @@ export function LoginPage() {
         LABORATORIO: '/laboratorio',
         ENVASADO: '/envasado',
         MONITOREO: '/historial',
-        JEFATURA: '/jefatura',
+        JEFATURA: '/visualizacion',
         ADMIN: '/admin'
       };
       navigate(home[response.data.user.role] ?? '/tv');
