@@ -6,6 +6,7 @@ Esta carpeta reúne todas las notas de versión disponibles del sistema DISAL Pl
 
 | Versión                             | Fecha      | Contenido principal                                                                                                                       |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [V0.0.37](RELEASE_NOTES_V0.0.37.md) | 15/10/2026 | Velocidad Devree, filtros en la pizarra, pantallas TV por sector y perfiles de InfluxDB por planta.                                        |
 | [V0.0.36](RELEASE_NOTES_V0.0.36.md) | 09/10/2026 | Pizarras de fabricación y envasado para Látex, con secuencia global de Devree y autocompletado de OF.                                     |
 | [V0.0.35](RELEASE_NOTES_V0.0.35.md) | 30/09/2026 | Mejoras de interfaz, resumen por OF y gráfico histórico de peso para Sintéticos.                                                          |
 | [V0.0.34](RELEASE_NOTES_V0.0.34.md) | 29/09/2026 | Endpoint consolidado y microcaché compartido para tableros Grafana multiplanta.                                                           |

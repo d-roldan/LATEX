@@ -84,7 +84,7 @@ La máquina también puede enviar la velocidad por separado del peso. La ruta co
 }
 ```
 
-`line` debe ser `DEVREE` para el emisor actual; `A` y `B` siguen aceptándose sólo por compatibilidad con emisores anteriores. `containersPerMinute` es un número entre 0 y 10000, con hasta tres decimales. Cero representa la máquina detenida. `measuredAt` es ISO-8601 opcional; una lectura con marca igual o anterior a la última aceptada se ignora. La respuesta incluye `accepted`, `ignored`, `receivedAt`, `persisted: false` y un resultado por lectura. El backend sólo conserva la última lectura en memoria y la considera sin señal después de 30 segundos.
+`line` debe ser `DEVREE` para el emisor actual; `A` y `B` siguen aceptándose sólo por compatibilidad con emisores anteriores. `containersPerMinute` es un número entre 0 y 10000, con hasta tres decimales. Cero representa la máquina detenida. `measuredAt` es ISO-8601 opcional; una lectura con marca igual o anterior a la última aceptada se ignora. La respuesta incluye `accepted`, `ignored`, `receivedAt`, `persisted: false` y un resultado por lectura. El backend sólo conserva la última lectura en memoria y la considera sin señal después de 60 segundos.
 
 El cartel del tanque muestra **VELOCIDAD** en envases/min únicamente cuando LATEX está `ENVASANDO`, hay una OE activa y la lectura de Devree es posterior al inicio de esa OE. Si no llegó una lectura reciente, muestra «Sin señal». La velocidad no se guarda como peso ni se agrega al histórico de InfluxDB mediante este endpoint.
 
@@ -122,7 +122,7 @@ La simulación reutiliza `NODE_RED_API_KEY` sólo dentro del Docker local; el ba
 
 ## Tiempo de comunicación
 
-Un equipo con telemetría automática muestra «Sin señal» después de más de 30 segundos sin una lectura nueva aceptada. Este margen admite emisores con pulsos de 10 segundos. Las tarjetas mantienen su consulta cada 2 segundos. El peso puede repetirse, pero `measuredAt` debe corresponder a una nueva medición: timestamps iguales o anteriores se ignoran y no renuevan la comunicación.
+Un equipo con telemetría automática muestra «Sin señal» después de más de 60 segundos sin una lectura nueva aceptada. Este margen admite emisores con pulsos de 10 segundos. Las tarjetas mantienen su consulta cada 2 segundos. El peso puede repetirse, pero `measuredAt` debe corresponder a una nueva medición: timestamps iguales o anteriores se ignoran y no renuevan la comunicación.
 
 ## Variables del emisor
 
