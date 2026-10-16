@@ -5,6 +5,7 @@
 Este runbook indica cómo actualizar una instalación existente de DISAL Planta de Látex desde un tag
 publicado. Complementa [Despliegue multiplanta](DESPLIEGUE_MULTIPLANTA.md), que conserva las reglas
 generales de instalación, persistencia y recuperación.
+La release debe haberse publicado y verificado según [Preparación y publicación de versiones](RELEASE_PROCESS.md); la publicación GitHub no autoriza intervenir este servidor.
 
 El documento no autoriza por sí mismo una intervención. El agente debe contar con un pedido explícito
 para actualizar el servidor, conocer la versión objetivo y trabajar dentro de una ventana de

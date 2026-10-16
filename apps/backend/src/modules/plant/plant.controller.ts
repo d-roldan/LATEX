@@ -396,10 +396,11 @@ export class PlantScopedController {
     @Query('tankId') tankId?: string,
     @Query('state') state?: string,
     @Query('from') from?: string,
-    @Query('to') to?: string
+    @Query('to') to?: string,
+    @Query('offset') offset?: string
   ) {
     const p = await this.service.assertPlantAccess(u.companyId, u.sub, c, tankId);
-    return this.service.history(u.companyId, tankId, state, from, to, p.id);
+    return this.service.history(u.companyId, tankId, state, from, to, p.id, offset);
   }
   @Get(':plantCode/history/audit')
   @Roles('ADMIN')
@@ -606,9 +607,10 @@ export class PlantProtectedController {
     @Query('tankId') tankId?: string,
     @Query('state') state?: string,
     @Query('from') from?: string,
-    @Query('to') to?: string
+    @Query('to') to?: string,
+    @Query('offset') offset?: string
   ) {
-    return this.service.history(user.companyId, tankId, state, from, to);
+    return this.service.history(user.companyId, tankId, state, from, to, undefined, offset);
   }
 
   @Get('history/audit')

@@ -92,13 +92,11 @@ Requisitos: Docker Desktop con Docker Compose.
 Copy-Item .env.example .env
 ```
 
-Editar `.env` y definir contraseñas y claves seguras. Luego ejecutar:
+Editar `.env` y definir contraseñas y claves seguras. **Antes del primer arranque**, si la base es nueva, completar el baseline de [Instalación multiplanta](docs/DESPLIEGUE_MULTIPLANTA.md); el historial de migraciones no se puede aplicar desde cero con `migrate deploy`. Si la base ya existe, seguir [Actualización controlada](docs/ACTUALIZACION_SERVIDOR.md) y verificar respaldo, baseline y migraciones. Una vez cumplida la precondición correspondiente, iniciar los servicios:
 
 ```powershell
-docker compose up -d --build
-docker compose exec disal-backend npm run prisma:migrate
-docker compose exec disal-backend npm run prisma:seed
-docker compose exec disal-backend npm run security:ensure-system-owner
+docker compose up -d --build disal-db disal-backend disal-frontend disal-nginx
+docker compose ps -a
 ```
 
 Abrir `http://localhost:<HTTP_PORT>`. El puerto predeterminado sugerido es `8081`.
@@ -109,7 +107,8 @@ Servicios resultantes:
 - `disal-backend`
 - `disal-frontend`
 - `disal-nginx`
-- `disal-node-red`
+
+`disal-node-red` es un simulador local opcional: iniciarlo sólo si la prueba lo necesita. El arranque dirigido ejecuta `disal-migrate` (`prisma migrate deploy`) como dependencia del backend. No ejecutar `db push`, seeds ni resets sobre una base persistente por rutina.
 
 Durante el arranque también se ejecutan `disal-uploads-init` y `disal-migrate`. Ambos deben terminar con código `0`; no son servicios permanentes. La función, tecnología y comunicación de cada contenedor se explican en [Arquitectura de contenedores](docs/ARQUITECTURA_CONTENEDORES.md).
 

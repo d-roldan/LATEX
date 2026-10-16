@@ -1,0 +1,126 @@
+name: Validación
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["V*.*.*"]
+permissions:
+  contents: read
+jobs:
+  alcance:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.paths.outputs.backend }}
+      frontend: ${{ steps.paths.outputs.frontend }}
+      prisma: ${{ steps.paths.outputs.prisma }}
+      e2e: ${{ steps.paths.outputs.e2e }}
+      infra: ${{ steps.paths.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Diff y rutas
+        id: paths
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            echo 'backend=true' >> "$GITHUB_OUTPUT"
+            echo 'frontend=true' >> "$GITHUB_OUTPUT"
+            echo 'prisma=true' >> "$GITHUB_OUTPUT"
+            echo 'e2e=true' >> "$GITHUB_OUTPUT"
+            echo 'infra=true' >> "$GITHUB_OUTPUT"
+          else
+            git diff --check "$BASE_SHA" "$GITHUB_SHA"
+            git diff --name-only "$BASE_SHA" "$GITHUB_SHA" > changed.txt
+            if grep -Eq '^apps/backend/' changed.txt; then echo 'backend=true' >> "$GITHUB_OUTPUT"; fi
+            if grep -Eq '^apps/frontend/' changed.txt; then echo 'frontend=true' >> "$GITHUB_OUTPUT"; fi
+            if grep -Eq '^apps/backend/prisma/' changed.txt; then echo 'prisma=true' >> "$GITHUB_OUTPUT"; fi
+            if grep -Eq '^e2e/' changed.txt; then echo 'e2e=true' >> "$GITHUB_OUTPUT"; fi
+            if grep -Eq '^(docker-compose\.yml|infra/nginx/|\.env\.example)' changed.txt; then echo 'infra=true' >> "$GITHUB_OUTPUT"; fi
+          fi
+      - name: Verificar tag y notas
+        if: github.ref_type == 'tag'
+        run: node scripts/verify-release.mjs "$GITHUB_REF_NAME"
+  backend:
+    needs: alcance
+    if: needs.alcance.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+        working-directory: apps/backend
+      - run: npm run prisma:generate
+        working-directory: apps/backend
+      - run: npm run lint
+        env:
+          ESLINT_USE_FLAT_CONFIG: "false"
+        working-directory: apps/backend
+      - run: npm run build
+        working-directory: apps/backend
+      - run: npm test -- --runInBand
+        working-directory: apps/backend
+      - name: Prisma y migraciones
+        if: needs.alcance.outputs.prisma == 'true'
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+        run: |
+          npx --no-install prisma validate
+          if find prisma/migrations -name migration.sql -empty -print -quit | grep -q .; then exit 1; fi
+  frontend:
+    needs: alcance
+    if: needs.alcance.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+      - run: npm ci
+        working-directory: apps/frontend
+      - run: npm run lint
+        env:
+          ESLINT_USE_FLAT_CONFIG: "false"
+        working-directory: apps/frontend
+      - run: npm run build
+        working-directory: apps/frontend
+  e2e-config:
+    needs: alcance
+    if: needs.alcance.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm ci
+        working-directory: e2e
+      - run: npm run test:list
+        working-directory: e2e
+  compose:
+    needs: alcance
+    if: needs.alcance.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: docker compose --env-file .env.example config --quiet

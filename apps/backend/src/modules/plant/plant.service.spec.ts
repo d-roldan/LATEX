@@ -788,4 +788,64 @@ describe('PlantService quality adjustment correction', () => {
     ).rejects.toThrow(ConflictException);
     expect(tx.qualityDecision.update).not.toHaveBeenCalled();
   });
+
+  it('registra agitación o recirculación sin materiales al corregir el ajuste', async () => {
+    const { service, tx } = createService();
+
+    await expect(
+      service.correctQualityAdjustment('company-1', 'tank-101', user, {
+        version: 4,
+        adjustmentReasons: ['Agitación/Recirculación']
+      })
+    ).resolves.toEqual({ ok: true });
+
+    expect(tx.qualityDecision.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reason: 'Agitación/Recirculación',
+          adjustmentItems: { deleteMany: {}, create: [] }
+        })
+      })
+    );
+  });
+});
+
+describe('PlantService history pagination', () => {
+  it('ordena de forma estable y aplica un offset seguro para el informe completo', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const service = new PlantService(
+      { tankStateHistory: { findMany } } as any,
+      { get: jest.fn() } as any,
+      { notifyTankAction: jest.fn() } as any
+    );
+
+    await service.history(
+      'company-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'plant-latex',
+      '1000'
+    );
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ companyId: 'company-1', plantId: 'plant-latex' }),
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        take: 1000,
+        skip: 1000
+      })
+    );
+
+    await service.history(
+      'company-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'plant-latex',
+      'Infinity'
+    );
+    expect(findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0 }));
+  });
 });

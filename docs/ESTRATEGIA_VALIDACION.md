@@ -2,6 +2,18 @@
 
 Antes de ejecutar pruebas o builds, identificar qué comportamiento cambió, qué componentes lo consumen y qué fallos serían relevantes. Elegir la comprobación más pequeña que aporte evidencia suficiente y ampliarla si aparece un riesgo concreto. Ahorrar tiempo y tokens nunca justifica dejar sin verificar una función afectada.
 
+## Niveles de trabajo
+
+| Nivel | Alcance | Evidencia habitual |
+| --- | --- | --- |
+| 0 | Texto, etiqueta o documentación sin efecto operativo | Archivo y diff; cotejar instrucciones críticas con el código vigente. |
+| 1 | Presentación, CSS, responsive o TV | Componente y vista afectada; navegador cuando se necesita ver el resultado; build si cambian tipos, imports o bundle. |
+| 2 | Función ordinaria, formulario, filtro, consulta o componente compartido | Consumidores directos, prueba enfocada y compilación del paquete afectado. |
+| 3 | Estados, concurrencia, roles, plantas, trazabilidad, datos, telemetría o Node-RED | Impacto, casos válidos y rechazados, persistencia y regresión pertinente en entorno seguro; build solo no basta. |
+| 4 | Release o preparación productiva | Procedimiento de `docs/RELEASE_PROCESS.md` sobre todos los cambios acumulados y runbook productivo si corresponde. |
+
+La clasificación depende del efecto real, no del tamaño del diff. Un cambio de texto en un selector de pruebas, contrato, accesibilidad o instrucción de seguridad puede subir de nivel. Nivel 0 no activa agentes, Docker, Playwright, E2E ni build por defecto. En todos los niveles, revisar `git diff --check` y el diff relevante.
+
 ## Decisión previa
 
 Para cada cambio, determinar:
@@ -37,5 +49,6 @@ Si una comprobación revela un fallo, investigar su relación con el cambio y am
 - Aplicar lint y formato al alcance modificado cuando el chequeo global tiene deuda conocida; registrar esa limitación. No reformatear archivos ajenos para hacer pasar una verificación.
 - Resumir resultados con comando, alcance, cantidad y fallo relevante. No volcar logs extensos si un resumen y unas pocas líneas diagnósticas bastan.
 - Detener las comprobaciones opcionales cuando la evidencia sea suficiente. Declarar qué quedó pendiente y por qué, especialmente si falta un entorno de integración o una señal real.
+- Agrupar reconstrucciones Docker relacionadas y limitar `docker compose up -d --build --no-deps <servicio>` a servicios afectados cuando la validación local lo requiera. Registrar contenedores actualizados y los que mantienen imagen anterior; no tocar servicios persistentes.
 
 Las skills de `backend-validate`, `frontend-validate`, `db-check` y `e2e-test` aportan comandos y criterios específicos. Esta política define cómo elegir su alcance; las instrucciones explícitas del usuario prevalecen.

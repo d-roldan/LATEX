@@ -12,7 +12,7 @@
         "test": "jest",
         "prisma:generate": "prisma generate",
         "prisma:normalize-enums": "node prisma/run-with-root-env.cjs prisma db execute --file prisma/enum-rename.sql --schema prisma/schema.prisma",
-        "prisma:migrate": "npm run prisma:normalize-enums && node prisma/run-with-root-env.cjs prisma db push --skip-generate",
+        "prisma:migrate": "node prisma/run-with-root-env.cjs prisma migrate deploy",
         "prisma:deploy": "node prisma/run-with-root-env.cjs prisma migrate deploy",
         "prisma:install-empty": "node prisma/run-with-root-env.cjs node prisma/install-empty.cjs",
         "prisma:seed": "node prisma/run-with-root-env.cjs node dist/prisma/seed.js",

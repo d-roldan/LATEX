@@ -546,7 +546,11 @@ export function PlantBoardPage({
           recoveryAction: form.recoveryAction || undefined,
           adjustments:
             form.qualityResult === 'AJUSTE'
-              ? form.adjustments.map((item) => ({
+              ? (form.adjustmentReasons.length === 1 &&
+                form.adjustmentReasons[0] === 'Agitación/Recirculación'
+                  ? []
+                  : form.adjustments
+                ).map((item) => ({
                   materialCode: item.materialCode,
                   quantityKg: Number(item.quantityKg)
                 }))
@@ -559,7 +563,11 @@ export function PlantBoardPage({
         payload: {
           version,
           adjustmentReasons: form.adjustmentReasons,
-          adjustments: form.adjustments.map((item) => ({
+          adjustments: (form.adjustmentReasons.length === 1 &&
+          form.adjustmentReasons[0] === 'Agitación/Recirculación'
+            ? []
+            : form.adjustments
+          ).map((item) => ({
             materialCode: item.materialCode,
             quantityKg: Number(item.quantityKg)
           }))
@@ -738,6 +746,11 @@ export function PlantBoardPage({
                 ? Math.max(0, Math.min(100, ((weight ?? 0) / tank.capacityKg) * 100))
                 : 0;
               const order = tank.activeLot?.packagingOrders[0];
+              const isTvPackagingFeatured =
+                isPublicMonitoring &&
+                tvSector === 'envasado' &&
+                plantCode === 'LATEX' &&
+                tank.state === 'ENVASANDO';
               const adjustmentDecision =
                 tank.state === 'AJUSTE' ? tank.activeLot?.qualityDecisions?.[0] : undefined;
               const laboratorySample =
@@ -749,7 +762,7 @@ export function PlantBoardPage({
               return (
                 <article
                   id={`tank-${tank.id}`}
-                  className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}${isPublicMonitoring && tvSector === 'envasado' && plantCode === 'LATEX' && tank.state === 'ENVASANDO' ? ' tank-card--tv-featured' : ''}${isPublicMonitoring && tvSector === 'laboratorio' && tank.state === 'LABORATORIO' ? ' tank-card--tv-lab' : ''}${tank.id === latestLabArrival ? ' tank-card--tv-arrival' : ''}`}
+                  className={`tank-card state-${tank.state.toLowerCase()} attention-${tank.stateAttention.toLowerCase()}${order ? ' has-packaging' : ''}${isTvPackagingFeatured ? ' tank-card--tv-featured' : ''}${isPublicMonitoring && tvSector === 'laboratorio' && tank.state === 'LABORATORIO' ? ' tank-card--tv-lab' : ''}${tank.id === latestLabArrival ? ' tank-card--tv-arrival' : ''}`}
                   key={tank.id}
                 >
                   <div className="tank-card__content">
@@ -868,6 +881,12 @@ export function PlantBoardPage({
                       ) : null}
                       {order ? (
                         <>
+                          {isTvPackagingFeatured && tank.activeLot ? (
+                            <div>
+                              <dt>OF</dt>
+                              <dd>{tank.activeLot.manufacturingOrder}</dd>
+                            </div>
+                          ) : null}
                           <div>
                             <dt>OE</dt>
                             <dd>{order.packagingOrder}</dd>
@@ -878,7 +897,7 @@ export function PlantBoardPage({
                               {order.line} · {order.format}
                             </dd>
                           </div>
-                          <div>
+                          <div className="tank-dosing-filter">
                             <dt>Dosif. / Filtro</dt>
                             <dd>
                               {order.dispenser ?? '—'} · {order.filter ?? '—'}
@@ -1297,7 +1316,11 @@ function renderFields(
             </select>
           </label>
         ) : null}
-        {form.qualityResult === 'AJUSTE' ? (
+        {form.qualityResult === 'AJUSTE' &&
+        !(
+          form.adjustmentReasons.length === 1 &&
+          form.adjustmentReasons[0] === 'Agitación/Recirculación'
+        ) ? (
           <fieldset className="quality-adjustments">
             <legend>Materiales a ajustar</legend>
             {form.adjustments.map((item, index) => (

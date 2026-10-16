@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "playwright test",
+    "test:industrial": "playwright test tests/industrial.spec.js",
+    "test:list": "playwright test --list"
   },
   "keywords": [],
   "author": "",

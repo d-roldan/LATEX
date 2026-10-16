@@ -1,0 +1,40 @@
+name: E2E industrial aislado
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  industrial:
+    runs-on: [self-hosted, latex-e2e]
+    environment: e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm ci
+        working-directory: e2e
+      - name: Ejecutar contra Compose descartable verificado
+        working-directory: e2e
+        env:
+          E2E_DISPOSABLE: latex-e2e
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_ADMIN_IDENTIFIER: ${{ secrets.E2E_ADMIN_IDENTIFIER }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_OPERATOR_IDENTIFIER: ${{ secrets.E2E_OPERATOR_IDENTIFIER }}
+          E2E_OPERATOR_PASSWORD: ${{ secrets.E2E_OPERATOR_PASSWORD }}
+          E2E_PLANT_CODE: ${{ vars.E2E_PLANT_CODE }}
+          E2E_OTHER_PLANT_CODE: ${{ vars.E2E_OTHER_PLANT_CODE }}
+          E2E_TANK_ID: ${{ vars.E2E_TANK_ID }}
+          E2E_MATERIAL_CODE: ${{ vars.E2E_MATERIAL_CODE }}
+          E2E_PACKAGING_MATERIAL: ${{ vars.E2E_PACKAGING_MATERIAL }}
+          E2E_PACKAGING_LINE: ${{ vars.E2E_PACKAGING_LINE }}
+          E2E_PACKAGING_FORMAT: ${{ vars.E2E_PACKAGING_FORMAT }}
+          E2E_DISPENSER: ${{ vars.E2E_DISPENSER }}
+          E2E_FILTER: ${{ vars.E2E_FILTER }}
+          E2E_EMPLOYEE_NUMBER: ${{ vars.E2E_EMPLOYEE_NUMBER }}
+        run: npm run test:industrial

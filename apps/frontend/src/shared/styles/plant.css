@@ -1783,6 +1783,10 @@ body {
   transform: translateY(-58%);
 }
 .history-collapse-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   min-height: 2.35rem;
   padding: 0.45rem 0.75rem;
   border: 1px solid #2d6688;
@@ -1792,6 +1796,10 @@ body {
   font: inherit;
   font-weight: 750;
   cursor: pointer;
+}
+.history-collapse-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 .history-collapse-button:hover {
   border-color: #55bdff;
@@ -4696,6 +4704,12 @@ body {
     background: color-mix(in srgb, var(--state) 11%, transparent);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl .tank-description {
+    grid-column: 1 / -1;
+  }
+  .plant-tv .plant-page--tv-packaging-active .tank-card.has-packaging.tank-card--tv-featured dl {
+    grid-template-rows: repeat(2, minmax(0, 1fr)) minmax(0, 1.65fr) repeat(3, minmax(0, 1fr));
+  }
+  .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured dl .tank-dosing-filter {
     grid-column: 1 / -1;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card--tv-featured .tank-description dd {

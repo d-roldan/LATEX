@@ -11,6 +11,7 @@ import { Prisma, QualityResult, TankState } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtUser } from '../../common/auth/jwt-user.interface';
 import {
+  AGITATION_ADJUSTMENT_REASON,
   CorrectLotDto,
   CorrectPackagingDto,
   CorrectQualityAdjustmentDto,
@@ -50,6 +51,7 @@ const FILTERS = ['1', '2', '3'];
 const SYNTHETICS_LINES = ['Linea 1', 'Linea 20', 'Linea 3'];
 const SYNTHETICS_FORMATS = ['0.25L', '0.5L', '1L', '4L', '10L'];
 const ADJUSTMENT_REASONS = [
+  AGITATION_ADJUSTMENT_REASON,
   'Nivel del tanque',
   'Viscosidad',
   'Cubritivo',
@@ -1320,6 +1322,12 @@ export class PlantService {
         : [];
     if (dto.result === 'AJUSTE' && !adjustmentReasons.length)
       throw new BadRequestException('Seleccioná al menos un motivo de ajuste');
+    if (
+      dto.result === 'AJUSTE' &&
+      !(adjustmentReasons.length === 1 && adjustmentReasons[0] === AGITATION_ADJUSTMENT_REASON) &&
+      !dto.adjustments?.length
+    )
+      throw new BadRequestException('Agregá al menos un material para el ajuste');
     const decisionReason = dto.result === 'AJUSTE' ? adjustmentReasons.join(', ') : dto.reason;
 
     return this.prisma.$transaction(
@@ -1359,7 +1367,7 @@ export class PlantService {
             adjustmentItems:
               dto.result === 'AJUSTE'
                 ? {
-                    create: dto.adjustments!.map((item, position) => ({
+                    create: (dto.adjustments ?? []).map((item, position) => ({
                       position,
                       materialCode: item.materialCode,
                       quantityKg: item.quantityKg
@@ -1427,6 +1435,11 @@ export class PlantService {
     ];
     if (!adjustmentReasons.length)
       throw new BadRequestException('Seleccioná al menos un motivo de ajuste');
+    if (
+      !(adjustmentReasons.length === 1 && adjustmentReasons[0] === AGITATION_ADJUSTMENT_REASON) &&
+      !dto.adjustments?.length
+    )
+      throw new BadRequestException('Agregá al menos un material para el ajuste');
     const decisionReason = adjustmentReasons.join(', ');
 
     return this.prisma.$transaction(
@@ -1465,7 +1478,7 @@ export class PlantService {
             adjustmentReasons,
             adjustmentItems: {
               deleteMany: {},
-              create: dto.adjustments.map((item, position) => ({
+              create: (dto.adjustments ?? []).map((item, position) => ({
                 position,
                 materialCode: item.materialCode,
                 quantityKg: item.quantityKg
@@ -1888,10 +1901,13 @@ export class PlantService {
     state?: string,
     from?: string,
     to?: string,
-    plantId?: string
+    plantId?: string,
+    offset?: string
   ) {
     const fromDate = from ? this.plantDayBounds(from).start : undefined;
     const toDate = to ? this.plantDayBounds(to).end : undefined;
+    const parsedOffset = Number(offset ?? 0);
+    const skip = Number.isSafeInteger(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
     const rows = await this.prisma.tankStateHistory.findMany({
       where: {
         companyId,
@@ -1909,8 +1925,9 @@ export class PlantService {
         lot: { include: { packagingOrders: { orderBy: { startedAt: 'desc' } } } },
         user: { select: { fullName: true, username: true } }
       },
-      orderBy: { startedAt: 'desc' },
-      take: 1000
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      take: 1000,
+      skip
     });
     const now = new Date();
     return rows.map((row) => ({
@@ -2503,9 +2520,16 @@ export class PlantService {
         : isLatex
           ? FILTERS
           : [],
-      adjustmentReasons: Array.isArray(settings.adjustmentReasons)
-        ? settings.adjustmentReasons.filter((v): v is string => typeof v === 'string')
-        : ADJUSTMENT_REASONS,
+      adjustmentReasons: [
+        ...new Set(
+          Array.isArray(settings.adjustmentReasons)
+            ? [
+                ...settings.adjustmentReasons.filter((v): v is string => typeof v === 'string'),
+                AGITATION_ADJUSTMENT_REASON
+              ]
+            : ADJUSTMENT_REASONS
+        )
+      ],
       stageTargetsMinutes: Object.fromEntries(
         Object.entries(DEFAULT_TARGET_SECONDS).map(([state, seconds]) => [
           state,

@@ -82,11 +82,17 @@ Consultar `docs/AGENTES_CODEX.md` para alcance y requisitos. Delegar únicamente
 
 Si la herramienta de la sesión no expone roles personalizados, leer el TOML pertinente y transmitir sus instrucciones a una subtarea compatible, indicando esa adaptación. No inventar una selección de rol ni eludir restricciones de herramientas o permisos. Mantener el modelo elegido por el usuario y evitar delegación recursiva de estos roles.
 
+## Alcance, costo y verificación
+
+Clasificar el cambio por riesgo antes de elegir herramientas: nivel 0 (texto o documentación), 1 (presentación), 2 (función ordinaria), 3 (estados, permisos, planta, persistencia o integración industrial) y 4 (preparación/publicación de versión). Aplicar la matriz de `docs/ESTRATEGIA_VALIDACION.md`; un archivo pequeño con un cambio de autorización sigue siendo nivel 3. Leer primero el archivo solicitado y sus consumidores directos; ampliar búsquedas sólo por una dependencia concreta. Cargar sólo las skills pertinentes, delegar sólo una subtarea independiente útil y reutilizar verificaciones aún válidas para el mismo código y entorno. No ejecutar builds, navegador, auditorías ni suites completas por rutina. No omitir pruebas necesarias por ahorrar recursos.
+
+Desarrollo local, publicación GitHub y actualización productiva son acciones distintas. Un cambio local no crea versión; publicar no actualiza producción. Para preparar o publicar una versión, seguir `docs/RELEASE_PROCESS.md`, revisar todos los cambios acumulados y consultar tags locales y remotos. La preparación sola no autoriza el push. Para actualizar producción, seguir `docs/ACTUALIZACION_SERVIDOR.md` con autorización específica.
+
 ## Trabajo y verificación
 
 - Ejecutar comandos desde la raíz del repositorio o el directorio de trabajo indicado; adaptar ejemplos de shell a PowerShell.
 - Consultar los scripts actuales de cada `package.json` antes de ejecutarlos. Distinguir comprobaciones de comandos que modifican archivos o datos.
-- En el entorno local del usuario, después de cada cambio de la aplicación reconstruir y actualizar en Docker Compose los servicios afectados para que pueda revisarlo; verificar que respondan. No reconstruir servicios ajenos al cambio ni aplicar esta regla al servidor productivo. Los cambios sólo de documentación no requieren reconstrucción.
+- Reconstruir Docker local sólo cuando la verificación del cambio lo requiera: nunca por documentación o texto estático; para presentación si hay que comprobar el resultado en Compose; para cambios funcionales o críticos, los servicios afectados cuando corresponda. Agrupar cambios relacionados y verificar los contenedores realmente actualizados. Informar cuáles conservan una imagen anterior. No tocar volúmenes, uploads ni PostgreSQL para validar código. No iniciar el Node-RED local/demo salvo que el caso lo requiera; el externo productivo queda fuera de este Compose.
 - Evitar repeticiones de pruebas y logs extensos: resumir la evidencia sin perder fallos relevantes. Una suite completa se ejecuta cuando lo exige el riesgo, un fallo o una entrega, conforme a `docs/ESTRATEGIA_VALIDACION.md`.
 - Para actualizar un servidor existente, leer primero `docs/ACTUALIZACION_SERVIDOR.md` y después
   `docs/DESPLIEGUE_MULTIPLANTA.md`. Para instalaciones nuevas, recuperación o criterios generales de

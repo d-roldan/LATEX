@@ -10,7 +10,7 @@
         "id": "disal-multiplant-live",
         "type": "tab",
         "label": "Pesos multiplanta DISAL",
-        "disabled": true,
+        "disabled": false,
         "info": "Simulación local: envía telemetría a Látex, Terplast y Slurry. Enduido se mantiene sin sensores y no recibe pesos inventados."
     },
     {
@@ -217,7 +217,9 @@
         "x": 430,
         "y": 210,
         "wires": [
-            [],
+            [
+                "multiplant-http-latex"
+            ],
             [],
             [],
             [

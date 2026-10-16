@@ -34,7 +34,7 @@ export interface PackagingOrderSummary {
   finishedBy?: { fullName: string };
 }
 
-interface HistoryRow {
+export interface HistoryRow {
   id: string;
   state: string;
   description?: string;
@@ -79,6 +79,7 @@ export interface QualityAdjustment {
 export interface Timeline {
   manufacturingOrder: string;
   materialCode: string;
+  specificWeight?: number | null;
   description: string;
   totalDurationSeconds: number;
   tank: { number: number; name: string };
@@ -145,6 +146,28 @@ const chartTime = (value: string) =>
   });
 const kilograms = (value: number) => `${Math.round(value).toLocaleString('es-AR')} kg`;
 
+const matchesHistorySearch = (row: HistoryRow, term: string) =>
+  !term ||
+  [
+    row.tank.name,
+    String(row.tank.number),
+    row.lot?.manufacturingOrder,
+    row.lot?.materialCode,
+    row.lot?.description,
+    row.description,
+    row.user?.fullName,
+    row.user?.username,
+    ...(row.lot?.packagingOrders.flatMap((order) => [
+      order.packagingOrder,
+      order.materialCode,
+      order.description,
+      order.line,
+      order.format,
+      order.dispenser,
+      order.filter
+    ]) ?? [])
+  ].some((value) => value?.toLocaleLowerCase('es-AR').includes(term));
+
 export function PlantHistoryPage() {
   const { active } = useActivePlant();
   const base = `/plants/${active?.code ?? 'LATEX'}`;
@@ -156,6 +179,7 @@ export function PlantHistoryPage() {
   const [collapsedByOrder, setCollapsedByOrder] = useState(false);
   const [selectedLot, setSelectedLot] = useState<string | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isDownloadingSummary, setIsDownloadingSummary] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ['plant-history', active?.code, tankId, state, from, to],
@@ -189,28 +213,7 @@ export function PlantHistoryPage() {
   });
   const filteredRows = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es-AR');
-    if (!term) return query.data ?? [];
-    return (query.data ?? []).filter((row) =>
-      [
-        row.tank.name,
-        String(row.tank.number),
-        row.lot?.manufacturingOrder,
-        row.lot?.materialCode,
-        row.lot?.description,
-        row.description,
-        row.user?.fullName,
-        row.user?.username,
-        ...(row.lot?.packagingOrders.flatMap((order) => [
-          order.packagingOrder,
-          order.materialCode,
-          order.description,
-          order.line,
-          order.format,
-          order.dispenser,
-          order.filter
-        ]) ?? [])
-      ].some((value) => value?.toLocaleLowerCase('es-AR').includes(term))
-    );
+    return (query.data ?? []).filter((row) => matchesHistorySearch(row, term));
   }, [query.data, search]);
   const orderSummaries = useMemo(() => {
     const summaries = new Map<
@@ -218,6 +221,8 @@ export function PlantHistoryPage() {
       {
         lotId: string;
         manufacturingOrder: string;
+        materialCode: string;
+        description: string;
         adjustments: number;
         packagingOrders: number;
       }
@@ -233,6 +238,8 @@ export function PlantHistoryPage() {
       summaries.set(row.lot.id, {
         lotId: row.lot.id,
         manufacturingOrder: row.lot.manufacturingOrder,
+        materialCode: row.lot.materialCode,
+        description: row.lot.description,
         adjustments: row.state === 'AJUSTE' ? 1 : 0,
         packagingOrders: row.lot.packagingOrders.length
       });
@@ -262,6 +269,47 @@ export function PlantHistoryPage() {
     }
   };
 
+  const downloadSummary = async () => {
+    setIsDownloadingSummary(true);
+    setPdfError(null);
+    try {
+      const { downloadHistorySummaryPdf } = await import('./history-summary-pdf');
+      const allRows: HistoryRow[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const page = (
+          await api.get<HistoryRow[]>(`${base}/history/states`, {
+            params: {
+              tankId: tankId || undefined,
+              state: state || undefined,
+              from: from || undefined,
+              to: to || undefined,
+              offset
+            }
+          })
+        ).data;
+        allRows.push(...page);
+        if (page.length < 1000) break;
+      }
+      const term = search.trim().toLocaleLowerCase('es-AR');
+      downloadHistorySummaryPdf(
+        allRows.filter((row) => matchesHistorySearch(row, term)),
+        {
+          plant: active?.code ?? 'LATEX',
+          from,
+          to,
+          tank: tanks.data?.find((tank) => tank.id === tankId)?.name ?? '',
+          state,
+          search: search.trim()
+        }
+      );
+    } catch (error) {
+      console.error('No se pudo generar el PDF del historial', error);
+      setPdfError('No se pudo generar el PDF del historial. Volvé a intentarlo.');
+    } finally {
+      setIsDownloadingSummary(false);
+    }
+  };
+
   return (
     <div className="plant-page history-page">
       <header className="plant-page-head">
@@ -283,6 +331,17 @@ export function PlantHistoryPage() {
           >
             {collapsedByOrder ? 'Ver todos los estados' : 'Contraer por OF'}
           </button>
+          {collapsedByOrder ? (
+            <button
+              type="button"
+              className="history-collapse-button"
+              onClick={downloadSummary}
+              disabled={query.isLoading || query.isError || isDownloadingSummary}
+            >
+              <FileDown aria-hidden="true" size={17} />
+              {isDownloadingSummary ? 'Generando…' : 'Descargar informe PDF'}
+            </button>
+          ) : null}
         </div>
       </header>
       <div className="history-filters">
@@ -324,6 +383,11 @@ export function PlantHistoryPage() {
           <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
         </label>
       </div>
+      {pdfError ? (
+        <p className="traceability-pdf-error" role="alert">
+          {pdfError}
+        </p>
+      ) : null}
       <div className="history-table">
         <table>
           {collapsedByOrder ? (
@@ -331,6 +395,7 @@ export function PlantHistoryPage() {
               <thead>
                 <tr>
                   <th>Orden de fabricación</th>
+                  <th>Semielaborado</th>
                   <th>Ajustes realizados</th>
                   <th>Órdenes de envasado asignadas</th>
                 </tr>
@@ -350,13 +415,16 @@ export function PlantHistoryPage() {
                         OF {summary.manufacturingOrder}
                       </button>
                     </td>
+                    <td>
+                      {summary.materialCode} · {summary.description}
+                    </td>
                     <td>{summary.adjustments}</td>
                     <td>{summary.packagingOrders}</td>
                   </tr>
                 ))}
                 {!orderSummaries.length ? (
                   <tr>
-                    <td colSpan={3} className="history-empty-cell">
+                    <td colSpan={4} className="history-empty-cell">
                       No hay órdenes de fabricación para los filtros seleccionados.
                     </td>
                   </tr>
@@ -435,7 +503,7 @@ export function PlantHistoryPage() {
         title={timeline.data ? `OF ${timeline.data.manufacturingOrder}` : 'Trazabilidad de la OF'}
         description={
           timeline.data
-            ? `${timeline.data.materialCode} · ${timeline.data.description} · ${timeline.data.tank.name} · Duración total ${duration(timeline.data.totalDurationSeconds)}`
+            ? `${timeline.data.materialCode} · ${timeline.data.description} · ${timeline.data.tank.name} · Peso específico ${timeline.data.specificWeight ?? 'No informado'} · Duración total ${duration(timeline.data.totalDurationSeconds)}`
             : 'Cargando etapas…'
         }
         headerActions={

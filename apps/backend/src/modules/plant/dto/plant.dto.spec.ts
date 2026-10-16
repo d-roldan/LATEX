@@ -249,6 +249,25 @@ describe('QualityDecisionDto adjustments', () => {
     );
   });
 
+  it('permite agitación o recirculación sin materiales, pero exige materiales con otros motivos', async () => {
+    const dto = adjustmentDto();
+    dto.adjustmentReasons = ['Agitación/Recirculación'];
+    await expect(validate(dto)).resolves.toHaveLength(0);
+    dto.adjustmentReasons.push('Viscosidad');
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'adjustments' })])
+    );
+  });
+
+  it('valida los materiales informados aunque el único motivo sea agitación o recirculación', async () => {
+    const dto = adjustmentDto([{ materialCode: 'MAT-A', quantityKg: 0 }]);
+    dto.adjustmentReasons = ['Agitación/Recirculación'];
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'adjustments' })])
+    );
+  });
+
   it('acepta uno o más motivos cuando el resultado es AJUSTE', async () => {
     const dto = adjustmentDto([{ materialCode: '1010', quantityKg: 25.5 }]);
 
@@ -299,6 +318,23 @@ describe('CorrectQualityAdjustmentDto', () => {
         expect.objectContaining({ property: 'adjustmentReasons' }),
         expect.objectContaining({ property: 'adjustments' })
       ])
+    );
+  });
+
+  it('permite corregir una solicitud a agitación o recirculación sin materiales', async () => {
+    const dto = validDto();
+    dto.adjustmentReasons = ['Agitación/Recirculación'];
+    dto.adjustments = undefined;
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rechaza materiales inválidos al corregir una agitación o recirculación', async () => {
+    const dto = validDto();
+    dto.adjustmentReasons = ['Agitación/Recirculación'];
+    dto.adjustments = [{ materialCode: 'MAT-A', quantityKg: 0 }];
+
+    expect(await validate(dto)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'adjustments' })])
     );
   });
 });

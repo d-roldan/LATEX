@@ -378,12 +378,17 @@ export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = n
 
   doc.setFillColor(246, 249, 252);
   doc.setDrawColor(...COLORS.line);
-  doc.roundedRect(14, 41, 182, 29, 2, 2, 'FD');
+  doc.roundedRect(14, 41, 182, 40, 2, 2, 'FD');
   const summary = [
     ['OF', timeline.manufacturingOrder],
     ['Material', timeline.materialCode],
     ['Tanque', timeline.tank.name],
-    ['Duración total', formatDuration(timeline.totalDurationSeconds)]
+    ['Duración total', formatDuration(timeline.totalDurationSeconds)],
+    [
+      'Peso específico',
+      timeline.specificWeight?.toLocaleString('es-AR', { maximumFractionDigits: 3 }) ??
+        'No informado'
+    ]
   ];
   summary.forEach(([label, value], index) => {
     const column = index % 2;
@@ -402,13 +407,13 @@ export function buildTraceabilityPdf(timeline: Timeline, logo: string | null = n
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.blue);
-  doc.text('PRODUCTO', 14, 79);
+  doc.text('PRODUCTO', 14, 90);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(...COLORS.text);
-  doc.text(safeText(timeline.description), 14, 85, { maxWidth: 182 });
+  doc.text(safeText(timeline.description), 14, 96, { maxWidth: 182 });
 
-  let y = drawWeightChart(doc, timeline, 91);
+  let y = drawWeightChart(doc, timeline, 103);
   y = addTable(
     doc,
     'Etapas de la orden',

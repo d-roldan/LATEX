@@ -85,6 +85,15 @@ export class QualityAdjustmentItemDto {
   @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.001) quantityKg!: number;
 }
 
+export const AGITATION_ADJUSTMENT_REASON = 'Agitación/Recirculación';
+
+const requiresAdjustmentItems = (reasons: string[] | undefined) =>
+  reasons?.length !== 1 || reasons[0]?.trim() !== AGITATION_ADJUSTMENT_REASON;
+
+const validateAdjustmentItems = (reasons: string[] | undefined, items: unknown) =>
+  requiresAdjustmentItems(reasons) ||
+  (items !== undefined && (!Array.isArray(items) || items.length > 0));
+
 export class QualityDecisionDto extends VersionedActionDto {
   @IsIn(['APROBADO', 'AJUSTE', 'RECHAZADO_RECUPERAR', 'RECHAZADO_DESTRUIR']) result!: string;
   @Matches(/^\d{6}$/) employeeNumber!: string;
@@ -98,7 +107,10 @@ export class QualityDecisionDto extends VersionedActionDto {
   @IsNotEmpty({ each: true })
   @MaxLength(180, { each: true })
   adjustmentReasons?: string[];
-  @ValidateIf((dto: QualityDecisionDto) => dto.result === 'AJUSTE')
+  @ValidateIf(
+    (dto: QualityDecisionDto) =>
+      dto.result === 'AJUSTE' && validateAdjustmentItems(dto.adjustmentReasons, dto.adjustments)
+  )
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
@@ -116,12 +128,15 @@ export class CorrectQualityAdjustmentDto {
   @IsNotEmpty({ each: true })
   @MaxLength(180, { each: true })
   adjustmentReasons!: string[];
+  @ValidateIf((dto: CorrectQualityAdjustmentDto) =>
+    validateAdjustmentItems(dto.adjustmentReasons, dto.adjustments)
+  )
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => QualityAdjustmentItemDto)
-  adjustments!: QualityAdjustmentItemDto[];
+  adjustments?: QualityAdjustmentItemDto[];
 }
 
 export class PackagingDto extends VersionedActionDto {

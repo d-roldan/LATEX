@@ -3,6 +3,8 @@
 Para ejecutar una actualización concreta sobre un servidor existente, seguir el runbook
 [Actualización controlada del servidor](ACTUALIZACION_SERVIDOR.md). Este documento conserva los
 criterios generales de instalación, persistencia, baseline y recuperación.
+La separación entre desarrollo, instalación inicial y despliegue de migraciones se resume en
+[Migraciones Prisma por entorno](MIGRACIONES.md).
 
 ## Datos persistentes
 

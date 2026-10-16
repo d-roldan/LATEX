@@ -21,6 +21,8 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [Contrato de pesos con Node-RED](NODE_RED_PESOS.md): formato y comportamiento de la telemetría actual.
 - [Matriz PLC / SCADA / Node-RED / InfluxDB](MATRIZ_INTEGRACION_INDUSTRIAL.md): responsabilidades, inbox idempotente y relevamiento pendiente por señal.
 - [Despliegue multiplanta](DESPLIEGUE_MULTIPLANTA.md): instalación vacía, baseline, actualización, backups y recuperación.
+- [Migraciones Prisma](MIGRACIONES.md): procedimientos separados para desarrollo, instalación y bases existentes.
+- [Preparación y publicación de versiones](RELEASE_PROCESS.md): numeración, notas, tag anotado, remotos y verificación.
 - [Actualización controlada del servidor](ACTUALIZACION_SERVIDOR.md): runbook para seleccionar un tag,
   respaldar, migrar, verificar y aplicar rollback en una instalación existente.
 - [Arquitectura de contenedores](ARQUITECTURA_CONTENEDORES.md): función, tecnología, comunicación, puertos, persistencia y operación de cada servicio Docker.
@@ -40,7 +42,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.38](releases/RELEASE_NOTES_V0.0.38.md): mejor distribución y contraste del tanque destacado en TV, con velocidad en Env/min truncada a dos decimales.
+- [Versión vigente · V0.0.39](releases/RELEASE_NOTES_V0.0.39.md): OF y OE en TV, informe PDF del historial, agitación sin materiales y procedimientos de entrega.
 
 ## Criterio de actualización
 

@@ -8,7 +8,7 @@ description: Gestionar Docker Compose cuando se solicita iniciar, detener, recon
 Trabajar desde la raíz del repositorio. Consultar `docker-compose.yml` y `docker compose config --services` para confirmar servicios. Incluye `disal-backend`, `disal-frontend`, `disal-db`, `disal-nginx`, `disal-node-red` y el migrador `disal-migrate`.
 
 - Estado: `docker compose ps -a`.
-- Inicio o reconstrucción autorizados: `docker compose up -d --build`; limitar a los servicios afectados si corresponde.
+- Inicio o reconstrucción local justificados: `docker compose up -d --build --no-deps disal-frontend` o el servicio afectado. Agrupar cambios relacionados. Consultar `docs/ESTRATEGIA_VALIDACION.md`: documentación y texto estático no requieren reconstrucción automática. Confirmar qué contenedores cambiaron y cuáles mantienen una imagen anterior.
 - Logs acotados: `docker compose logs --tail 100 disal-backend`.
 - Reinicio del backend: `docker compose restart disal-backend`.
 - Detención solicitada: `docker compose down`, sin eliminar volúmenes.

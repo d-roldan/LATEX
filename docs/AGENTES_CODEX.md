@@ -30,7 +30,7 @@ El agente principal debe asignar una subtarea concreta, su alcance y la entrega 
 
 Las definiciones usan las herramientas disponibles en la sesión. Las plantillas de Playwright originales mencionan herramientas MCP específicas; estas ediciones incluyen una alternativa con las herramientas de navegador, archivos y CLI efectivamente disponibles. No se instala ni se presupone un servidor MCP adicional.
 
-La incorporación de agentes no equivale a una suite E2E terminada. Al preparar estas definiciones, `e2e/package.json` declara Playwright 1.58.2 como rango mínimo compatible y su comando `test` sigue siendo un marcador pendiente. Tampoco se encontraron dependencias Playwright instaladas en `e2e/node_modules`. El generador comprueba configuración, dependencias, navegador, datos y entorno antes de ejecutar casos; puede preparar lo necesario dentro de una tarea de pruebas autorizada.
+La suite industrial se define en `e2e/` y usa Playwright Test. El generador comprueba configuración, dependencias, navegador, datos y el preflight del entorno descartable antes de ejecutar casos. Los agentes no sustituyen los resultados de pruebas efectivamente ejecutadas.
 
 No usar cuentas demo supuestas ni iniciar pruebas contra una planta activa sin un entorno apropiado. Una exploración estática se informa como tal. Los planes se versionan cuando corresponde; las trazas, sesiones, capturas e informes temporales se guardan bajo `output/` o una ruta ignorada.
 

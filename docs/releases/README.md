@@ -4,8 +4,11 @@
 
 Esta carpeta reúne todas las notas de versión disponibles del sistema DISAL Planta de Látex. Las versiones se presentan de la más reciente a la más antigua.
 
+Para la próxima versión, seguir [el procedimiento de publicación](../RELEASE_PROCESS.md) y [la plantilla de notas](TEMPLATE.md). La plantilla no representa una versión publicada.
+
 | Versión                             | Fecha      | Contenido principal                                                                                                                       |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [V0.0.39](RELEASE_NOTES_V0.0.39.md) | 16/10/2026 | OF y OE en TV, PDF del historial por OF, agitación sin materiales y procedimientos de validación y publicación.                            |
 | [V0.0.38](RELEASE_NOTES_V0.0.38.md) | 15/10/2026 | Mejor contraste, distribución y tamaño de los datos del tanque destacado en TV; velocidad en Env/min truncada a dos decimales.          |
 | [V0.0.37](RELEASE_NOTES_V0.0.37.md) | 15/10/2026 | Velocidad Devree, filtros en la pizarra, pantallas TV por sector y perfiles de InfluxDB por planta.                                        |
 | [V0.0.36](RELEASE_NOTES_V0.0.36.md) | 09/10/2026 | Pizarras de fabricación y envasado para Látex, con secuencia global de Devree y autocompletado de OF.                                     |

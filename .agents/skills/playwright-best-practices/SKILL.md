@@ -36,4 +36,4 @@ Desde `e2e/`, una vez configurada una suite de Playwright Test:
 npx --no-install playwright test --reporter=list
 ```
 
-Actualmente `e2e/npm test` es un marcador pendiente y los scripts heredados no equivalen a una suite de tanques. No afirmar que el comando anterior funciona hasta comprobar que existen configuración y pruebas compatibles. Usar ejecución sin ventana por defecto; mostrar el navegador si se solicita o resulta necesario para el diagnóstico.
+`e2e/npm test` usa la suite industrial configurada en `playwright.config.cjs`; el preflight exige un Compose descartable. Los scripts heredados no equivalen a esa suite. No afirmar que un escenario pasó si sólo se enumeró. Usar ejecución sin ventana por defecto; mostrar el navegador si se solicita o resulta necesario para el diagnóstico.
