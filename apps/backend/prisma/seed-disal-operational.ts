@@ -164,14 +164,49 @@ async function main() {
   }
 
   const clientDefinitions = [
-    ['DISAL_sample_client_01', 'Agropecuaria Los Ombúes', 'Producción agrícola', 'compras@losombues.example'],
-    ['DISAL_sample_client_02', 'Estancia La Esperanza', 'Ganadería', 'administracion@laesperanza.example'],
-    ['DISAL_sample_client_03', 'Servicios Ganaderos del Sur', 'Servicios rurales', 'proyectos@ganaderosdelsur.example'],
-    ['DISAL_sample_client_04', 'Agrotransportes del Centro', 'Logística agropecuaria', 'operaciones@agrotransportes.example'],
+    [
+      'DISAL_sample_client_01',
+      'Agropecuaria Los Ombúes',
+      'Producción agrícola',
+      'compras@losombues.example'
+    ],
+    [
+      'DISAL_sample_client_02',
+      'Estancia La Esperanza',
+      'Ganadería',
+      'administracion@laesperanza.example'
+    ],
+    [
+      'DISAL_sample_client_03',
+      'Servicios Ganaderos del Sur',
+      'Servicios rurales',
+      'proyectos@ganaderosdelsur.example'
+    ],
+    [
+      'DISAL_sample_client_04',
+      'Agrotransportes del Centro',
+      'Logística agropecuaria',
+      'operaciones@agrotransportes.example'
+    ],
     ['DISAL_sample_client_05', 'Cabaña Santa Rosa', 'Cría bovina', 'compras@santarosa.example'],
-    ['DISAL_sample_client_06', 'Cooperativa Rural Norte', 'Cooperativa agropecuaria', 'infraestructura@ruralnorte.example'],
-    ['DISAL_sample_client_07', 'Campos del Horizonte', 'Producción mixta', 'administracion@camposdelhorizonte.example'],
-    ['DISAL_sample_client_08', 'Establecimiento Don Raúl', 'Agricultura y contratistas', 'contacto@donraul.example']
+    [
+      'DISAL_sample_client_06',
+      'Cooperativa Rural Norte',
+      'Cooperativa agropecuaria',
+      'infraestructura@ruralnorte.example'
+    ],
+    [
+      'DISAL_sample_client_07',
+      'Campos del Horizonte',
+      'Producción mixta',
+      'administracion@camposdelhorizonte.example'
+    ],
+    [
+      'DISAL_sample_client_08',
+      'Establecimiento Don Raúl',
+      'Agricultura y contratistas',
+      'contacto@donraul.example'
+    ]
   ] as const;
 
   const clients: Record<string, { id: string }> = {};
@@ -285,7 +320,8 @@ async function main() {
       model: 'RC4400',
       title: 'Casilla rural RC4400 - Oficina de campo',
       currentProcess: 'Armado y soldadura de estructura',
-      detail: 'Oficina de campo con escritorio doble, ventana lateral y preinstalación de aire acondicionado.',
+      detail:
+        'Oficina de campo con escritorio doble, ventana lateral y preinstalación de aire acondicionado.',
       status: ProductionStatus.EN_PROCESO,
       priority: 2,
       startedDaysAgo: 8,
@@ -295,7 +331,8 @@ async function main() {
       estimatedCost: 14800000,
       operators: ['DISAL_sample_user_01'],
       machineId: 'DISAL_sample_machine_02',
-      progressNote: 'Estructura principal armada. Se completa soldadura de techo y refuerzos laterales.'
+      progressNote:
+        'Estructura principal armada. Se completa soldadura de techo y refuerzos laterales.'
     },
     {
       id: 'DISAL_sample_order_02',
@@ -304,7 +341,8 @@ async function main() {
       model: 'RC4900',
       title: 'Casilla rural RC4900 - Vestuario para personal',
       currentProcess: 'Instalación eléctrica y tablero',
-      detail: 'Vestuario rural para ocho personas con iluminación LED, tomas reforzadas y termotanque eléctrico.',
+      detail:
+        'Vestuario rural para ocho personas con iluminación LED, tomas reforzadas y termotanque eléctrico.',
       status: ProductionStatus.EN_PROCESO,
       priority: 1,
       startedDaysAgo: 13,
@@ -314,7 +352,8 @@ async function main() {
       estimatedCost: 17600000,
       operators: ['DISAL_sample_user_03'],
       machineId: 'DISAL_sample_machine_03',
-      progressNote: 'Cableado principal tendido. Falta montar tablero, protecciones y prueba de aislación.'
+      progressNote:
+        'Cableado principal tendido. Falta montar tablero, protecciones y prueba de aislación.'
     },
     {
       id: 'DISAL_sample_order_03',
@@ -343,7 +382,8 @@ async function main() {
       model: 'RC4400',
       title: 'Casilla rural RC4400 - Puesto de control',
       currentProcess: 'Corte y plegado de componentes',
-      detail: 'Puesto de control de acceso con visual de tres lados, mostrador y espacio para equipos.',
+      detail:
+        'Puesto de control de acceso con visual de tres lados, mostrador y espacio para equipos.',
       status: ProductionStatus.PLANIFICADA,
       priority: 3,
       plannedInDays: 1,
@@ -361,7 +401,8 @@ async function main() {
       model: 'RC4900',
       title: 'Casilla rural RC4900 - Dormitorio rural',
       currentProcess: 'Pintura exterior y terminaciones',
-      detail: 'Dormitorio para cuatro personas con placares, mosquiteros y equipo de climatización.',
+      detail:
+        'Dormitorio para cuatro personas con placares, mosquiteros y equipo de climatización.',
       status: ProductionStatus.EN_PROCESO,
       priority: 2,
       startedDaysAgo: 19,
@@ -371,7 +412,8 @@ async function main() {
       estimatedCost: 18900000,
       operators: ['DISAL_sample_user_05'],
       machineId: 'DISAL_sample_machine_04',
-      progressNote: 'Primera mano aplicada. Continúan acabado exterior, sellados y retoques interiores.'
+      progressNote:
+        'Primera mano aplicada. Continúan acabado exterior, sellados y retoques interiores.'
     },
     {
       id: 'DISAL_sample_order_06',
@@ -428,15 +470,15 @@ async function main() {
       estimatedCost: 17100000,
       operators: ['DISAL_sample_user_05'],
       machineId: 'DISAL_sample_machine_05',
-      progressNote: 'Control dimensional aprobado. Se corrigen sellados y se prepara checklist de entrega.'
+      progressNote:
+        'Control dimensional aprobado. Se corrigen sellados y se prepara checklist de entrega.'
     }
   ];
 
   const orders: Record<string, { id: string }> = {};
   for (const definition of orderDefinitions) {
-    const startedAt = definition.startedDaysAgo === undefined
-      ? null
-      : daysFromNow(-definition.startedDaysAgo, 7);
+    const startedAt =
+      definition.startedDaysAgo === undefined ? null : daysFromNow(-definition.startedDaysAgo, 7);
     const description = [
       `Modelo: ${definition.model}.`,
       `Proceso actual: ${definition.currentProcess}.`,
@@ -745,7 +787,9 @@ async function main() {
   console.log('8 empresas cliente, 8 casillas activas, 5 operarios, 10 recursos y 10 materiales.');
   for (const definition of orderDefinitions) {
     const names = definition.operators.map((id) => users[id].fullName).join(' + ');
-    console.log(`${definition.code} | ${definition.status} | ${definition.currentProcess} | ${names}`);
+    console.log(
+      `${definition.code} | ${definition.status} | ${definition.currentProcess} | ${names}`
+    );
   }
 }
 
