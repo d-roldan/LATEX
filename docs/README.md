@@ -42,7 +42,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.40](releases/RELEASE_NOTES_V0.0.40.md): corrección de CI sobre la entrega de OF y OE en TV, informe PDF y procedimientos de validación.
+- [Versión vigente · V0.0.41](releases/RELEASE_NOTES_V0.0.41.md): OF y OE en TV, informe PDF y procedimientos de validación, con correcciones del workflow de CI.
 
 ## Criterio de actualización
 
