@@ -16,6 +16,7 @@
         "prisma:deploy": "node prisma/run-with-root-env.cjs prisma migrate deploy",
         "prisma:install-empty": "node prisma/run-with-root-env.cjs node prisma/install-empty.cjs",
         "prisma:seed": "node prisma/run-with-root-env.cjs node dist/prisma/seed.js",
+        "prisma:provision-envases": "node prisma/run-with-root-env.cjs node dist/prisma/provision-envases.js",
         "prisma:seed-disal-operational": "node prisma/run-with-root-env.cjs node dist/prisma/seed-disal-operational.js && node prisma/run-with-root-env.cjs node dist/prisma/seed-disal-stage-models.js",
         "prisma:seed-disal-stages": "node prisma/run-with-root-env.cjs node dist/prisma/seed-disal-stage-models.js",
         "prisma:remove-planning-stage": "node prisma/run-with-root-env.cjs prisma db execute --file prisma/remove-planning-stage.sql --schema prisma/schema.prisma",

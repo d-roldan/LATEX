@@ -6,7 +6,8 @@ describe('UsersService', () => {
   const prisma = {
     user: {
       findFirst: jest.fn(),
-      create: jest.fn()
+      create: jest.fn(),
+      update: jest.fn()
     },
     userPlantAccess: {
       deleteMany: jest.fn(),
@@ -152,5 +153,92 @@ describe('UsersService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('permite al administrador protegido editar su perfil y asignarse una planta activa', async () => {
+    const actor = {
+      sub: 'admin-1',
+      companyId: 'company-1',
+      role: UserRole.ADMIN,
+      email: 'admin@disal.local',
+      username: 'admin',
+      fullName: 'Administrador',
+      isProtected: true,
+      isSystemOwner: true,
+      sessionVersion: 0
+    };
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@disal.local',
+      username: 'admin',
+      fullName: 'Administrador',
+      role: UserRole.ADMIN,
+      isActive: true,
+      isProtected: true,
+      isSystemOwner: true,
+      plantAccesses: [{ plantId: 'plant-1' }]
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'admin-1',
+      fullName: 'Administrador Disal',
+      email: 'admin@disal.local',
+      username: 'admin',
+      role: UserRole.ADMIN,
+      isActive: true
+    });
+    prisma.plant.findMany.mockResolvedValue([{ id: 'plant-1' }, { id: 'envases' }]);
+
+    await service.updateProfile(
+      'company-1',
+      'admin-1',
+      { fullName: 'Administrador Disal' },
+      'admin-1',
+      actor
+    );
+    await service.updatePlants('company-1', 'admin-1', ['plant-1', 'envases'], 'admin-1', actor);
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'admin-1' } })
+    );
+    expect(prisma.userPlantAccess.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'admin-1', plantId: 'envases' }],
+      skipDuplicates: true
+    });
+  });
+
+  it('mantiene bloqueados rol, baja y edición ajena del administrador protegido', async () => {
+    const actor = {
+      sub: 'admin-1',
+      companyId: 'company-1',
+      role: UserRole.ADMIN,
+      email: 'admin@disal.local',
+      username: 'admin',
+      fullName: 'Administrador',
+      isProtected: true,
+      isSystemOwner: true,
+      sessionVersion: 0
+    };
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'admin-1',
+      isProtected: true,
+      isSystemOwner: true,
+      isActive: true,
+      plantAccesses: []
+    });
+
+    await expect(
+      service.updateRole('company-1', 'admin-1', UserRole.FABRICACION, 'admin-1', actor)
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.toggleActive('company-1', 'admin-1', 'admin-1', actor)
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateProfile('company-1', 'admin-1', { fullName: 'Otro' }, 'admin-2', {
+        ...actor,
+        sub: 'admin-2',
+        isSystemOwner: false
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

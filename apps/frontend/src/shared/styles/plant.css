@@ -1141,6 +1141,7 @@ body {
   transform: translateX(-102%);
   transition: transform 0.2s ease;
   box-shadow: 1rem 0 3rem #0008;
+  max-height: 100dvh;
 }
 .plant-sidebar.is-open {
   transform: translateX(0);
@@ -1198,6 +1199,10 @@ body {
 }
 .plant-sidebar nav {
   display: grid;
+  align-content: start;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   gap: 0.4rem;
   padding: 1rem 0.75rem;
 }
@@ -1220,6 +1225,7 @@ body {
 }
 .plant-sidebar footer {
   display: grid;
+  flex-shrink: 0;
   gap: 0.8rem;
   margin-top: auto;
   padding: 1rem;

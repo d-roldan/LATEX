@@ -31,6 +31,11 @@ const PlantTvPage = lazy(() =>
     default: module.PlantTvPage
   }))
 );
+const InjectionMachinesPage = lazy(() =>
+  import('../../features/plant/InjectionMachinesPage').then((module) => ({
+    default: module.InjectionMachinesPage
+  }))
+);
 const UsersPage = lazy(() =>
   import('../../features/users/UsersPage').then((module) => ({ default: module.UsersPage }))
 );
@@ -66,6 +71,29 @@ export function AppRouter() {
         <Route path="/tv" element={<PlantTvPage />} />
         <Route path="/monitoreo" element={<TvRedirect />} />
         <Route element={<ProtectedRoute />}>
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  'FABRICACION',
+                  'LABORATORIO',
+                  'ENVASADO',
+                  'MONITOREO',
+                  'JEFATURA',
+                  'ADMIN'
+                ]}
+              />
+            }
+          >
+            <Route
+              path="/envases"
+              element={
+                <AppLayout>
+                  <InjectionMachinesPage />
+                </AppLayout>
+              }
+            />
+          </Route>
           <Route element={<ProtectedRoute allowedRoles={['FABRICACION', 'ADMIN']} />}>
             <Route path="/fabricacion" element={page('fabricacion')} />
           </Route>

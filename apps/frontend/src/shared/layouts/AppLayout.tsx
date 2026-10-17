@@ -23,6 +23,13 @@ import { ThemeToggle } from '../components/ThemeToggle';
 import { useActivePlant } from '../../features/plant/useActivePlant';
 
 const items = [
+  {
+    to: '/envases',
+    label: 'Inyectoras',
+    icon: Factory,
+    roles: ['FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN'],
+    plantCode: 'ENVASES'
+  },
   { to: '/fabricacion', label: 'Fabricación', icon: Factory, roles: ['FABRICACION', 'ADMIN'] },
   { to: '/laboratorio', label: 'Laboratorio', icon: Beaker, roles: ['LABORATORIO', 'ADMIN'] },
   { to: '/envasado', label: 'Envasado', icon: Boxes, roles: ['ENVASADO', 'ADMIN'] },
@@ -68,11 +75,13 @@ export function AppLayout({ children }: PropsWithChildren) {
   const user = getSessionUser();
   const [open, setOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const { plants, active, select } = useActivePlant();
   const allowed = items.filter(
     (item) =>
-      item.roles.includes(user?.role ?? '') && (!item.systemOwnerOnly || user?.isSystemOwner)
+      item.roles.includes(user?.role ?? '') &&
+      (!item.systemOwnerOnly || user?.isSystemOwner) &&
+      (!item.plantCode || item.plantCode === active?.code)
   );
-  const { plants, active, select } = useActivePlant();
   const plantQuery = active ? `?plant=${active.code}` : '';
 
   useEffect(() => {
@@ -103,7 +112,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             >
               {plants.map((plant) => (
                 <option key={plant.id} value={plant.code}>
-                  {plant.name}
+                  {plant.code === 'ENVASES' ? 'Envases' : plant.name}
                 </option>
               ))}
             </select>

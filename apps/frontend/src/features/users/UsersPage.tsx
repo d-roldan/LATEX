@@ -5,6 +5,7 @@ import { Badge } from '../../shared/ui/Badge';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { Input } from '../../shared/ui/Input';
+import { getSessionUser } from '../auth/session';
 
 interface UserItem {
   id: string;
@@ -13,6 +14,8 @@ interface UserItem {
   username: string;
   role: string;
   isActive: boolean;
+  isProtected?: boolean;
+  isSystemOwner?: boolean;
   createdAt: string;
   plantAccesses: Array<{ plant: PlantItem }>;
 }
@@ -64,6 +67,7 @@ type SortDirection = 'asc' | 'desc';
 
 export function UsersPage() {
   const queryClient = useQueryClient();
+  const currentUser = getSessionUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -139,7 +143,6 @@ export function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      closeModal();
     },
     onError: (error: { response?: { data?: { message?: string } } }) => {
       setFormError(error.response?.data?.message ?? 'No se pudo actualizar el usuario.');
@@ -203,6 +206,9 @@ export function UsersPage() {
   const editingUser = useMemo(
     () => listQuery.data?.find((u) => u.id === editingId) ?? null,
     [listQuery.data, editingId]
+  );
+  const isProtectedSelf = Boolean(
+    editingUser?.id === currentUser?.id && (editingUser?.isProtected || editingUser?.isSystemOwner)
   );
   const visibleUsers = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es-AR');
@@ -304,7 +310,7 @@ export function UsersPage() {
     setModalInfo(null);
   };
 
-  const onSubmit = (event: FormEvent) => {
+  const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
     setActionError(null);
@@ -315,33 +321,39 @@ export function UsersPage() {
     }
     if (editingId) {
       const changedFields: string[] = [];
+      try {
+        if (
+          form.fullName !== editingUser?.fullName ||
+          form.email !== editingUser?.email ||
+          form.username !== editingUser?.username
+        ) {
+          await updateProfileMutation.mutateAsync({ id: editingId });
+          changedFields.push('datos');
+        }
 
-      if (
-        form.fullName !== editingUser?.fullName ||
-        form.email !== editingUser?.email ||
-        form.username !== editingUser?.username
-      ) {
-        changedFields.push('datos');
-        updateProfileMutation.mutate({ id: editingId });
-      }
+        if (!isProtectedSelf && form.role !== editingUser?.role) {
+          await updateRoleMutation.mutateAsync({ id: editingId, role: form.role });
+          changedFields.push('puesto');
+        }
 
-      if (form.role !== editingUser?.role) {
-        changedFields.push('puesto');
-        updateRoleMutation.mutate({ id: editingId, role: form.role });
-      }
+        const previousPlantIds = (editingUser?.plantAccesses ?? [])
+          .map(({ plant }) => plant.id)
+          .sort();
+        const selectedPlantIds = [...form.plantIds].sort();
+        if (previousPlantIds.join('|') !== selectedPlantIds.join('|')) {
+          await updatePlantsMutation.mutateAsync({ id: editingId, plantIds: form.plantIds });
+          changedFields.push('plantas');
+          if (editingId === currentUser?.id) {
+            queryClient.invalidateQueries({ queryKey: ['authorized-plants'] });
+          }
+        }
 
-      const previousPlantIds = (editingUser?.plantAccesses ?? [])
-        .map(({ plant }) => plant.id)
-        .sort();
-      const selectedPlantIds = [...form.plantIds].sort();
-      if (previousPlantIds.join('|') !== selectedPlantIds.join('|')) {
-        changedFields.push('plantas');
-        updatePlantsMutation.mutate({ id: editingId, plantIds: form.plantIds });
-      }
-
-      if (newPassword.trim()) {
-        changedFields.push('contrasena');
-        updatePasswordMutation.mutate({ id: editingId, password: newPassword });
+        if (!isProtectedSelf && newPassword.trim()) {
+          await updatePasswordMutation.mutateAsync({ id: editingId, password: newPassword });
+          changedFields.push('contrasena');
+        }
+      } catch {
+        return;
       }
 
       if (changedFields.length === 0) {
@@ -478,30 +490,39 @@ export function UsersPage() {
                       </Badge>
                     </td>
                     <td className="row-actions" style={{ justifyContent: 'flex-end' }}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        type="button"
-                        onClick={() => openEdit(user)}
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        variant={user.isActive ? 'destructive' : 'secondary'}
-                        size="sm"
-                        type="button"
-                        onClick={() => setConfirmToggle(user)}
-                      >
-                        {user.isActive ? 'Suspender' : 'Activar'}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        type="button"
-                        onClick={() => setConfirmDelete(user)}
-                      >
-                        Eliminar
-                      </Button>
+                      {(!user.isProtected && !user.isSystemOwner) ||
+                      currentUser?.isSystemOwner ||
+                      user.id === currentUser?.id ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          type="button"
+                          onClick={() => openEdit(user)}
+                        >
+                          Editar
+                        </Button>
+                      ) : null}
+                      {(!user.isProtected && !user.isSystemOwner) ||
+                      (currentUser?.isSystemOwner && user.id !== currentUser.id) ? (
+                        <>
+                          <Button
+                            variant={user.isActive ? 'destructive' : 'secondary'}
+                            size="sm"
+                            type="button"
+                            onClick={() => setConfirmToggle(user)}
+                          >
+                            {user.isActive ? 'Suspender' : 'Activar'}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            type="button"
+                            onClick={() => setConfirmDelete(user)}
+                          >
+                            Eliminar
+                          </Button>
+                        </>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -583,6 +604,7 @@ export function UsersPage() {
                   className="control-bar__select"
                   style={{ width: '100%', padding: '0.6rem' }}
                   value={form.role}
+                  disabled={isProtectedSelf}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
                   {ROLES.map((r) => (
@@ -596,6 +618,7 @@ export function UsersPage() {
                 {editingId ? 'Nueva contrasena' : 'Contrasena inicial'}
                 <Input
                   type="password"
+                  disabled={isProtectedSelf}
                   value={editingId ? newPassword : form.password}
                   onChange={(e) =>
                     editingId
@@ -606,6 +629,7 @@ export function UsersPage() {
                   minLength={6}
                   placeholder={editingId ? 'Dejar vacio para no cambiar' : 'Minimo 6 caracteres'}
                 />
+                {isProtectedSelf ? <small>Usá Cambiar contraseña desde tu perfil.</small> : null}
               </label>
             </div>
             <fieldset className="users-plant-selector" aria-describedby="plant-access-help">

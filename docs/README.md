@@ -19,6 +19,8 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [Modelo de datos](data-model.md): entidades vigentes y ampliaciones propuestas.
 - [Integración y base de datos](INSTRUCTIVO_INTEGRACION_Y_BASE_DE_DATOS.md): instalación, configuración e integración técnica.
 - [Contrato de pesos con Node-RED](NODE_RED_PESOS.md): formato y comportamiento de la telemetría actual.
+- [Integración de inyectoras Woojin · ENVASES](INTEGRACION_ENVASES_WOOJIN.md): contrato de telemetría, provisión y puesta en marcha industrial.
+- [Simulador local Woojin · ENVASES](SIMULADOR_ENVASES_WOOJIN.md): datos de demostración, controles y aislamiento de la fuente real.
 - [Matriz PLC / SCADA / Node-RED / InfluxDB](MATRIZ_INTEGRACION_INDUSTRIAL.md): responsabilidades, inbox idempotente y relevamiento pendiente por señal.
 - [Despliegue multiplanta](DESPLIEGUE_MULTIPLANTA.md): instalación vacía, baseline, actualización, backups y recuperación.
 - [Migraciones Prisma](MIGRACIONES.md): procedimientos separados para desarrollo, instalación y bases existentes.
@@ -42,7 +44,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.41](releases/RELEASE_NOTES_V0.0.41.md): OF y OE en TV, informe PDF y procedimientos de validación, con correcciones del workflow de CI.
+- [Versión vigente · V0.0.42](releases/RELEASE_NOTES_V0.0.42.md): planta ENVASES, monitoreo Woojin, simulador local y edición de accesos del administrador.
 
 ## Criterio de actualización
 

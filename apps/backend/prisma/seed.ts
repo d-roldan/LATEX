@@ -17,8 +17,28 @@ const companySettings = {
   packagingFormats: ['1 L', '4 L', '10 L', '20 L'],
   packagingDispensers: ['A', 'B'],
   packagingFilters: ['1', '2', '3'],
-  adjustmentReasons: ['Nivel del tanque', 'Viscosidad', 'Cubritivo', 'Preservación', 'Brillo', 'Lavabilidad', 'Color', 'Reemplazo de materia prima', 'Error operativo o de proceso', 'Desaereante', 'Cambio de almacenamiento de producción'],
-  plantStageTargetsMinutes: { FABRICANDO: 480, LABORATORIO: 30, AJUSTE: 60, RECHAZADO: 60, APROBADO: 120, ENVASANDO: 360, FUERA_DE_SERVICIO: 480 }
+  adjustmentReasons: [
+    'Nivel del tanque',
+    'Viscosidad',
+    'Cubritivo',
+    'Preservación',
+    'Brillo',
+    'Lavabilidad',
+    'Color',
+    'Reemplazo de materia prima',
+    'Error operativo o de proceso',
+    'Desaereante',
+    'Cambio de almacenamiento de producción'
+  ],
+  plantStageTargetsMinutes: {
+    FABRICANDO: 480,
+    LABORATORIO: 30,
+    AJUSTE: 60,
+    RECHAZADO: 60,
+    APROBADO: 120,
+    ENVASANDO: 360,
+    FUERA_DE_SERVICIO: 480
+  }
 };
 
 const tankNumbers = [101, 102, 103, 104, 105, 106, 107, 108, 109];
@@ -52,10 +72,7 @@ async function removeKnownDemoData() {
     await prisma.auditLog.deleteMany({
       where: {
         companyId: COMPANY_ID,
-        OR: [
-          { entityId: { in: auditTargets } },
-          { entityId: { startsWith: 'seed_' } }
-        ]
+        OR: [{ entityId: { in: auditTargets } }, { entityId: { startsWith: 'seed_' } }]
       }
     });
   }
@@ -79,10 +96,7 @@ async function removeKnownDemoData() {
   const materials = await prisma.material.deleteMany({
     where: {
       companyId: COMPANY_ID,
-      OR: [
-        { id: { startsWith: 'seed_m' } },
-        { id: { startsWith: 'DISAL_sample_material_' } }
-      ],
+      OR: [{ id: { startsWith: 'seed_m' } }, { id: { startsWith: 'DISAL_sample_material_' } }],
       consumptions: { none: {} }
     }
   });
@@ -140,41 +154,177 @@ async function main() {
 
   const removed = await removeKnownDemoData();
   const latex = await prisma.plant.upsert({
-    where: { companyId_code: { companyId: COMPANY_ID, code: 'LATEX' } }, update: {},
-    create: { companyId: COMPANY_ID, code: 'LATEX', name: 'Látex', displayOrder: 10, finalOperation: 'PACKAGING', settings: { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, packagingDispensers: companySettings.packagingDispensers, packagingFilters: companySettings.packagingFilters, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } }
+    where: { companyId_code: { companyId: COMPANY_ID, code: 'LATEX' } },
+    update: {},
+    create: {
+      companyId: COMPANY_ID,
+      code: 'LATEX',
+      name: 'Látex',
+      displayOrder: 10,
+      finalOperation: 'PACKAGING',
+      settings: {
+        packagingLines: companySettings.packagingLines,
+        packagingFormats: companySettings.packagingFormats,
+        packagingDispensers: companySettings.packagingDispensers,
+        packagingFilters: companySettings.packagingFilters,
+        adjustmentReasons: companySettings.adjustmentReasons,
+        stageTargetsMinutes: companySettings.plantStageTargetsMinutes
+      }
+    }
   });
   const syntheticsCapacityKg = [
-    6_600, 6_000, 4_800, 7_200, 7_200, 12_000, 12_000,
-    12_000, 12_000, 20_400, 20_400, 24_000, 12_000
+    6_600, 6_000, 4_800, 7_200, 7_200, 12_000, 12_000, 12_000, 12_000, 20_400, 20_400, 24_000,
+    12_000
   ];
   const additionalPlants = [
-    { code: 'LATEX_VIEJO', name: 'Látex Viejo', displayOrder: 15, finalOperation: 'PACKAGING' as const, count: 4, capacityKg: 30_000, inheritLatexSettings: true },
-    { code: 'TERPLAST', name: 'Terplast', displayOrder: 20, finalOperation: 'PACKAGING' as const, count: 4, capacityKg: null, inheritLatexSettings: false },
-    { code: 'SLURRY', name: 'Slurry', displayOrder: 30, finalOperation: 'TRANSFER' as const, count: 2, capacityKg: null, inheritLatexSettings: false },
-    { code: 'ENDUIDO', name: 'Enduido', displayOrder: 40, finalOperation: 'PACKAGING' as const, count: 2, capacityKg: null, inheritLatexSettings: false },
-    { code: 'SINTETICOS', name: 'Sinteticos', displayOrder: 50, finalOperation: 'PACKAGING' as const, count: 13, capacityKg: null, inheritLatexSettings: true }
+    {
+      code: 'LATEX_VIEJO',
+      name: 'Látex Viejo',
+      displayOrder: 15,
+      finalOperation: 'PACKAGING' as const,
+      count: 4,
+      capacityKg: 30_000,
+      inheritLatexSettings: true
+    },
+    {
+      code: 'TERPLAST',
+      name: 'Terplast',
+      displayOrder: 20,
+      finalOperation: 'PACKAGING' as const,
+      count: 4,
+      capacityKg: null,
+      inheritLatexSettings: false
+    },
+    {
+      code: 'SLURRY',
+      name: 'Slurry',
+      displayOrder: 30,
+      finalOperation: 'TRANSFER' as const,
+      count: 2,
+      capacityKg: null,
+      inheritLatexSettings: false
+    },
+    {
+      code: 'ENDUIDO',
+      name: 'Enduido',
+      displayOrder: 40,
+      finalOperation: 'PACKAGING' as const,
+      count: 2,
+      capacityKg: null,
+      inheritLatexSettings: false
+    },
+    {
+      code: 'SINTETICOS',
+      name: 'Sinteticos',
+      displayOrder: 50,
+      finalOperation: 'PACKAGING' as const,
+      count: 13,
+      capacityKg: null,
+      inheritLatexSettings: true
+    }
   ];
   for (const definition of additionalPlants) {
-    const plant = await prisma.plant.upsert({ where: { companyId_code: { companyId: COMPANY_ID, code: definition.code } }, update: {}, create: { companyId: COMPANY_ID, code: definition.code, name: definition.name, displayOrder: definition.displayOrder, finalOperation: definition.finalOperation, settings: definition.inheritLatexSettings ? { packagingLines: companySettings.packagingLines, packagingFormats: companySettings.packagingFormats, packagingDispensers: companySettings.packagingDispensers, packagingFilters: companySettings.packagingFilters, adjustmentReasons: companySettings.adjustmentReasons, stageTargetsMinutes: companySettings.plantStageTargetsMinutes } : undefined } });
+    const plant = await prisma.plant.upsert({
+      where: { companyId_code: { companyId: COMPANY_ID, code: definition.code } },
+      update: {},
+      create: {
+        companyId: COMPANY_ID,
+        code: definition.code,
+        name: definition.name,
+        displayOrder: definition.displayOrder,
+        finalOperation: definition.finalOperation,
+        settings: definition.inheritLatexSettings
+          ? {
+              packagingLines: companySettings.packagingLines,
+              packagingFormats: companySettings.packagingFormats,
+              packagingDispensers: companySettings.packagingDispensers,
+              packagingFilters: companySettings.packagingFilters,
+              adjustmentReasons: companySettings.adjustmentReasons,
+              stageTargetsMinutes: companySettings.plantStageTargetsMinutes
+            }
+          : undefined
+      }
+    });
     for (let number = 1; number <= definition.count; number += 1) {
       const disperser = definition.code === 'SLURRY';
       const terplast = definition.code === 'TERPLAST';
       const oldLatex = definition.code === 'LATEX_VIEJO';
       const synthetics = definition.code === 'SINTETICOS';
       const tank = await prisma.tank.upsert({
-        where: { plantId_number: { plantId: plant.id, number } }, update: {},
-        create: { companyId: COMPANY_ID, plantId: plant.id, number, name: terplast ? `TANQUE ${number + 2}` : oldLatex || synthetics ? `TANQUE ${number}` : disperser ? `Dispersora ${number}` : `Equipo ${number}`, capacityKg: terplast ? (number <= 2 ? 1500 : 8000) : synthetics ? syntheticsCapacityKg[number - 1] : definition.capacityKg, equipmentCode: disperser ? `DISP${number}` : oldLatex ? `LV${String(number).padStart(2, '0')}` : synthetics ? `SIN${String(number).padStart(2, '0')}` : `EQ${number}`, equipmentType: disperser ? 'DISPERSER' : 'TANK', telemetryMode: oldLatex || synthetics ? 'AUTOMATIC' : definition.code === 'ENDUIDO' ? 'NOT_INSTALLED' : 'PENDING', scaleKey: oldLatex ? `LV${String(number).padStart(2, '0')}` : synthetics ? `SIN${String(number).padStart(2, '0')}` : null }
+        where: { plantId_number: { plantId: plant.id, number } },
+        update: {},
+        create: {
+          companyId: COMPANY_ID,
+          plantId: plant.id,
+          number,
+          name: terplast
+            ? `TANQUE ${number + 2}`
+            : oldLatex || synthetics
+              ? `TANQUE ${number}`
+              : disperser
+                ? `Dispersora ${number}`
+                : `Equipo ${number}`,
+          capacityKg: terplast
+            ? number <= 2
+              ? 1500
+              : 8000
+            : synthetics
+              ? syntheticsCapacityKg[number - 1]
+              : definition.capacityKg,
+          equipmentCode: disperser
+            ? `DISP${number}`
+            : oldLatex
+              ? `LV${String(number).padStart(2, '0')}`
+              : synthetics
+                ? `SIN${String(number).padStart(2, '0')}`
+                : `EQ${number}`,
+          equipmentType: disperser ? 'DISPERSER' : 'TANK',
+          telemetryMode:
+            oldLatex || synthetics
+              ? 'AUTOMATIC'
+              : definition.code === 'ENDUIDO'
+                ? 'NOT_INSTALLED'
+                : 'PENDING',
+          scaleKey: oldLatex
+            ? `LV${String(number).padStart(2, '0')}`
+            : synthetics
+              ? `SIN${String(number).padStart(2, '0')}`
+              : null
+        }
       });
-      const open = await prisma.tankStateHistory.findFirst({ where: { tankId: tank.id, endedAt: null } });
-      if (!open) await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, plantId: plant.id, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });
+      const open = await prisma.tankStateHistory.findFirst({
+        where: { tankId: tank.id, endedAt: null }
+      });
+      if (!open)
+        await prisma.tankStateHistory.create({
+          data: {
+            companyId: COMPANY_ID,
+            plantId: plant.id,
+            tankId: tank.id,
+            state: tank.state,
+            description: 'Estado inicial'
+          }
+        });
     }
   }
 
+  // ENVASES sólo monitorea inyectoras; no se crean tanques ni estados productivos.
+  await prisma.plant.upsert({
+    where: { companyId_code: { companyId: COMPANY_ID, code: 'ENVASES' } },
+    update: {},
+    create: {
+      companyId: COMPANY_ID,
+      code: 'ENVASES',
+      name: 'ENVASES',
+      displayOrder: 60,
+      finalOperation: 'PACKAGING',
+      settings: { equipmentType: 'INJECTION_MACHINE', monitoringOnly: true }
+    }
+  });
+
   for (const number of tankNumbers) {
-    const capacityKg = number <= 102 ? 60_000
-      : number <= 104 ? 45_000
-        : number <= 107 ? 30_000
-          : 10_500;
+    const capacityKg =
+      number <= 102 ? 60_000 : number <= 104 ? 45_000 : number <= 107 ? 30_000 : 10_500;
     const tank = await prisma.tank.upsert({
       where: { plantId_number: { plantId: latex.id, number } },
       update: {},
@@ -188,9 +338,19 @@ async function main() {
         scaleKey: `TK${number}`
       }
     });
-    const openHistory = await prisma.tankStateHistory.findFirst({ where: { tankId: tank.id, endedAt: null } });
+    const openHistory = await prisma.tankStateHistory.findFirst({
+      where: { tankId: tank.id, endedAt: null }
+    });
     if (!openHistory) {
-      await prisma.tankStateHistory.create({ data: { companyId: COMPANY_ID, plantId: latex.id, tankId: tank.id, state: tank.state, description: 'Estado inicial' } });
+      await prisma.tankStateHistory.create({
+        data: {
+          companyId: COMPANY_ID,
+          plantId: latex.id,
+          tankId: tank.id,
+          state: tank.state,
+          description: 'Estado inicial'
+        }
+      });
     }
   }
 
@@ -201,11 +361,33 @@ async function main() {
     }
     const keyHash = createHash('sha256').update(integrationKey).digest('hex');
     const localTelemetry = [
-      { plantCode: 'LATEX', source: 'NODE_RED_LATEX', scaleKeys: tankNumbers.map((number) => `TK${number}`) },
-      { plantCode: 'LATEX_VIEJO', source: 'NODE_RED_LATEX_VIEJO', scaleKeys: Array.from({ length: 4 }, (_, index) => `LV${String(index + 1).padStart(2, '0')}`) },
-      { plantCode: 'TERPLAST', source: 'NODE_RED_TERPLAST_LOCAL', scaleKeys: ['TERP01', 'TERP02', 'TERP03', 'TERP04'] },
+      {
+        plantCode: 'LATEX',
+        source: 'NODE_RED_LATEX',
+        scaleKeys: tankNumbers.map((number) => `TK${number}`)
+      },
+      {
+        plantCode: 'LATEX_VIEJO',
+        source: 'NODE_RED_LATEX_VIEJO',
+        scaleKeys: Array.from(
+          { length: 4 },
+          (_, index) => `LV${String(index + 1).padStart(2, '0')}`
+        )
+      },
+      {
+        plantCode: 'TERPLAST',
+        source: 'NODE_RED_TERPLAST_LOCAL',
+        scaleKeys: ['TERP01', 'TERP02', 'TERP03', 'TERP04']
+      },
       { plantCode: 'SLURRY', source: 'NODE_RED_SLURRY_LOCAL', scaleKeys: ['SLURRY01', 'SLURRY02'] },
-      { plantCode: 'SINTETICOS', source: 'NODE_RED_SINTETICOS', scaleKeys: Array.from({ length: 13 }, (_, index) => `SIN${String(index + 1).padStart(2, '0')}`) }
+      {
+        plantCode: 'SINTETICOS',
+        source: 'NODE_RED_SINTETICOS',
+        scaleKeys: Array.from(
+          { length: 13 },
+          (_, index) => `SIN${String(index + 1).padStart(2, '0')}`
+        )
+      }
     ];
 
     for (const definition of localTelemetry) {
@@ -218,7 +400,9 @@ async function main() {
         select: { id: true }
       });
       if (equipment.length !== definition.scaleKeys.length) {
-        throw new Error(`Cantidad inesperada de equipos para simulación local en ${definition.plantCode}`);
+        throw new Error(
+          `Cantidad inesperada de equipos para simulación local en ${definition.plantCode}`
+        );
       }
       for (let index = 0; index < equipment.length; index += 1) {
         await prisma.tank.update({
@@ -238,7 +422,9 @@ async function main() {
         }
       });
     }
-    console.log('Telemetría simulada local habilitada para Látex, Látex Viejo, Terplast, Slurry y Sintéticos.');
+    console.log(
+      'Telemetría simulada local habilitada para Látex, Látex Viejo, Terplast, Slurry y Sintéticos.'
+    );
   }
 
   // No elimina equipos con producción: sólo configuraciones obsoletas vacías.
@@ -250,9 +436,11 @@ async function main() {
   console.log(`Empresa activa: Planta de Látex (${COMPANY_ID})`);
   console.log(
     `Datos demo eliminados: ${removed.orders} órdenes, ${removed.resources} recursos, ` +
-    `${removed.materials} materiales, ${removed.clients} clientes y ${removed.users} usuarios.`
+      `${removed.materials} materiales, ${removed.clients} clientes y ${removed.users} usuarios.`
   );
-  console.log('No se crean datos ficticios. Ejecutá security:ensure-system-owner para asegurar el administrador protegido.');
+  console.log(
+    'No se crean datos ficticios. Ejecutá security:ensure-system-owner para asegurar el administrador protegido.'
+  );
 }
 
 main()

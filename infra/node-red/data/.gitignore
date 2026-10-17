@@ -1,3 +1,5 @@
 *
 !.gitignore
 !flows.json
+!envases-simulator.function.js
+!build-envases-flow.cjs

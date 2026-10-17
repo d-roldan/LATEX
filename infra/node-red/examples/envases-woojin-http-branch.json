@@ -1,0 +1,33 @@
+[
+  {
+    "id": "envases-prepare", "type": "function", "name": "ENVASES · preparar lote", "outputs": 2,
+    "func": "if (Number(flow.get('envases_http_busy_until')||0)>Date.now()) return [null, {payload:'ENVASES: envío omitido; solicitud anterior pendiente'}];\nconst base=env.get('LATEX_API_BASE_URL'); const key=env.get('ENVASES_NODE_RED_KEY');\nif (!base || !key) return [null,{payload:'ENVASES: faltan URL o clave en el entorno'}];\nif (!msg.payload || !Array.isArray(msg.payload.maquinas)) return [null,{payload:'ENVASES: resumen inválido'}];\nflow.set('envases_http_busy_until',Date.now()+25000);\nmsg.method='POST'; msg.url=base.replace(/\\/$/,'')+'/plants/ENVASES/telemetry/injection-machines';\nmsg.headers={'content-type':'application/json','x-node-red-key':key};\nmsg.payload={...msg.payload,source:'NODE_RED_ENVASES',schemaVersion:1}; msg.envasesBody=msg.payload; msg.envasesAttempt=0;\nreturn [msg,null];",
+    "wires": [["envases-http"], ["envases-diagnostic"]]
+  },
+  {
+    "id": "envases-http", "type": "http request", "name": "ENVASES · POST LATEX", "method": "use", "ret": "obj", "paytoqs": "ignore", "url": "", "tls": "", "persist": false, "proxy": "", "insecureHTTPParser": false, "authType": "", "senderr": false, "headers": [], "timeout": "4000",
+    "wires": [["envases-result"]]
+  },
+  {
+    "id": "envases-result", "type": "function", "name": "ENVASES · resultado y reintento", "outputs": 2,
+    "func": "const status=Number(msg.statusCode||0); const retry=status===0 || status===429 || status>=500; const attempt=Number(msg.envasesAttempt||0);\nif(retry && attempt<2){msg.envasesAttempt=attempt+1; msg.payload=msg.envasesBody; msg.headers={'content-type':'application/json','x-node-red-key':env.get('ENVASES_NODE_RED_KEY')}; return [msg,null];}\nflow.set('envases_http_busy_until',0); const summary={statusCode:status,attempts:attempt+1,accepted:msg.payload?.accepted,rejected:msg.payload?.rejected,ignored:msg.payload?.ignored};\nreturn [null,{payload:summary}];",
+    "wires": [["envases-retry-delay"], ["envases-diagnostic"]]
+  },
+  {
+    "id": "envases-retry-delay", "type": "delay", "name": "ENVASES · espera 3 s", "pauseType": "delay", "timeout": "3", "timeoutUnits": "seconds", "rate": "1", "nbRateUnits": "1", "rateUnits": "second", "randomFirst": "1", "randomLast": "5", "randomUnits": "seconds", "drop": false, "allowrate": false,
+    "wires": [["envases-http"]]
+  },
+  {
+    "id": "envases-http-error", "type": "catch", "name": "ENVASES · error HTTP", "scope": ["envases-http"], "uncaught": false,
+    "wires": [["envases-error-handler"]]
+  },
+  {
+    "id": "envases-error-handler", "type": "function", "name": "ENVASES · error sin secretos", "outputs": 2,
+    "func": "const attempt=Number(msg.envasesAttempt||0); if(attempt<2){msg.envasesAttempt=attempt+1; msg.payload=msg.envasesBody; msg.headers={'content-type':'application/json','x-node-red-key':env.get('ENVASES_NODE_RED_KEY')}; return [msg,null];}\nflow.set('envases_http_busy_until',0); return [null,{payload:{status:'HTTP_ERROR',attempts:attempt+1,message:String(msg.error?.message||'Error de red').slice(0,180)}}];",
+    "wires": [["envases-retry-delay"], ["envases-diagnostic"]]
+  },
+  {
+    "id": "envases-diagnostic", "type": "debug", "name": "ENVASES · diagnóstico sin clave", "active": true, "tosidebar": true, "console": false, "tostatus": false, "complete": "payload", "targetType": "msg",
+    "wires": []
+  }
+]

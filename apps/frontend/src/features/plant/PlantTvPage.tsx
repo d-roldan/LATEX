@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { PlantBoardPage } from './PlantBoardPage';
 import { ThemeToggle } from '../../shared/components/ThemeToggle';
 import { findPublicPlant, publicPlants } from './plantCatalog';
+import { InjectionMachinesPage } from './InjectionMachinesPage';
 
 const sectors = ['fabricacion', 'laboratorio', 'envasado'] as const;
 const sectorLabels = {
@@ -27,6 +28,13 @@ export function PlantTvPage() {
   }, []);
 
   useEffect(() => {
+    if (selectedPlant?.code === 'ENVASES') {
+      const previousTitle = document.title;
+      document.title = 'ENVASES · Inyectoras · TV';
+      return () => {
+        document.title = previousTitle;
+      };
+    }
     if (!selectedPlant || !selectedSector) return;
     const previousTitle = document.title;
     document.title = `${sectorLabels[selectedSector]} · ${selectedPlant.name} · TV`;
@@ -44,7 +52,7 @@ export function PlantTvPage() {
     }
   };
 
-  if (!selectedPlant || !selectedSector) {
+  if (!selectedPlant || (!selectedSector && selectedPlant.code !== 'ENVASES')) {
     return (
       <main className="plant-main plant-tv plant-tv-setup">
         <ThemeToggle className="plant-theme-toggle plant-tv-setup__theme" />
@@ -79,7 +87,9 @@ export function PlantTvPage() {
   }
 
   return (
-    <main className="plant-main plant-tv">
+    <main
+      className={`plant-main plant-tv${selectedPlant.code === 'ENVASES' ? ' plant-tv--envases' : ''}`}
+    >
       <div className="plant-tv__controls">
         <button
           className="plant-fullscreen plant-tv__fullscreen"
@@ -92,7 +102,11 @@ export function PlantTvPage() {
         </button>
         <ThemeToggle className="plant-theme-toggle plant-tv__theme-toggle" />
       </div>
-      <PlantBoardPage sector="monitoreo" publicPlant={selectedPlant} tvSector={selectedSector} />
+      {selectedPlant.code === 'ENVASES' ? (
+        <InjectionMachinesPage tv />
+      ) : (
+        <PlantBoardPage sector="monitoreo" publicPlant={selectedPlant} tvSector={selectedSector!} />
+      )}
     </main>
   );
 }

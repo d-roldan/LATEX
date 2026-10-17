@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
-import { PlantController, PlantPublicScopedController, PlantScopedController } from './plant.controller';
+import {
+  PlantController,
+  PlantPublicScopedController,
+  PlantScopedController
+} from './plant.controller';
 import { PlantService } from './plant.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { InfluxHistoryService } from './influx-history.service';
 import { IntegrationInboxController } from './integration-inbox.controller';
 import { IntegrationInboxService } from './integration-inbox.service';
 import { PlantIntegrationAuthService } from './plant-integration-auth.service';
+import { InjectionMachinesService } from './injection-machines.service';
 
 @Module({
   imports: [NotificationsModule],
@@ -19,6 +24,7 @@ import { PlantIntegrationAuthService } from './plant-integration-auth.service';
     PlantService,
     InfluxHistoryService,
     PlantIntegrationAuthService,
+    InjectionMachinesService,
     IntegrationInboxService
   ]
 })

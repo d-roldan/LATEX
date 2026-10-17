@@ -43,6 +43,8 @@ import {
   WeightBatchDto
 } from './dto/plant.dto';
 import { PlantService } from './plant.service';
+import { InjectionMachinesService } from './injection-machines.service';
+import { InjectionMachineBatchDto } from './dto/injection-machine.dto';
 
 @Controller('plant')
 export class PlantController {
@@ -76,7 +78,10 @@ export class PlantController {
 
 @Controller('plants')
 export class PlantPublicScopedController {
-  constructor(private readonly service: PlantService) {}
+  constructor(
+    private readonly service: PlantService,
+    private readonly injectionMachines: InjectionMachinesService
+  ) {}
   @Get('tv')
   @Header('Cache-Control', 'public, max-age=2, stale-while-revalidate=5')
   @Throttle({ default: { ttl: 60000, limit: 600 } })
@@ -88,6 +93,20 @@ export class PlantPublicScopedController {
   @Throttle({ default: { ttl: 60000, limit: 600 } })
   tv(@Param('plantCode') code: string) {
     return this.service.publicTanks(code);
+  }
+  @Get(':plantCode/tv/injection-machines')
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { ttl: 60000, limit: 600 } })
+  injectionTv(@Param('plantCode') code: string) {
+    return this.injectionMachines.publicSnapshot(code);
+  }
+  @Post(':plantCode/telemetry/injection-machines')
+  injectionTelemetry(
+    @Param('plantCode') code: string,
+    @Headers('x-node-red-key') key: string | undefined,
+    @Body() dto: InjectionMachineBatchDto
+  ) {
+    return this.injectionMachines.receive(code, key, dto);
   }
   @Post(':plantCode/telemetry/weights')
   weights(
@@ -110,11 +129,20 @@ export class PlantPublicScopedController {
 @Controller('plants')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PlantScopedController {
-  constructor(private readonly service: PlantService) {}
+  constructor(
+    private readonly service: PlantService,
+    private readonly injectionMachines: InjectionMachinesService
+  ) {}
   @Get()
   @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
   list(@CurrentUser() u: JwtUser) {
     return this.service.authorizedPlants(u.companyId, u.sub);
+  }
+  @Get(':plantCode/telemetry/injection-machines')
+  @Header('Cache-Control', 'no-store')
+  @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
+  injectionTelemetry(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {
+    return this.injectionMachines.privateSnapshot(u.companyId, u.sub, c);
   }
   @Get(':plantCode/config')
   @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')

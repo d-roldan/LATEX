@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../shared/api/http';
+import { getSessionUser } from '../auth/session';
 
 export interface AuthorizedPlant {
   id: string;
@@ -48,7 +49,18 @@ export function useActivePlant({ enabled = true }: { enabled?: boolean } = {}) {
     client.removeQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('plant-') });
     const next = new URLSearchParams(params);
     next.set('plant', code);
-    navigate({ pathname: location.pathname, search: next.toString() });
+    const role = getSessionUser()?.role;
+    const home =
+      role === 'LABORATORIO'
+        ? '/laboratorio'
+        : role === 'ENVASADO'
+          ? '/envasado'
+          : role === 'MONITOREO' || role === 'JEFATURA'
+            ? '/visualizacion'
+            : '/fabricacion';
+    const pathname =
+      code === 'ENVASES' ? '/envases' : location.pathname === '/envases' ? home : location.pathname;
+    navigate({ pathname, search: next.toString() });
   };
   return { plants: plants.data ?? [], active, select, isLoading: plants.isLoading };
 }

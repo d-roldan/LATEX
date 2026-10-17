@@ -1,0 +1,250 @@
+import { ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { InjectionMachinesService } from './injection-machines.service';
+import { InjectionMachineBatchDto } from './dto/injection-machine.dto';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { createHash } from 'crypto';
+import { PlantIntegrationAuthService } from './plant-integration-auth.service';
+
+const reading = (ip: string, timestamp: string, quantity: number | null = 10) => ({
+  machine_ip: ip,
+  cms_timestamp: timestamp,
+  current_quantity: quantity,
+  modelo: ip === '172.16.0.141' ? 'DL650G5' : 'DL450G5',
+  operation_status_code: 77,
+  operation_status_text: 'DESCONOCIDO',
+  adquisicion_industrial_fresca: 'NO_VERIFICADA',
+  tipo_cambio_contador: 'INCREMENTO_DETECTADO',
+  delta_contador_observado: 1,
+  ultimo_incremento_detectado: timestamp
+});
+const batch = (machines: ReturnType<typeof reading>[]): InjectionMachineBatchDto => ({
+  source: 'NODE_RED_ENVASES',
+  schemaVersion: 1,
+  fecha_recepcion_nodered: new Date().toISOString(),
+  maquinas: machines
+});
+
+describe('InjectionMachinesService', () => {
+  const prisma = { plant: { findFirst: jest.fn() } } as any;
+  const auth = { authenticate: jest.fn() } as any;
+  const config = { get: jest.fn().mockReturnValue('empresa') } as any;
+  let service: InjectionMachinesService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    auth.authenticate.mockResolvedValue({ plantId: 'envases-1' });
+    prisma.plant.findFirst.mockResolvedValue({ id: 'envases-1' });
+    service = new InjectionMachinesService(prisma, auth, config);
+  });
+
+  it('ordena cinco equipos y conserva ausencia de datos al reiniciar', async () => {
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines.map((machine) => machine.code)).toEqual([
+      'INY01',
+      'INY02',
+      'INY03',
+      'INY04',
+      'INY05'
+    ]);
+    expect(snapshot.machines.map((machine) => machine.ip)).toEqual([
+      '172.16.0.141',
+      '172.16.0.146',
+      '172.16.0.143',
+      '172.16.0.144',
+      '172.16.0.145'
+    ]);
+    expect(snapshot.machines.every((machine) => machine.reading === null)).toBe(true);
+    expect(snapshot.communication).toBe('NO_RECENT_DATA');
+  });
+
+  it('acepta lote parcial, ignora duplicados y preserva valores nulos y códigos desconocidos', async () => {
+    const t = new Date(Date.now() - 1000).toISOString();
+    const first = await service.receive(
+      'ENVASES',
+      'key',
+      batch([reading('172.16.0.146', t), reading('172.16.0.141', t, null)])
+    );
+    expect(first.accepted).toBe(2);
+    const duplicate = await service.receive(
+      'ENVASES',
+      'key',
+      batch([reading('172.16.0.141', t, 99)])
+    );
+    expect(duplicate.ignored).toBe(1);
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines[0].reading?.current_quantity).toBeNull();
+    expect(snapshot.machines[0].reading?.operation_status_code).toBe(77);
+    expect(snapshot.machines[1].reading?.current_quantity).toBe(10);
+    expect(snapshot.machines[2].reading).toBeNull();
+  });
+
+  it('rechaza IP desconocida y modelo incorrecto por máquina sin perder las válidas', async () => {
+    const t = new Date(Date.now() - 1000).toISOString();
+    const wrong = reading('172.16.0.141', t);
+    wrong.modelo = 'OTRO';
+    const result = await service.receive(
+      'ENVASES',
+      'key',
+      batch([reading('172.16.0.146', t), reading('10.0.0.99', t), wrong])
+    );
+    expect(result).toMatchObject({ accepted: 1, rejected: 2 });
+  });
+
+  it('aísla el simulador y conserva el último ciclo técnico al recibir un disparo repetido', async () => {
+    config.get.mockImplementation((name: string) =>
+      name === 'DISAL_ENABLE_ENVASES_SIMULATOR' ? 'true' : 'empresa'
+    );
+    const t = new Date(Date.now() - 1000).toISOString();
+    const simulated = {
+      ...reading('172.16.0.141', t, 100),
+      simulated: true,
+      ultimo_ciclo_tecnico: {
+        shot_number: 42,
+        timestamp: t,
+        cycle_time: 26,
+        barrel_temperatures: [190, 191, 192, 193, 194, 195, 196]
+      }
+    };
+    const simBatch = {
+      ...batch([simulated]),
+      source: 'NODE_RED_ENVASES_SIM',
+      mode: 'SIMULATION',
+      simulated: true
+    } as InjectionMachineBatchDto;
+    await service.receive('ENVASES', 'sim-key', simBatch);
+    expect(auth.authenticate).toHaveBeenCalledWith('ENVASES', 'NODE_RED_ENVASES_SIM', 'sim-key');
+    let snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.source).toBe('NODE_RED_ENVASES_SIM');
+    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.shot_number).toBe(42);
+    const next = new Date().toISOString();
+    await service.receive('ENVASES', 'sim-key', {
+      ...simBatch,
+      fecha_recepcion_nodered: next,
+      maquinas: [
+        {
+          ...simulated,
+          cms_timestamp: next,
+          current_quantity: 0,
+          delta_contador_observado: -100,
+          tipo_cambio_contador: 'REINICIO_O_RETROCESO_CONTADOR',
+          ultimo_ciclo_tecnico: { ...simulated.ultimo_ciclo_tecnico, cycle_time: 99 }
+        }
+      ]
+    });
+    snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines[0].reading?.current_quantity).toBe(0);
+    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.cycle_time).toBe(26);
+    config.get.mockReturnValue('empresa');
+    snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.source).toBe('NODE_RED_ENVASES');
+    expect(snapshot.machines[0].reading).toBeNull();
+    await expect(service.receive('ENVASES', 'sim-key', simBatch)).rejects.toBeInstanceOf(
+      ForbiddenException
+    );
+  });
+
+  it('no concede acceso cambiando la URL y exige la clave de integración', async () => {
+    prisma.plant.findFirst.mockResolvedValue(null);
+    await expect(service.privateSnapshot('empresa', 'usuario', 'ENVASES')).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+    expect(prisma.plant.findFirst).toHaveBeenCalledWith({
+      where: {
+        companyId: 'empresa',
+        code: 'ENVASES',
+        isActive: true,
+        userAccesses: { some: { userId: 'usuario' } }
+      }
+    });
+    auth.authenticate.mockRejectedValue(new UnauthorizedException());
+    await expect(
+      service.receive(
+        'ENVASES',
+        undefined,
+        batch([reading('172.16.0.141', new Date().toISOString())])
+      )
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('marca datos obsoletos sin alterar el último contador', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-16T18:00:00.000Z'));
+    try {
+      const old = new Date(Date.now() - 9000).toISOString();
+      await service.receive('ENVASES', 'key', batch([reading('172.16.0.141', old, 123)]));
+      jest.setSystemTime(new Date(Date.now() + 31_000));
+      const snapshot = await service.publicSnapshot('ENVASES');
+      expect(snapshot.communication).toBe('NO_RECENT_DATA');
+      expect(snapshot.machines[0]).toMatchObject({ cmsFresh: false, communicationFresh: false });
+      expect(snapshot.machines[0].reading?.current_quantity).toBe(123);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('preserva un reinicio observado del contador sin reinterpretarlo', async () => {
+    const t = new Date(Date.now() - 1000).toISOString();
+    const reset = {
+      ...reading('172.16.0.141', t, 3),
+      delta_contador_observado: -200,
+      tipo_cambio_contador: 'REINICIO_O_RETROCESO_CONTADOR'
+    };
+    await service.receive('ENVASES', 'key', batch([reset]));
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines[0].reading).toMatchObject({
+      current_quantity: 3,
+      delta_contador_observado: -200,
+      tipo_cambio_contador: 'REINICIO_O_RETROCESO_CONTADOR'
+    });
+  });
+
+  it('no presenta como vigente un timestamp CMS adelantado', async () => {
+    const future = new Date(Date.now() + 20_000).toISOString();
+    await service.receive('ENVASES', 'key', batch([reading('172.16.0.141', future)]));
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines[0].cmsFresh).toBe(false);
+  });
+
+  it('autentica exclusivamente la fuente y clave registradas para ENVASES', async () => {
+    const key = 'clave-de-prueba-no-productiva-123456789';
+    const keyHash = createHash('sha256').update(key).digest('hex');
+    const integrationPrisma = {
+      plantIntegration: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'integration-1',
+            plantId: 'envases-1',
+            companyId: 'empresa',
+            source: 'NODE_RED_ENVASES',
+            keyHash,
+            plant: { code: 'ENVASES' }
+          }
+        ])
+      }
+    } as any;
+    const integrationAuth = new PlantIntegrationAuthService(integrationPrisma);
+    await expect(
+      integrationAuth.authenticate('ENVASES', 'NODE_RED_ENVASES', 'incorrecta')
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      integrationAuth.authenticate('ENVASES', 'NODE_RED_ENVASES', key)
+    ).resolves.toMatchObject({ plantId: 'envases-1' });
+    expect(integrationPrisma.plantIntegration.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          source: 'NODE_RED_ENVASES',
+          isActive: true,
+          plant: { code: 'ENVASES', isActive: true }
+        }
+      })
+    );
+  });
+
+  it('valida tipos y rangos del contrato anidado', async () => {
+    const dto = plainToInstance(InjectionMachineBatchDto, {
+      ...batch([reading('172.16.0.141', new Date().toISOString())]),
+      maquinas: [{ ...reading('172.16.0.141', new Date().toISOString()), current_quantity: -1 }]
+    });
+    expect(await validate(dto)).not.toEqual([]);
+  });
+});

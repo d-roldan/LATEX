@@ -20,13 +20,18 @@ export class UsersService {
 
   private assertCanManageTarget(
     target: { id: string; isProtected: boolean; isSystemOwner: boolean },
-    actor?: JwtUser
+    actor?: JwtUser,
+    allowProtectedSelf = false
   ) {
     if (!target.isProtected && !target.isSystemOwner) {
       return;
     }
 
     if (actor?.isSystemOwner && actor.sub !== target.id) {
+      return;
+    }
+
+    if (allowProtectedSelf && actor?.sub === target.id && actor.role === 'ADMIN') {
       return;
     }
 
@@ -339,7 +344,7 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    this.assertCanManageTarget(user, actor);
+    this.assertCanManageTarget(user, actor, true);
 
     if (dto.email && dto.email.toLowerCase() !== user.email) {
       const existing = await this.prisma.user.findFirst({
@@ -428,7 +433,7 @@ export class UsersService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    this.assertCanManageTarget(user, actor);
+    this.assertCanManageTarget(user, actor, true);
 
     const availablePlants = await this.prisma.plant.findMany({
       where: { companyId, isActive: true, id: { in: plantIds } },

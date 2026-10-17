@@ -1,5 +1,5 @@
 export interface PublicPlant {
-  code: 'LATEX' | 'LATEX_VIEJO' | 'TERPLAST' | 'SLURRY' | 'ENDUIDO' | 'SINTETICOS';
+  code: 'LATEX' | 'LATEX_VIEJO' | 'TERPLAST' | 'SLURRY' | 'ENDUIDO' | 'SINTETICOS' | 'ENVASES';
   name: string;
 }
 
@@ -9,7 +9,8 @@ export const publicPlants: PublicPlant[] = [
   { code: 'TERPLAST', name: 'Terplast' },
   { code: 'SLURRY', name: 'Slurry' },
   { code: 'ENDUIDO', name: 'Enduido' },
-  { code: 'SINTETICOS', name: 'Sinteticos' }
+  { code: 'SINTETICOS', name: 'Sinteticos' },
+  { code: 'ENVASES', name: 'Envases' }
 ];
 
 export function findPublicPlant(code: string | null) {
