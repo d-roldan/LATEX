@@ -20,6 +20,10 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [Integración y base de datos](INSTRUCTIVO_INTEGRACION_Y_BASE_DE_DATOS.md): instalación, configuración e integración técnica.
 - [Contrato de pesos con Node-RED](NODE_RED_PESOS.md): formato y comportamiento de la telemetría actual.
 - [Integración de inyectoras Woojin · ENVASES](INTEGRACION_ENVASES_WOOJIN.md): contrato de telemetría, provisión y puesta en marcha industrial.
+- [Base de datos CMS de Woojin](BASE_DATOS_CMS_WOOJIN.md): estructura, finalidad y límites de las once tablas de `disal_cms`.
+- [Origen de temperaturas del CMS Board Woojin](ORIGEN_TEMPERATURAS_WOOJIN.md): recorrido estático de `Setting` y `Current`, correspondencia de las ocho tarjetas y límites para integrarlas.
+- [Análisis de secuencias de disparos Woojin](ANALISIS_SHOT_NUMBER_WOOJIN.md): continuidad de `Shot_Number`, duplicados y límites para atribuir históricos a una IP.
+- [Flujo completo de Node-RED externo para ENVASES](FLUJO_NODERED_EXTERNO_ENVASES.md): JSON importable, configuración, prueba manual y límites de atribución de ciclos.
 - [Simulador local Woojin · ENVASES](SIMULADOR_ENVASES_WOOJIN.md): datos de demostración, controles y aislamiento de la fuente real.
 - [Matriz PLC / SCADA / Node-RED / InfluxDB](MATRIZ_INTEGRACION_INDUSTRIAL.md): responsabilidades, inbox idempotente y relevamiento pendiente por señal.
 - [Despliegue multiplanta](DESPLIEGUE_MULTIPLANTA.md): instalación vacía, baseline, actualización, backups y recuperación.
@@ -44,7 +48,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.42](releases/RELEASE_NOTES_V0.0.42.md): planta ENVASES, monitoreo Woojin, simulador local y edición de accesos del administrador.
+- [Versión vigente · V0.0.43](releases/RELEASE_NOTES_V0.0.43.md): historial y receta Woojin por inyectora, flujo externo preparado y origen de temperaturas del CMS Board.
 
 ## Criterio de actualización
 

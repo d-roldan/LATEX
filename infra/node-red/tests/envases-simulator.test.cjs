@@ -29,6 +29,11 @@ assert.deepEqual(Array.from(first.maquinas, (reading) => reading.cycle_time_curr
 assert.equal(byCode(first, 'INY05').alarm_status_code, 204);
 assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.barrel_temperatures.length, 7);
 assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.mold_temperatures.length, 12);
+assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.machine_ip, '172.16.0.141');
+assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.identity_source, 'SIMULATED');
+assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.recipe.inj_velocity.split('/').length, 3);
+assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.recipe.barrel_temperature.split('/').length, 8);
+assert.equal(byCode(first, 'INY01').ultimo_ciclo_tecnico.recipe.mold_temperature.split('/').length, 12);
 
 let latest = first;
 for (let index = 0; index < 16; index += 1) latest = tick('', 2000);

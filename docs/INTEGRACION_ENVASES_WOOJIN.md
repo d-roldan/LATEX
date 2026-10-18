@@ -1,12 +1,34 @@
 # ENVASES · monitoreo Woojin
 
+La estructura observada de la base MariaDB del software CMS se documenta en [BASE_DATOS_CMS_WOOJIN.md](BASE_DATOS_CMS_WOOJIN.md).
+El origen estático de las parejas de temperatura de la pantalla nativa se resume en [ORIGEN_TEMPERATURAS_WOOJIN.md](ORIGEN_TEMPERATURAS_WOOJIN.md).
+
+La consulta fija de cinco máquinas del Node-RED industrial puede tomar el modelo de
+`itgr_machine_list.Machine_Nickname` mediante el `JOIN` de
+[`envases-woojin-real-data.sql`](../infra/node-red/examples/envases-woojin-real-data.sql).
+Se conserva el flujo existente que ya consulta CMS; el archivo es una propuesta de sustitución
+de su sentencia SQL, no una consulta adicional ni un despliegue del Node-RED compartido.
+`real_data` aporta los 14 campos de estado actual que admite la API. Durante el descanso de fin
+de semana su última lectura puede quedar antigua aunque la adquisición funcione normalmente
+en los días de producción.
+
 ## Alcance
 
-ENVASES es una planta independiente de ENVASADO. El backend recibe el resumen ya producido por el Node-RED industrial externo y conserva únicamente el último valor aceptado de cada inyectora en memoria. No consulta MariaDB ni Modbus, no envía órdenes a las máquinas y no escribe muestras en PostgreSQL o InfluxDB. Tras reiniciar el backend, las cinco tarjetas muestran **Sin datos** hasta el siguiente lote.
+ENVASES es una planta independiente de ENVASADO. El backend recibe el resumen ya producido por el Node-RED industrial externo y conserva el último valor aceptado de cada inyectora en memoria. No consulta MariaDB ni Modbus, ni envía órdenes a las máquinas. Puede escribir series históricas en un bucket dedicado de InfluxDB cuando se configura `INFLUXDB_ENVASES_BUCKET`; no escribe muestras en PostgreSQL. Tras reiniciar el backend, las cinco tarjetas muestran **Sin datos** hasta el siguiente lote, aunque el historial configurado permanece en InfluxDB.
 
 Como la caché vigente es local al proceso (igual que la telemetría de pesos actual), la recepción y las consultas deben llegar a la misma instancia de backend. Un despliegue con varias réplicas necesitaría un almacén compartido antes de habilitar balanceo libre entre ellas.
 
 La pantalla autenticada es `/envases?plant=ENVASES`; la TV de consulta pública sigue el modelo existente en `/tv?plant=ENVASES`. La API pública de TV no expone la clave ni concede acciones de administración. Para restringirla en una instalación concreta sería necesario cambiar el modelo público de TV de la aplicación.
+
+## Organización del tablero
+
+- **Tarjeta y TV:** mostrar los datos que `real_data` atribuye directamente a una IP: modo, motor, calefacción, contador actual, total, ciclo actual/anterior, promedio y tiempo de producción. El color resume el modo y el texto lo identifica. Una marca de lectura antigua impide presentar esos valores como actuales durante el descanso o una pérdida de comunicación.
+- **Popup, General y Producción:** conservar todos los códigos y contadores de `real_data`, fecha CMS, recepción en LATEX y diagnóstico de frescura. El cero se muestra como valor, separado de «No informado».
+- **Popup, Parámetros de inyección y Ajustes del ciclo:** separar resultados medidos en `shot_data` de las series de parámetros de `shot_data_rec`. Mostrar el timestamp del disparo y el origen de su vínculo con la máquina. La comparación por zona presenta ajuste y medición del **último disparo**, nunca temperaturas instantáneas. Las siete posiciones de cilindro se rotulan «Zona CMS» y la octava se compara con tolva. El análisis del CMS Board identifica otras ocho parejas vivas (`Ext Nozzle`, `Nozzle`, `Heater1`–`Heater4`, `Oil`, `Hopper`) entregadas a DBA por la API DBS; no demuestra equivalencia de esas tarjetas con las columnas de disparos ni sus unidades.
+- **Popup, Histórico:** graficar ciclo, contador y, cuando exista disparo atribuido, ajuste y medición por zona. Las fuentes real y simulada están separadas.
+- **Archivo:** mostrar `Additional_Info_1` como «archivo del último ciclo» únicamente cuando ese ciclo esté atribuido a una IP. No presentarlo como archivo cargado en este instante: `real_data` no ofrece ese dato.
+
+Esta distribución conserva la TV legible a distancia y deja las series técnicas extensas para el popup. No requiere que el navegador consulte MariaDB; la API entrega una instantánea normalizada por máquina cada dos segundos.
 
 ## Catálogo y umbrales
 
@@ -51,22 +73,57 @@ Este procedimiento está preparado, pero **no se ejecutó contra producción**. 
 }
 ```
 
-Se admiten lotes parciales. Cada IP conocida y visible se relaciona con su código estable; el modelo recibido, si existe, debe coincidir con el catálogo. Una IP desconocida o un modelo distinto se rechazan por máquina, sin perder las aceptadas. Se rechazan IP repetidas en el mismo lote, timestamps futuros, tipos inválidos y campos fuera del contrato. Se ignora una lectura cuyo `cms_timestamp` sea igual o anterior al último aceptado de esa inyectora. Respuesta: `accepted`, `rejected`, `ignored`, `receivedAt`, `persisted: false` y `results` por IP. Un lote válido, aunque repita muestras, actualiza la última comunicación del emisor; no altera contadores.
+Se admiten lotes parciales. Cada IP conocida y visible se relaciona con su código estable; el modelo recibido, si existe, debe coincidir con el catálogo. Una IP desconocida o un modelo distinto se rechazan por máquina, sin perder las aceptadas. Se rechazan IP repetidas en el mismo lote, timestamps futuros, tipos inválidos y campos fuera del contrato. Se ignora una lectura cuyo `cms_timestamp` sea igual o anterior al último aceptado de esa inyectora. Respuesta: `accepted`, `rejected`, `ignored`, `receivedAt`, `persisted` y `results` por IP. `persisted` es verdadero sólo si se almacenaron en InfluxDB **todas** las lecturas aceptadas del lote; la caché operativa puede actualizarse aunque InfluxDB no esté configurado o falle. Un lote válido, aunque repita muestras, actualiza la última comunicación del emisor; no altera contadores.
 
 `GET /api/plants/ENVASES/telemetry/injection-machines` requiere sesión, rol de planta y asignación ENVASES al usuario. `GET /api/plants/ENVASES/tv/injection-machines` es público conforme al TV existente. Ambos devuelven un único lote ordenado con cinco equipos y `reading: null` para los que aún no recibieron datos. `communication`, `cmsFresh`, `communicationFresh` y `counterRecent` se recalculan al consultar. La recepción desde Node-RED, la frescura SQL de CMS y la validación industrial son diagnósticos independientes. Los valores nulos y los códigos desconocidos permanecen visibles.
 
 `cycle_time_current` y `cycle_time_before` se muestran en segundos como **unidad inferida pendiente de confirmación**. `production_time_hour` y `production_time_min` se rotulan como tiempo reportado por CMS. `total_quantity` es total reportado por CMS, no meta. El delta de contador indica cambio entre consultas, no piezas producidas en un segundo. El código de alarma se muestra en bruto: cero no se interpreta como ausencia confirmada de alarma.
 
+## Historial de ENVASES
+
+Configurar en el backend `INFLUXDB_URL`, `INFLUXDB_TOKEN`, `INFLUXDB_ORG` o `INFLUXDB_ORG_ID`, y `INFLUXDB_ENVASES_BUCKET` con un bucket **dedicado** creado en InfluxDB. Dejar `INFLUXDB_ENVASES_BUCKET` vacío desactiva la escritura y la consulta histórica sin afectar el tablero actual. La clave debe permitir escribir y consultar únicamente ese bucket. No compartirla con Node-RED ni el frontend. Antes de activarlo en producción, revisar retención y respaldo del bucket según la política de la planta.
+
+El backend escribe `woojin_status` por IP validada y timestamp de `real_data`, con ciclo actual, contador actual, total, promedio y código de operación. Un `woojin_shot` por disparo **atribuido** guarda número, ciclo y temperaturas medidas/ajustadas de cilindro, tolva y molde cuando estén presentes. Los tags `machine=INY01..INY05` y `source=NODE_RED_ENVASES` o `NODE_RED_ENVASES_SIM` impiden mezclar equipos y simulación. Las lecturas rechazadas, repetidas, antiguas o marcadas como obsoletas no alimentan el estado histórico; un disparo nuevo atribuido sí puede registrarse aunque `real_data` repita timestamp. El endpoint autenticado `GET /api/plants/ENVASES/injection-machines/:code/history` exige asignación de ENVASES y acepta `source`, `metric=cycle|quantity|temperature`, `hours=1|6|24|72|168` y `zone=1..20`. Las zonas 1–7 son cilindro, 8 es tolva y 9–20 son molde. La TV no consulta ni muestra este historial.
+
+Este registro comienza **desde su activación**. El flujo externo actual envía el último ciclo técnico, por lo que un disparo omitido entre dos consultas no se recupera automáticamente. El histórico anterior de `shot_data`/`shot_data_rec` permanece sin IP verificable; no se atribuye por similitud de contador o de molde. Para importarlo por inyectora hace falta comprobar la correspondencia contador/archivo/IP con producción y validar los cambios de molde. En ausencia de un ciclo atribuido, la gráfica de temperaturas indica que aún no hay datos.
+
+La gráfica `metric=temperature` representa temperaturas asociadas a **disparos atribuidos**, no la evolución continua de `Setting`/`Current` que presenta CMS Board. Para obtener esa serie continua hace falta una adquisición adicional de la API DBS, validada operativamente, con IP, timestamp y frescura propios; no se debe etiquetar la gráfica actual como temperatura en vivo.
+
 ## Rama importable de Node-RED
 
-Archivo: `infra/node-red/examples/envases-woojin-http-branch.json`. Importar **en la pestaña del flujo que ya produce `RESUMEN 5 WOOJIN`**; conectar una nueva salida de ese nodo a la entrada de `ENVASES · preparar lote`. Mantener sus conexiones existentes a Debug, `EVENTOS contador` y `PREPARADO InfluxDB (NO escribe)`. No agregar un Inject ni otra consulta SQL. La rama envía el resumen completo en una sola solicitud, con timeout de 4 s, hasta dos reintentos separados por 3 s y una compuerta temporal para que una caída de LATEX no acumule envíos sin límite. Los diagnósticos muestran únicamente estado y cantidades; nunca la clave ni el cuerpo completo.
+### Ciclos técnicos y parámetros de receta
 
-Configurar en el entorno seguro de ese Node-RED:
+`real_data` no contiene las mediciones de `shot_data` ni las cadenas por etapas de
+`shot_data_rec`. El contrato opcional `ultimo_ciclo_tecnico` admite los resultados del último
+disparo y un objeto `recipe` con los dieciséis campos de `shot_data_rec`: `inj_velocity`,
+`inj_pressure`, `inj_position`, `sov_time`, `sov_position`, `hld_pressure`, `hld_time`, `hld_vel`,
+`chg_position`, `chg_speed`, `back_pressure`, `suckback_position`, `suckback_speed`,
+`barrel_temperature`, `mold_temperature` y `timer`. Las series separadas por `/` se conservan
+como texto de CMS, sin deducir unidades.
 
-- `LATEX_API_BASE_URL`: URL interna del backend terminada en `/api`, accesible desde el contenedor externo.
-- `ENVASES_NODE_RED_KEY`: la misma clave secreta usada al provisionar `PlantIntegration`.
+Para que la API publique un ciclo **real** dentro de una inyectora, el ciclo debe incluir
+`machine_ip` igual a la IP de la lectura y `identity_source` igual a `CMS_MACHINE_NAME` o
+`NODE_RED_MACHINE_CONTEXT`, según el vínculo efectivamente verificado. El simulador usa
+`SIMULATED`. Si falta esa atribución, la API conserva los campos actuales de `real_data` y
+omite el ciclo técnico de la tarjeta; la respuesta de recepción indica
+`technical: UNATTRIBUTED` para ese equipo. La API separa `reading` (estado actual) de
+`ultimo_ciclo_tecnico` (último disparo atribuido) y puede actualizar el segundo aunque el
+`cms_timestamp` de `real_data` no haya cambiado. Los registros observados de `shot_data` y
+`shot_data_rec` tienen `Machine_Name = '-'`; el `JOIN` por IP de `real_data` con
+`itgr_machine_list` **no identifica esos disparos antiguos**. El usuario confirmó que puede
+configurar CMS para guardar en los nuevos disparos el apodo de la máquina como
+`shot_data.Machine_Name`. El flujo externo preparado sólo vincula un nuevo ciclo a una IP
+cuando ese valor coincide exactamente y de forma única con
+`itgr_machine_list.Machine_Nickname`, la receta coincide en identificador, fecha y número de
+disparo, y la IP/modelo corresponden a una lectura actual. Los registros previos con `-`
+quedan sin atribución. El nombre de archivo de `Additional_Info_1` corresponde al último
+ciclo registrado, no certifica el archivo cargado en ese instante.
 
-Probar primero contra un backend de desarrollo con un resumen real o una muestra controlada y comprobar aceptación por IP, orden, refresco de 2 s y caducidad al detener envíos. Inspeccionar el mapeo de tiempos entre MariaDB, Node-RED y backend. La conectividad productiva sigue **pendiente de habilitar esta rama** con autorización del responsable del Node-RED compartido. No reiniciar ni desplegar el Node-RED externo como parte de la preparación local.
+### Envío del resumen actual
+
+El [flujo externo completo](FLUJO_NODERED_EXTERNO_ENVASES.md) sustituye el flujo SQL/HTTP recibido del usuario e incluye un bloque JSON listo para importar. Lee `real_data` y el modelo de `itgr_machine_list`, conserva la comparación de contadores y envía lotes a LATEX. Consulta los últimos ciclos por apodo único y agrega parámetros técnicos sólo a la IP comprobada. Mantiene además una lectura manual del último par global `shot_data`/`shot_data_rec` **sólo en Debug**. El documento explica cómo configurar el nombre en CMS, el acceso de solo lectura, las variables `DISAL_API_BASE_URL` y `DISAL_ENVASES_INTEGRATION_KEY`, la zona horaria, la prueba manual y la activación periódica sin duplicar el flujo anterior.
+
+`infra/node-red/examples/envases-woojin-http-branch.json` queda como ejemplo anterior de rama HTTP para quien mantenga el flujo legado; no debe importarse además del flujo completo. La conectividad productiva sigue pendiente de la importación y configuración por el responsable del Node-RED externo compartido. No se reinició ni desplegó ese servicio como parte de la preparación local.
 
 ## Simulación local para visualizar las tarjetas
 
@@ -74,4 +131,4 @@ El simulador local tiene fuente, clave y caché propias (`NODE_RED_ENVASES_SIM`,
 
 ## Validación y límites
 
-La verificación local debe incluir contrato válido/inválido, permisos, parcialidad, duplicados, códigos desconocidos, nulidad, caída de señal, compilaciones y vista en 1920 × 1080 y tamaños menores. Una muestra de prueba local demuestra el recorrido de aplicación; no demuestra conectividad productiva con CMS. No hay historial persistido ni gráficos históricos en esta fase. La salida `PREPARADO InfluxDB (NO escribe)` queda intacta para una etapa posterior con autorización independiente.
+La verificación local debe incluir contrato válido/inválido, permisos, parcialidad, duplicados, códigos desconocidos, nulidad, caída de señal, compilaciones y vista en 1920 × 1080 y tamaños menores. Una muestra de prueba local demuestra el recorrido de aplicación; no demuestra conectividad productiva con CMS ni la asignación de disparos antiguos. El nuevo historial requiere probar un bucket dedicado antes de habilitarlo en producción. La rama `PREPARADO InfluxDB (NO escribe)` del flujo externo queda intacta: la escritura opcional la realiza el backend.

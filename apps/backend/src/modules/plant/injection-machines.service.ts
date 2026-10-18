@@ -2,7 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException
+  NotFoundException,
+  Optional
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -12,6 +13,7 @@ import {
   InjectionTechnicalCycleDto
 } from './dto/injection-machine.dto';
 import { PlantIntegrationAuthService } from './plant-integration-auth.service';
+import { InjectionHistoryMetric, InjectionHistoryService } from './injection-history.service';
 import {
   INJECTION_PLANT_CODE,
   INJECTION_SIM_SOURCE,
@@ -44,7 +46,8 @@ export class InjectionMachinesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrationAuth: PlantIntegrationAuthService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    @Optional() private readonly history?: InjectionHistoryService
   ) {}
 
   async receive(plantCode: string, key: string | undefined, dto: InjectionMachineBatchDto) {
@@ -105,26 +108,67 @@ export class InjectionMachinesService {
         };
       const cacheKey = `${integration.plantId}:${dto.source}:${machine.code}`;
       const previous = this.latest.get(cacheKey);
-      if (previous && stamp <= Date.parse(previous.reading.cms_timestamp))
-        return { machineIp: reading.machine_ip, code: machine.code, status: 'IGNORED_OLDER' };
-      this.latest.set(cacheKey, {
-        reading,
-        receivedAt: now.toISOString(),
-        nodeRedAt: dto.fecha_recepcion_nodered,
-        sqlDurationMs: dto.duracion_consulta_ms ?? null
-      });
       const shot = reading.ultimo_ciclo_tecnico;
       const previousShot = this.technical.get(cacheKey);
-      if (
+      const attributableShot =
         shot &&
+        shot.machine_ip === reading.machine_ip &&
+        (simulated
+          ? shot.identity_source === 'SIMULATED'
+          : shot.identity_source === 'CMS_MACHINE_NAME' ||
+            shot.identity_source === 'NODE_RED_MACHINE_CONTEXT');
+      let technical = shot ? 'UNATTRIBUTED' : 'ABSENT';
+      if (attributableShot) technical = 'UNCHANGED';
+      if (
+        attributableShot &&
         (!previousShot ||
           (shot.shot_number > previousShot.shot_number &&
             Date.parse(shot.timestamp) >= Date.parse(previousShot.timestamp)))
       ) {
         this.technical.set(cacheKey, shot);
+        technical = 'UPDATED';
       }
-      return { machineIp: reading.machine_ip, code: machine.code, status: 'ACCEPTED' };
+      if (previous && stamp <= Date.parse(previous.reading.cms_timestamp))
+        return {
+          machineIp: reading.machine_ip,
+          code: machine.code,
+          status: 'IGNORED_OLDER',
+          technical
+        };
+      const currentReading = { ...reading };
+      delete currentReading.ultimo_ciclo_tecnico;
+      this.latest.set(cacheKey, {
+        reading: currentReading,
+        receivedAt: now.toISOString(),
+        nodeRedAt: dto.fecha_recepcion_nodered,
+        sqlDurationMs: dto.duracion_consulta_ms ?? null
+      });
+      return {
+        machineIp: reading.machine_ip,
+        code: machine.code,
+        status: 'ACCEPTED',
+        technical
+      };
     });
+    const stored = await Promise.all(
+      results.map((result, index) => {
+        if (
+          !this.history ||
+          result.status === 'REJECTED' ||
+          (result.status !== 'ACCEPTED' && result.technical !== 'UPDATED')
+        )
+          return Promise.resolve(false);
+        const reading = dto.maquinas[index];
+        const shot = result.technical === 'UPDATED' ? (reading.ultimo_ciclo_tecnico ?? null) : null;
+        return this.history.record(
+          result.code!,
+          dto.source,
+          reading,
+          shot,
+          result.status === 'ACCEPTED'
+        );
+      })
+    );
     const batchKey = `${integration.plantId}:${dto.source}`;
     this.lastBatchAt.set(batchKey, now.toISOString());
     this.lastBatch.set(batchKey, {
@@ -139,7 +183,12 @@ export class InjectionMachinesService {
       rejected: results.filter((result) => result.status === 'REJECTED').length,
       ignored: results.filter((result) => result.status === 'IGNORED_OLDER').length,
       receivedAt: now.toISOString(),
-      persisted: false,
+      persisted:
+        results.some((result) => result.status === 'ACCEPTED' || result.technical === 'UPDATED') &&
+        results.every(
+          (result, index) =>
+            (result.status !== 'ACCEPTED' && result.technical !== 'UPDATED') || stored[index]
+        ),
       results
     };
   }
@@ -166,6 +215,46 @@ export class InjectionMachinesService {
     });
     if (!plant) throw new NotFoundException('Planta no encontrada');
     return this.snapshot(plant.id);
+  }
+
+  async privateHistory(
+    companyId: string,
+    userId: string,
+    plantCode: string,
+    code: string,
+    source: string,
+    metric: string,
+    hoursText: string,
+    zoneText: string
+  ) {
+    this.assertCode(plantCode);
+    const machine = injectionMachines.find((item) => item.code === code && item.visible);
+    const hours = Number(hoursText);
+    const zone = Number(zoneText);
+    if (
+      !machine ||
+      ![INJECTION_SOURCE, INJECTION_SIM_SOURCE].includes(source) ||
+      !['cycle', 'quantity', 'temperature'].includes(metric) ||
+      ![1, 6, 24, 72, 168].includes(hours) ||
+      !Number.isInteger(zone) ||
+      zone < 1 ||
+      zone > 20
+    )
+      throw new BadRequestException('Consulta histórica inválida');
+    if (source === INJECTION_SIM_SOURCE && !this.simulationEnabled())
+      throw new BadRequestException('Simulación no habilitada');
+    const plant = await this.prisma.plant.findFirst({
+      where: {
+        companyId,
+        code: INJECTION_PLANT_CODE,
+        isActive: true,
+        userAccesses: { some: { userId } }
+      }
+    });
+    if (!plant) throw new NotFoundException('Planta no encontrada o no autorizada');
+    return this.history
+      ? this.history.read(code, source, metric as InjectionHistoryMetric, hours, zone)
+      : { status: 'CONFIGURATION_PENDING', message: 'Historial no configurado.', points: [] };
   }
 
   private snapshot(plantId: string) {

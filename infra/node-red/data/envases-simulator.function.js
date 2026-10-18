@@ -21,7 +21,8 @@ const cycleValue = (p, shot) => round(p.cycle + Math.sin(shot * 0.73 + p.cavity)
 const technical = (p, shot, stamp, duration) => {
   const wave = Math.sin(shot * 0.37 + p.cavity);
   return {
-    shot_number: shot, timestamp: new Date(stamp).toISOString(), cycle_time: duration,
+    shot_number: shot, timestamp: new Date(stamp).toISOString(), machine_ip: p.ip,
+    identity_source: 'SIMULATED', cycle_time: duration,
     mold_name: p.mold, cavity: p.cavity, ngmark: 0,
     injection_time: round(duration * 0.16 + wave * 0.1), filling_time: round(duration * 0.09 + wave * 0.05),
     max_injection_pressure: round(78 + p.cavity * 2 + wave * 3), max_injection_speed: round(38 + p.cavity + wave * 2),
@@ -34,7 +35,22 @@ const technical = (p, shot, stamp, duration) => {
     resin_weight: round(p.cavity * 12 + wave * 0.6),
     barrel_temperatures: Array.from({ length: 7 }, (_, zone) => round(192 + zone * 3 + wave * 0.6)),
     mold_temperatures: Array.from({ length: 12 }, (_, zone) => round(38 + (zone % 4) * 1.4 + wave * 0.3)),
-    hopper_temperature: round(34 + wave * 0.3)
+    hopper_temperature: round(34 + wave * 0.3),
+    recipe: {
+      inj_velocity: `${round(84 + wave)}/${round(91 + wave)}/${round(95 + wave)}`,
+      inj_pressure: `${round(101 + wave)}/${round(105 + wave)}/${round(108 + wave)}`,
+      inj_position: `${round(84 + wave)}/${round(43 + wave)}/${round(22 + wave)}`,
+      sov_time: round(duration * 0.12 + wave * 0.02, 2),
+      sov_position: round(22 + p.cavity + wave),
+      hld_pressure: `${round(68 + wave)}/${round(61 + wave)}`,
+      hld_time: '1.5/2.0', hld_vel: '28/22',
+      chg_position: `${round(52 + p.cavity + wave)}/${round(84 + p.cavity + wave)}`,
+      chg_speed: '75/65', back_pressure: '8/10',
+      suckback_position: '4/7', suckback_speed: '24/20',
+      barrel_temperature: [...Array.from({ length: 7 }, (_, zone) => 192 + zone * 3), 34].join('/'),
+      mold_temperature: Array.from({ length: 12 }, (_, zone) => round(38 + (zone % 4) * 1.4)).join('/'),
+      timer: `${round(duration * 0.16, 2)}/${round(duration * 0.42, 2)}`
+    }
   };
 };
 const states = flow.get('envases_sim_state_v2') || {};

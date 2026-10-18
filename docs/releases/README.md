@@ -8,6 +8,7 @@ Para la próxima versión, seguir [el procedimiento de publicación](../RELEASE_
 
 | Versión                             | Fecha      | Contenido principal                                                                                                                       |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [V0.0.43](RELEASE_NOTES_V0.0.43.md) | 18/10/2026 | Historial y receta Woojin por inyectora, flujo externo preparado y documentación del origen de temperaturas.                              |
 | [V0.0.42](RELEASE_NOTES_V0.0.42.md) | 17/10/2026 | Planta ENVASES y TV de inyectoras Woojin, simulador Node-RED local, telemetría y autogestión de plantas del administrador.              |
 | [V0.0.41](RELEASE_NOTES_V0.0.41.md) | 16/10/2026 | Corrección de la verificación de tags y lint proporcional en CI; incluye los cambios de aplicación de V0.0.39.                           |
 | [V0.0.40](RELEASE_NOTES_V0.0.40.md) | 16/10/2026 | Corrección de formato del seed de demostración para completar el lint general del backend en CI.                                          |

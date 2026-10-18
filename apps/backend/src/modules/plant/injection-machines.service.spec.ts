@@ -18,7 +18,7 @@ const reading = (ip: string, timestamp: string, quantity: number | null = 10) =>
   delta_contador_observado: 1,
   ultimo_incremento_detectado: timestamp
 });
-const batch = (machines: ReturnType<typeof reading>[]): InjectionMachineBatchDto => ({
+const batch = (machines: InjectionMachineBatchDto['maquinas']): InjectionMachineBatchDto => ({
   source: 'NODE_RED_ENVASES',
   schemaVersion: 1,
   fecha_recepcion_nodered: new Date().toISOString(),
@@ -56,6 +56,46 @@ describe('InjectionMachinesService', () => {
     ]);
     expect(snapshot.machines.every((machine) => machine.reading === null)).toBe(true);
     expect(snapshot.communication).toBe('NO_RECENT_DATA');
+  });
+
+  it('exige asignación de ENVASES y parámetros válidos para consultar historia', async () => {
+    prisma.plant.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.privateHistory(
+        'empresa',
+        'usuario',
+        'ENVASES',
+        'INY01',
+        'NODE_RED_ENVASES',
+        'cycle',
+        '24',
+        '1'
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.privateHistory(
+        'empresa',
+        'usuario',
+        'ENVASES',
+        'INY01',
+        'NODE_RED_ENVASES',
+        'temperature',
+        '24',
+        '21'
+      )
+    ).rejects.toThrow('Consulta histórica inválida');
+    await expect(
+      service.privateHistory(
+        'empresa',
+        'usuario',
+        'ENVASES',
+        'INY01',
+        'NODE_RED_ENVASES',
+        'cycle',
+        '24',
+        '1'
+      )
+    ).resolves.toMatchObject({ status: 'CONFIGURATION_PENDING' });
   });
 
   it('acepta lote parcial, ignora duplicados y preserva valores nulos y códigos desconocidos', async () => {
@@ -102,8 +142,11 @@ describe('InjectionMachinesService', () => {
       ultimo_ciclo_tecnico: {
         shot_number: 42,
         timestamp: t,
+        machine_ip: '172.16.0.141',
+        identity_source: 'SIMULATED' as const,
         cycle_time: 26,
-        barrel_temperatures: [190, 191, 192, 193, 194, 195, 196]
+        barrel_temperatures: [190, 191, 192, 193, 194, 195, 196],
+        recipe: { inj_velocity: '95/95/95', sov_time: 3.1 }
       }
     };
     const simBatch = {
@@ -117,6 +160,7 @@ describe('InjectionMachinesService', () => {
     let snapshot = await service.publicSnapshot('ENVASES');
     expect(snapshot.source).toBe('NODE_RED_ENVASES_SIM');
     expect(snapshot.machines[0].ultimo_ciclo_tecnico?.shot_number).toBe(42);
+    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('95/95/95');
     const next = new Date().toISOString();
     await service.receive('ENVASES', 'sim-key', {
       ...simBatch,
@@ -165,6 +209,88 @@ describe('InjectionMachinesService', () => {
         batch([reading('172.16.0.141', new Date().toISOString())])
       )
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('conserva el estado actual y no atribuye un disparo real sin identidad de máquina', async () => {
+    const t = new Date(Date.now() - 1000).toISOString();
+    const base = reading('172.16.0.141', t, 99);
+    const unlinked = await service.receive(
+      'ENVASES',
+      'key',
+      batch([
+        {
+          ...base,
+          ultimo_ciclo_tecnico: {
+            shot_number: 917888,
+            timestamp: t,
+            mold_name: 'cuerpo_4l_iml_JCA.db',
+            recipe: { inj_velocity: '95.0/95.0/95.0' }
+          }
+        }
+      ])
+    );
+    let snapshot = await service.publicSnapshot('ENVASES');
+    expect(unlinked.results[0]).toMatchObject({ technical: 'UNATTRIBUTED' });
+    expect(snapshot.machines[0].reading?.current_quantity).toBe(99);
+    expect(snapshot.machines[0].reading?.ultimo_ciclo_tecnico).toBeUndefined();
+    expect(snapshot.machines[0].ultimo_ciclo_tecnico).toBeNull();
+
+    const linked = await service.receive(
+      'ENVASES',
+      'key',
+      batch([
+        {
+          ...base,
+          cms_timestamp: t,
+          ultimo_ciclo_tecnico: {
+            shot_number: 917888,
+            timestamp: t,
+            machine_ip: '172.16.0.141',
+            identity_source: 'NODE_RED_MACHINE_CONTEXT',
+            mold_name: 'cuerpo_4l_iml_JCA.db',
+            recipe: { inj_velocity: '95.0/95.0/95.0' }
+          }
+        }
+      ])
+    );
+    snapshot = await service.publicSnapshot('ENVASES');
+    expect(linked.results[0]).toMatchObject({ status: 'IGNORED_OLDER', technical: 'UPDATED' });
+    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('95.0/95.0/95.0');
+  });
+
+  it('asigna un ciclo CMS sólo a la IP indicada por el nombre verificado', async () => {
+    const t = new Date(Date.now() - 1000).toISOString();
+    const result = await service.receive(
+      'ENVASES',
+      'key',
+      batch([
+        {
+          ...reading('172.16.0.141', t),
+          ultimo_ciclo_tecnico: {
+            machine_ip: '172.16.0.141',
+            identity_source: 'CMS_MACHINE_NAME',
+            shot_number: 917889,
+            timestamp: t,
+            mold_name: 'cuerpo_4l_iml_JCA.db',
+            recipe: { inj_velocity: '80/90', sov_time: 2.4 }
+          }
+        },
+        {
+          ...reading('172.16.0.146', t),
+          ultimo_ciclo_tecnico: {
+            machine_ip: '172.16.0.141',
+            identity_source: 'CMS_MACHINE_NAME',
+            shot_number: 917889,
+            timestamp: t
+          }
+        }
+      ])
+    );
+    expect(result.results[0]).toMatchObject({ technical: 'UPDATED' });
+    expect(result.results[1]).toMatchObject({ technical: 'UNATTRIBUTED' });
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('80/90');
+    expect(snapshot.machines[1].ultimo_ciclo_tecnico).toBeNull();
   });
 
   it('marca datos obsoletos sin alterar el último contador', async () => {
@@ -246,5 +372,21 @@ describe('InjectionMachinesService', () => {
       maquinas: [{ ...reading('172.16.0.141', new Date().toISOString()), current_quantity: -1 }]
     });
     expect(await validate(dto)).not.toEqual([]);
+    const invalidRecipe = plainToInstance(InjectionMachineBatchDto, {
+      ...batch([reading('172.16.0.141', new Date().toISOString())]),
+      maquinas: [
+        {
+          ...reading('172.16.0.141', new Date().toISOString()),
+          ultimo_ciclo_tecnico: {
+            shot_number: 1,
+            timestamp: new Date().toISOString(),
+            machine_ip: '172.16.0.141',
+            identity_source: 'CMS_MACHINE_NAME',
+            recipe: { inj_velocity: 'x'.repeat(129) }
+          }
+        }
+      ]
+    });
+    expect(await validate(invalidRecipe)).not.toEqual([]);
   });
 });

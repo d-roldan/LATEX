@@ -11,6 +11,7 @@ import { IntegrationInboxController } from './integration-inbox.controller';
 import { IntegrationInboxService } from './integration-inbox.service';
 import { PlantIntegrationAuthService } from './plant-integration-auth.service';
 import { InjectionMachinesService } from './injection-machines.service';
+import { InjectionHistoryService } from './injection-history.service';
 
 @Module({
   imports: [NotificationsModule],
@@ -25,6 +26,7 @@ import { InjectionMachinesService } from './injection-machines.service';
     InfluxHistoryService,
     PlantIntegrationAuthService,
     InjectionMachinesService,
+    InjectionHistoryService,
     IntegrationInboxService
   ]
 })

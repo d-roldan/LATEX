@@ -1,0 +1,364 @@
+[
+    {
+        "id": "w5_comment",
+        "type": "comment",
+        "z": "w5_tab",
+        "name": "1) Revisar config MySQL. Manual primero. Auto 5s deshabilitado.",
+        "info": "Los datos provienen de disal_cms.real_data. No cambiar CMS. El SQL es fijo, limit 5. Frescura del timestamp DBS no garantiza Modbus fresco. Los estados AUTO/RUN/STOP basados en una correlación puntual; verificar en planta. Ninguna salida escribe a Influx por defecto.",
+        "x": 370,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "w5_manual",
+        "type": "inject",
+        "z": "w5_tab",
+        "name": "LEER 5 WOOJIN - MANUAL",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 85,
+        "y": 140,
+        "wires": [
+            [
+                "w5_sql"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "w5_auto_5s",
+        "type": "inject",
+        "z": "w5_tab",
+        "d": true,
+        "name": "OPCIONAL: auto cada 5s - DESACTIVADO",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "5",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 210,
+        "y": 205,
+        "wires": [
+            [
+                "w5_sql"
+            ]
+        ]
+    },
+    {
+        "id": "w5_sql",
+        "type": "function",
+        "z": "w5_tab",
+        "name": "SQL SELECT fijo - 5 maquinas",
+        "func": "// Woojin CMS - SELECT fijo y acotado. NO aceptar SQL desde otros mensajes.\n// El usuario SQL DEBE migrarse a una cuenta exclusiva SELECT.\nconst ultimo = flow.get('woojin_consulta_en_curso');\nconst ahora = Date.now();\nif (ultimo && (ahora - ultimo < 20000)) {\n    node.status({fill:'yellow',shape:'ring',text:'Consulta anterior en curso; omitida'});\n    return null;\n}\nflow.set('woojin_consulta_en_curso', ahora);\nmsg.woojin_inicio_ms = ahora;\nmsg.topic = `SELECT\n    Machine_IP, Machine_Name, Time_Stamp,\n    Motor_Status, Heater_Status, Operation_Status,\n    Cycle_Time_Before, Cycle_Time_Current,\n    Production_Time_Hour, Production_Time_Min,\n    Total_Quantity, Current_Quantity, Avg_Quantity_Per_Hour,\n    Alarm_Status,\n    TIMESTAMPDIFF(SECOND, Time_Stamp, NOW()) AS cms_age_seconds\nFROM disal_cms.real_data\nWHERE Machine_IP IN (\n    '172.16.0.141', '172.16.0.143', '172.16.0.144',\n    '172.16.0.145', '172.16.0.146'\n)\nLIMIT 5`;\n// No parámetros arbitrarios: los cinco identificadores están fijados en el SQL.\nmsg.payload = [];\nnode.status({fill:'blue',shape:'dot',text:'Lectura SQL en curso'});\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 250,
+        "y": 140,
+        "wires": [
+            [
+                "w5_mysql"
+            ]
+        ]
+    },
+    {
+        "id": "w5_mysql",
+        "type": "mysql",
+        "z": "w5_tab",
+        "mydb": "woojin_database",
+        "name": "MariaDB Woojin (configurar credenciales)",
+        "x": 560,
+        "y": 140,
+        "wires": [
+            [
+                "w5_normalize"
+            ]
+        ]
+    },
+    {
+        "id": "w5_normalize",
+        "type": "function",
+        "z": "w5_tab",
+        "name": "Normalizar, frescura, contador e Influx",
+        "func": "// Procesamiento de SOLO LECTURA. Tres salidas:\n// 1) resumen de 5 inyectoras; 2) eventos de incremento/reinicio;\n// 3) puntos [fields,tags] PREPARADOS, SIN escribir a InfluxDB.\nflow.set('woojin_consulta_en_curso', null);\nconst modelos = {\n  '172.16.0.141':'DL650G5',\n  '172.16.0.143':'TB280G5-1',\n  '172.16.0.144':'TB280G5-2',\n  '172.16.0.145':'TB200G5',\n  '172.16.0.146':'DL450G5'\n};\nconst ips = Object.keys(modelos);\nconst ahoraMs = Date.now();\nconst fechaLectura = new Date(ahoraMs).toISOString();\nconst duracionMs = typeof msg.woojin_inicio_ms === 'number' ? ahoraMs - msg.woojin_inicio_ms : null;\nconst SEC_EDAD_MAX = 10; // Umbral propuesto, NO especificación confirmada de Woojin.\nconst anterior = context.get('woojin_historial') || {};\nconst nuevos = {};\nconst eventos = [];\nconst puntos = [];\nconst vistos = {};\nif (!Array.isArray(msg.payload)) {\n    node.status({fill:'red',shape:'ring',text:'Respuesta SQL inesperada'});\n    node.error('Woojin: msg.payload no es un arreglo SQL', msg);\n    return null;\n}\nfunction numero(v) {\n    if (v === null || v === undefined || v === '') return null;\n    const n = Number(typeof v === 'string' ? v.replace(',', '.') : v);\n    return Number.isFinite(n) ? n : null;\n}\nfunction fecha(v) {\n    if (v === null || v === undefined) return null;\n    if (v instanceof Date) return Number.isFinite(v.getTime()) ? v.toISOString() : null;\n    return String(v); // Evitar reinterpretar zona horaria de DATETIME MariaDB.\n}\nfunction nombreEstado(x, positivos, negativos) {\n    if (x === 1) return positivos;\n    if (x === 0) return negativos;\n    return 'NO_VALIDADO';\n}\nconst salida = [];\nfor (const fila of msg.payload) {\n    if (!fila || !Object.prototype.hasOwnProperty.call(modelos, String(fila.Machine_IP))) continue;\n    const ip = String(fila.Machine_IP);\n    if (vistos[ip]) continue;\n    vistos[ip] = true;\n    const edad = numero(fila.cms_age_seconds); // Calculada DENTRO de MariaDB: misma zona horaria que NOW().\n    const fresca = edad !== null && edad >= -3 && edad <= SEC_EDAD_MAX;\n    const anteriorMaquina = anterior[ip] || {};\n    const cantidad = numero(fila.Current_Quantity);\n    const cantidadAnterior = anteriorMaquina.contador;\n    let delta = null;\n    let eventoContador = 'SIN_REFERENCIA';\n    let ultimoIncrementoMs = anteriorMaquina.ultimo_incremento_ms || null;\n    if (!fresca) {\n        eventoContador = 'SIN_EVALUAR_POR_FRESCURA';\n    } else if (cantidad === null) {\n        eventoContador = 'CONTADOR_INVALIDO';\n    } else if (typeof cantidadAnterior !== 'number') {\n        eventoContador = 'LINEA_BASE_INICIAL';\n    } else {\n        delta = cantidad - cantidadAnterior;\n        if (delta > 0) {\n            eventoContador = 'INCREMENTO_DETECTADO';\n            ultimoIncrementoMs = ahoraMs;\n            eventos.push({payload:{evento:'INCREMENTO_CONTADOR',machine_ip:ip,modelo:modelos[ip],incremento_observado:delta,contador_actual:cantidad,contador_anterior:cantidadAnterior,observado_en:fechaLectura,nota:'Los incrementos no equivalen necesariamente a piezas buenas ni a disparos individuales.'}});\n        } else if (delta < 0) {\n            eventoContador = 'REINICIO_O_RETROCESO_CONTADOR';\n            ultimoIncrementoMs = null;\n            eventos.push({payload:{evento:'REINICIO_O_RETROCESO_CONTADOR',machine_ip:ip,modelo:modelos[ip],contador_actual:cantidad,contador_anterior:cantidadAnterior,observado_en:fechaLectura}});\n        } else {\n            eventoContador = 'SIN_INCREMENTO_EN_ESTA_LECTURA';\n        }\n    }\n    const ciclo = numero(fila.Cycle_Time_Current);\n    const umbralActividadS = Math.max(90, ciclo !== null && ciclo > 0 ? ciclo * 3 : 0);\n    let actividad = 'NO_DETERMINADA';\n    if (!fresca) actividad = 'DATOS_CMS_DESACTUALIZADOS';\n    else if (eventoContador === 'INCREMENTO_DETECTADO') actividad = 'INCREMENTO_RECIENTE';\n    else if (ultimoIncrementoMs && (ahoraMs - ultimoIncrementoMs) <= umbralActividadS * 1000) actividad = 'ACTIVIDAD_DE_CONTADOR_RECIENTE';\n    else if (eventoContador === 'REINICIO_O_RETROCESO_CONTADOR') actividad = 'CONTADOR_REINICIADO';\n    else actividad = 'SIN_ACTIVIDAD_DE_CONTADOR_CONFIRMADA';\n    const op = numero(fila.Operation_Status);\n    const motor = numero(fila.Motor_Status);\n    const heater = numero(fila.Heater_Status);\n    const alarma = numero(fila.Alarm_Status);\n    const elemento = {\n        machine_ip: ip, modelo: modelos[ip], machine_name_cms: fila.Machine_Name,\n        cms_timestamp: fecha(fila.Time_Stamp), cms_age_seconds: edad, cms_row_fresh: fresca,\n        adquisicion_industrial_fresca: 'NO_VERIFICADA',\n        operation_status_code: op,\n        operation_status_text: op === 1 ? 'AUTO' : 'NO_VALIDADO',\n        motor_status_code: motor, motor_status_text: nombreEstado(motor, 'RUN', 'STOP'),\n        heater_status_code: heater, heater_status_text: nombreEstado(heater, 'RUN', 'STOP'),\n        alarm_status_code: alarma, // Significado de 0/1 aún sin confirmar.\n        cycle_time_current: ciclo,\n        cycle_time_before: numero(fila.Cycle_Time_Before),\n        production_time_hour: numero(fila.Production_Time_Hour),\n        production_time_min: numero(fila.Production_Time_Min),\n        current_quantity: cantidad,\n        total_quantity: numero(fila.Total_Quantity),\n        avg_quantity_per_hour: numero(fila.Avg_Quantity_Per_Hour),\n        delta_contador_observado: delta,\n        tipo_cambio_contador: eventoContador,\n        actividad_inferida: actividad,\n        ultimo_incremento_detectado: ultimoIncrementoMs ? new Date(ultimoIncrementoMs).toISOString() : null\n    };\n    salida.push(elemento);\n    // Guardar SOLO muestras frescas y con contador válido como base comparativa.\n    nuevos[ip] = {\n        contador: fresca && cantidad !== null ? cantidad : cantidadAnterior,\n        ultimo_incremento_ms: ultimoIncrementoMs\n    };\n    if (fresca) {\n        const fields = {\n            current_quantity: cantidad,\n            total_quantity: numero(fila.Total_Quantity),\n            cycle_time_current: ciclo,\n            cycle_time_before: numero(fila.Cycle_Time_Before),\n            avg_quantity_per_hour: numero(fila.Avg_Quantity_Per_Hour),\n            operation_status_code: op,\n            motor_status_code: motor,\n            heater_status_code: heater,\n            alarm_status_code: alarma,\n            cms_age_seconds: edad,\n            delta_contador_observado: delta\n        };\n        // InfluxDB rechaza campos null; no inventar ceros para valores ausentes.\n        for (const k of Object.keys(fields)) if (fields[k] === null) delete fields[k];\n        puntos.push({topic:'woojin_real_data',payload:[fields,{machine_ip:ip,modelo:modelos[ip]}],measurement:'woojin_real_data'});\n    }\n}\nfor (const ip of ips) {\n    if (!vistos[ip]) salida.push({machine_ip:ip,modelo:modelos[ip],actividad_inferida:'SIN_FILA_SQL',cms_row_fresh:false,adquisicion_industrial_fresca:'NO_VERIFICADA'});\n}\ncontext.set('woojin_historial', Object.assign({}, anterior, nuevos));\nconst validas = salida.filter(x=>x.cms_row_fresh).length;\nnode.status({fill:validas===5?'green':'yellow',shape:'dot',text:validas+'/5 filas CMS frescas'});\nconst resumen = {\n    payload: {\n        fecha_recepcion_nodered: fechaLectura,\n        cantidad_filas_sql: msg.payload.length,\n        cantidad_maquinas_frescas_cms: validas,\n        duracion_consulta_ms: duracionMs,\n        aviso:'Frescura SQL no demuestra frescura Modbus. AUTO no demuestra producción.',\n        maquinas: salida\n    },\n    topic:'woojin_resumen'\n};\nreturn [resumen, eventos.length ? eventos : null, puntos.length ? puntos : null];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 890,
+        "y": 140,
+        "wires": [
+            [
+                "w5_debug_summary",
+                "envases-disal-prepare"
+            ],
+            [
+                "w5_debug_delta"
+            ],
+            [
+                "w5_debug_influx"
+            ]
+        ]
+    },
+    {
+        "id": "w5_debug_summary",
+        "type": "debug",
+        "z": "w5_tab",
+        "name": "RESUMEN 5 WOOJIN",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1160,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "w5_debug_delta",
+        "type": "debug",
+        "z": "w5_tab",
+        "name": "EVENTOS contador (incrementos/reinicios)",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1230,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "w5_debug_influx",
+        "type": "debug",
+        "z": "w5_tab",
+        "name": "PREPARADO InfluxDB (NO escribe)",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1210,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "envases-disal-comment",
+        "type": "comment",
+        "z": "w5_tab",
+        "name": "Conectar aquí la salida 1 de w5_normalize",
+        "info": "Conectar la primera salida de 'Normalizar, frescura, contador e Influx' a 'ENVASES · preparar lote real'. No desconectar los Debug, eventos ni la salida preparada para InfluxDB.",
+        "x": 520,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "envases-disal-prepare",
+        "type": "function",
+        "z": "w5_tab",
+        "name": "ENVASES · preparar lote real",
+        "func": "if (Number(flow.get('envases_http_busy_until') || 0) > Date.now()) {\n    return [null, { payload: { status: 'SKIPPED_BUSY', message: 'Solicitud anterior pendiente' } }];\n}\n\nconst base = env.get('DISAL_API_BASE_URL');\nconst key = env.get('DISAL_ENVASES_INTEGRATION_KEY');\n\nif (!base || !key) {\n    return [null, { payload: { status: 'CONFIG_ERROR', message: 'Falta DISAL_API_BASE_URL o DISAL_ENVASES_INTEGRATION_KEY' } }];\n}\n\nif (!msg.payload || !Array.isArray(msg.payload.maquinas)) {\n    return [null, { payload: { status: 'INVALID_SUMMARY', message: 'msg.payload.maquinas no es un arreglo' } }];\n}\n\n// El normalizador agrega marcadores SIN_FILA_SQL sin cms_timestamp.\n// La API acepta lotes parciales, pero cada lectura enviada debe tener timestamp ISO válido.\nconst maquinas = msg.payload.maquinas.filter((maquina) =>\n    maquina &&\n    typeof maquina.machine_ip === 'string' &&\n    typeof maquina.cms_timestamp === 'string' &&\n    Number.isFinite(Date.parse(maquina.cms_timestamp))\n);\n\nif (maquinas.length === 0) {\n    return [null, { payload: { status: 'NO_VALID_READINGS', received: msg.payload.maquinas.length, sent: 0 } }];\n}\n\nflow.set('envases_http_busy_until', Date.now() + 25000);\n\nmsg.method = 'POST';\nmsg.url = base.replace(/\\/$/, '') + '/plants/ENVASES/telemetry/injection-machines';\nmsg.headers = {\n    'content-type': 'application/json',\n    'x-node-red-key': key\n};\nmsg.payload = {\n    ...msg.payload,\n    source: 'NODE_RED_ENVASES',\n    schemaVersion: 1,\n    maquinas\n};\nmsg.envasesBody = msg.payload;\nmsg.envasesAttempt = 0;\nmsg.envasesMachineCount = maquinas.length;\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 380,
+        "wires": [
+            [
+                "envases-disal-http"
+            ],
+            [
+                "envases-disal-debug"
+            ]
+        ]
+    },
+    {
+        "id": "envases-disal-http",
+        "type": "http request",
+        "z": "w5_tab",
+        "name": "ENVASES · POST API LATEX",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 810,
+        "y": 380,
+        "wires": [
+            [
+                "envases-disal-result"
+            ]
+        ]
+    },
+    {
+        "id": "envases-disal-result",
+        "type": "function",
+        "z": "w5_tab",
+        "name": "ENVASES · resultado y reintento",
+        "func": "const statusCode = Number(msg.statusCode || 0);\nconst attempt = Number(msg.envasesAttempt || 0);\nconst shouldRetry = statusCode === 0 || statusCode === 429 || statusCode >= 500;\n\nif (shouldRetry && attempt < 2) {\n    msg.envasesAttempt = attempt + 1;\n    msg.payload = msg.envasesBody;\n    msg.headers = {\n        'content-type': 'application/json',\n        'x-node-red-key': env.get('DISAL_ENVASES_INTEGRATION_KEY')\n    };\n    return [msg, null];\n}\n\nflow.set('envases_http_busy_until', 0);\nreturn [null, {\n    payload: {\n        statusCode,\n        attempts: attempt + 1,\n        sent: msg.envasesMachineCount,\n        accepted: msg.payload && msg.payload.accepted,\n        rejected: msg.payload && msg.payload.rejected,\n        ignored: msg.payload && msg.payload.ignored,\n        error: statusCode >= 400 ? (msg.payload && msg.payload.message) || 'Respuesta HTTP no exitosa' : undefined\n    }\n}];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1120,
+        "y": 380,
+        "wires": [
+            [
+                "envases-disal-delay"
+            ],
+            [
+                "envases-disal-debug"
+            ]
+        ]
+    },
+    {
+        "id": "envases-disal-delay",
+        "type": "delay",
+        "z": "w5_tab",
+        "name": "ENVASES · reintento en 3 s",
+        "pauseType": "delay",
+        "timeout": "3",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 830,
+        "y": 450,
+        "wires": [
+            [
+                "envases-disal-http"
+            ]
+        ]
+    },
+    {
+        "id": "envases-disal-catch",
+        "type": "catch",
+        "z": "w5_tab",
+        "name": "ENVASES · capturar error HTTP",
+        "scope": [
+            "envases-disal-http"
+        ],
+        "uncaught": false,
+        "x": 450,
+        "y": 500,
+        "wires": [
+            [
+                "envases-disal-error"
+            ]
+        ]
+    },
+    {
+        "id": "envases-disal-error",
+        "type": "function",
+        "z": "w5_tab",
+        "name": "ENVASES · error sin secretos",
+        "func": "const attempt = Number(msg.envasesAttempt || 0);\nif (attempt < 2) {\n    msg.envasesAttempt = attempt + 1;\n    msg.payload = msg.envasesBody;\n    msg.headers = {\n        'content-type': 'application/json',\n        'x-node-red-key': env.get('DISAL_ENVASES_INTEGRATION_KEY')\n    };\n    return [msg, null];\n}\n\nflow.set('envases_http_busy_until', 0);\nreturn [null, {\n    payload: {\n        status: 'HTTP_ERROR',\n        attempts: attempt + 1,\n        sent: msg.envasesMachineCount,\n        message: String((msg.error && msg.error.message) || 'Error de red').slice(0, 180)\n    }\n}];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 750,
+        "y": 500,
+        "wires": [
+            [
+                "envases-disal-delay"
+            ],
+            [
+                "envases-disal-debug"
+            ]
+        ]
+    },
+    {
+        "id": "envases-disal-debug",
+        "type": "debug",
+        "z": "w5_tab",
+        "name": "ENVASES · diagnóstico API sin clave",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1110,
+        "y": 510,
+        "wires": []
+    },
+    {
+        "id": "woojin_database",
+        "type": "MySQLdatabase",
+        "name": "Woojin CMS - SOLO LECTURA",
+        "host": "10.1.0.105",
+        "port": "3306",
+        "db": "disal_cms",
+        "tz": "",
+        "charset": "UTF8"
+    },
+    {
+        "id": "cd15e18162c75709",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-node-mysql": "3.0.3"
+        }
+    }
+]

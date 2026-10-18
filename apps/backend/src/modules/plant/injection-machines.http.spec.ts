@@ -140,9 +140,12 @@ describe('ENVASES HTTP', () => {
           ultimo_ciclo_tecnico: {
             shot_number: 99,
             timestamp,
+            machine_ip: '172.16.0.141',
+            identity_source: 'NODE_RED_MACHINE_CONTEXT',
             cycle_time: 26,
             barrel_temperatures: [null, 191, 192, 193, 194, 195, 196],
-            mold_temperatures: Array(12).fill(null)
+            mold_temperatures: Array(12).fill(null),
+            recipe: { inj_velocity: '95/95/95', sov_time: 3.1 }
           }
         }
       ]
@@ -157,7 +160,8 @@ describe('ENVASES HTTP', () => {
     const snapshot = await (await fetch(`${base}/api/plants/ENVASES/tv/injection-machines`)).json();
     expect(snapshot.machines[0].ultimo_ciclo_tecnico).toMatchObject({
       shot_number: 99,
-      barrel_temperatures: [null, 191, 192, 193, 194, 195, 196]
+      barrel_temperatures: [null, 191, 192, 193, 194, 195, 196],
+      recipe: { inj_velocity: '95/95/95', sov_time: 3.1 }
     });
   });
 });

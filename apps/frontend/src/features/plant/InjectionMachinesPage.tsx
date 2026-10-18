@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts';
 import { api } from '../../shared/api/http';
 import { Button } from '../../shared/ui/Button';
 import { useActivePlant } from './useActivePlant';
@@ -36,6 +46,8 @@ interface Reading {
 interface TechnicalCycle {
   shot_number: number;
   timestamp: string;
+  machine_ip?: string | null;
+  identity_source?: 'CMS_MACHINE_NAME' | 'NODE_RED_MACHINE_CONTEXT' | 'SIMULATED';
   cycle_time?: number | null;
   mold_name?: string | null;
   cavity?: number | null;
@@ -60,6 +72,24 @@ interface TechnicalCycle {
   barrel_temperatures?: (number | null)[] | null;
   mold_temperatures?: (number | null)[] | null;
   hopper_temperature?: number | null;
+  recipe?: {
+    inj_velocity?: string | null;
+    inj_pressure?: string | null;
+    inj_position?: string | null;
+    sov_time?: number | null;
+    sov_position?: number | null;
+    hld_pressure?: string | null;
+    hld_time?: string | null;
+    hld_vel?: string | null;
+    chg_position?: string | null;
+    chg_speed?: string | null;
+    back_pressure?: string | null;
+    suckback_position?: string | null;
+    suckback_speed?: string | null;
+    barrel_temperature?: string | null;
+    mold_temperature?: string | null;
+    timer?: string | null;
+  } | null;
 }
 interface Machine {
   code: string;
@@ -94,6 +124,11 @@ interface Snapshot {
   communication: 'RECENT' | 'NO_RECENT_DATA';
   machines: Machine[];
 }
+interface InjectionHistory {
+  status: 'AVAILABLE' | 'NO_DATA' | 'CONFIGURATION_PENDING' | 'UNAVAILABLE';
+  message: string;
+  points: { timestamp: string; value?: number; target?: number; measured?: number }[];
+}
 
 const number = (value: number | null | undefined, digits = 0) =>
   value == null ? 'No informado' : value.toLocaleString('es-AR', { maximumFractionDigits: digits });
@@ -105,6 +140,13 @@ const time = (value: string | null | undefined) =>
         new Date(value)
       )
     : 'No informado';
+const temperatureTargets = (value: string | null | undefined, sizes: number[]) => {
+  if (!value) return null;
+  const parts = value.split('/').map((part) => part.trim());
+  if (!sizes.includes(parts.length)) return null;
+  const values = parts.map((part) => (part !== '' ? Number(part) : NaN));
+  return values.every(Number.isFinite) ? values : null;
+};
 const isProducing = (machine: Machine, snapshot: Snapshot | undefined) =>
   snapshot?.communication === 'RECENT' &&
   machine.cmsFresh &&
@@ -119,17 +161,59 @@ function Details({
   batch,
   source,
   schemaVersion,
+  simulated,
   onClose
 }: {
   machine: Machine;
   batch: Snapshot['batch'];
   source: string;
   schemaVersion: number;
+  simulated: boolean;
   onClose: () => void;
 }) {
   const r = machine.reading;
   const shot = machine.ultimo_ciclo_tecnico;
   const [tab, setTab] = useState('GENERAL');
+  const [historyMetric, setHistoryMetric] = useState<'cycle' | 'quantity' | 'temperature'>('cycle');
+  const [historyHours, setHistoryHours] = useState(24);
+  const [historyZone, setHistoryZone] = useState(1);
+  const history = useQuery({
+    queryKey: ['injection-history', machine.code, source, historyMetric, historyHours, historyZone],
+    queryFn: async () =>
+      (
+        await api.get<InjectionHistory>(
+          `/plants/ENVASES/injection-machines/${machine.code}/history`,
+          {
+            params: { source, metric: historyMetric, hours: historyHours, zone: historyZone }
+          }
+        )
+      ).data,
+    enabled: tab === 'HISTÓRICO',
+    staleTime: 60_000
+  });
+  const barrelTargets = temperatureTargets(shot?.recipe?.barrel_temperature, [7, 8]);
+  const moldTargets = temperatureTargets(shot?.recipe?.mold_temperature, [12]);
+  const barrelTemperatures = [
+    ...Array.from({ length: 7 }, (_, index) => ({
+      name: `Zona CMS ${index + 1}`,
+      target: barrelTargets?.[index],
+      measured: shot?.barrel_temperatures?.[index]
+    })),
+    {
+      name: 'Tolva',
+      target: barrelTargets?.[7],
+      measured: shot?.hopper_temperature
+    }
+  ];
+  const moldTemperatures = Array.from({ length: 12 }, (_, index) => ({
+    name: `Molde Z${index + 1}`,
+    target: moldTargets?.[index],
+    measured: shot?.mold_temperatures?.[index]
+  }));
+  const temperatureGroups = [
+    { title: 'Cilindro y tolva', rows: barrelTemperatures },
+    { title: 'Molde', rows: moldTemperatures }
+  ];
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -150,7 +234,8 @@ function Details({
           ['Operación', r?.operation_status_text],
           ['Motor', r?.motor_status_text],
           ['Calefacción', r?.heater_status_text],
-          ['Alarma, código', r?.alarm_status_code]
+          ['Alarma, código', r?.alarm_status_code],
+          ['Última lectura CMS', time(r?.cms_timestamp)]
         ]
       ]
     ],
@@ -178,6 +263,7 @@ function Details({
         [
           ['Disparo', shot?.shot_number],
           ['Fecha del disparo', time(shot?.timestamp)],
+          ['Vínculo con la inyectora', shot?.identity_source],
           ['Tiempo de ciclo', shot?.cycle_time],
           ['Archivo del último ciclo', shot?.mold_name],
           ['Cavidades', shot?.cavity],
@@ -200,19 +286,33 @@ function Details({
           ['Posición de apertura', shot?.clamp_open_position],
           ['Peso de resina', shot?.resin_weight]
         ]
+      ]
+    ],
+    'AJUSTES DEL CICLO': [
+      [
+        'Perfil de inyección y transferencia · shot_data_rec',
+        [
+          ['Velocidades de inyección', shot?.recipe?.inj_velocity],
+          ['Presiones de inyección', shot?.recipe?.inj_pressure],
+          ['Posiciones de inyección', shot?.recipe?.inj_position],
+          ['Tiempo SOV', shot?.recipe?.sov_time],
+          ['Posición SOV', shot?.recipe?.sov_position],
+          ['Presiones de sostenimiento', shot?.recipe?.hld_pressure],
+          ['Tiempos de sostenimiento', shot?.recipe?.hld_time],
+          ['Velocidades de sostenimiento', shot?.recipe?.hld_vel]
+        ]
       ],
       [
-        'Temperaturas del último ciclo',
+        'Carga, contrapresión y temperaturas · shot_data_rec',
         [
-          ...Array.from(
-            { length: 7 },
-            (_, index): Entry => [`Cilindro Z${index + 1}`, shot?.barrel_temperatures?.[index]]
-          ),
-          ...Array.from(
-            { length: 12 },
-            (_, index): Entry => [`Molde Z${index + 1}`, shot?.mold_temperatures?.[index]]
-          ),
-          ['Tolva', shot?.hopper_temperature]
+          ['Posiciones de carga', shot?.recipe?.chg_position],
+          ['Velocidades de carga', shot?.recipe?.chg_speed],
+          ['Contrapresiones', shot?.recipe?.back_pressure],
+          ['Posiciones de descompresión', shot?.recipe?.suckback_position],
+          ['Velocidades de descompresión', shot?.recipe?.suckback_speed],
+          ['Temperaturas de cilindro (texto CMS)', shot?.recipe?.barrel_temperature],
+          ['Temperaturas de molde (texto CMS)', shot?.recipe?.mold_temperature],
+          ['Temporizador CMS', shot?.recipe?.timer]
         ]
       ]
     ],
@@ -235,7 +335,8 @@ function Details({
           ['Aviso', batch?.notice]
         ]
       ]
-    ]
+    ],
+    HISTÓRICO: []
   };
   return (
     <div className="injection-overlay" onClick={onClose}>
@@ -277,11 +378,49 @@ function Details({
           ))}
         </nav>
         {!r && <p>Sin telemetría recibida desde el reinicio del backend.</p>}
-        {tab === 'PARÁMETROS DE INYECCIÓN' && (
+        {(tab === 'PARÁMETROS DE INYECCIÓN' || tab === 'AJUSTES DEL CICLO') && (
           <p className="injection-detail__note">
-            Valores simulados del último ciclo completado. Las unidades de presión, posición,
-            velocidad, peso y temperatura no están verificadas con el equipo real.
+            {shot
+              ? `${simulated ? 'Valores simulados' : 'Valores reportados por CMS'} del último ciclo atribuido a esta inyectora.`
+              : 'Todavía no hay un ciclo técnico vinculado de forma comprobada a esta inyectora.'}{' '}
+            Las unidades de presión, posición, velocidad, peso y temperatura siguen pendientes de
+            confirmación. Las series separadas por «/» se muestran como texto original de CMS.
           </p>
+        )}
+        {tab === 'PARÁMETROS DE INYECCIÓN' && (
+          <section className="injection-temperature-comparison">
+            <h3>Temperaturas · ajuste y medición del último disparo</h3>
+            <p>
+              Ambos valores corresponden al ciclo {shot ? number(shot.shot_number) : 'no vinculado'}
+              . No son temperaturas instantáneas. Un cero es el valor reportado por CMS y no
+              confirma por sí solo que el sensor esté activo.
+            </p>
+            <div className="injection-temperature-comparison__grid">
+              {temperatureGroups.map(({ title, rows }) => (
+                <div className="injection-temperature-comparison__table" key={title}>
+                  <h4>{title}</h4>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Zona</th>
+                        <th scope="col">Ajuste</th>
+                        <th scope="col">Medido</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((zone) => (
+                        <tr key={zone.name}>
+                          <th scope="row">{zone.name}</th>
+                          <td>{number(zone.target, 1)}</td>
+                          <td>{number(zone.measured, 1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
         {groups[tab].map(([title, entries]) => (
           <section key={title}>
@@ -296,6 +435,135 @@ function Details({
             </dl>
           </section>
         ))}
+        {tab === 'HISTÓRICO' && (
+          <section className="injection-history">
+            <h3>Histórico de {machine.name}</h3>
+            <p>
+              {simulated ? 'Serie simulada' : 'Serie real'} identificada por IP desde que se activó
+              el registro. Los disparos antiguos sin vínculo comprobado no se incluyen.
+            </p>
+            <div className="injection-history__controls">
+              <div aria-label="Variable histórica">
+                {(
+                  [
+                    ['cycle', 'Ciclo'],
+                    ['quantity', 'Contador'],
+                    ['temperature', 'Temperaturas']
+                  ] as const
+                ).map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={historyMetric === value ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => setHistoryMetric(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <label>
+                Período
+                <select
+                  value={historyHours}
+                  onChange={(event) => setHistoryHours(Number(event.target.value))}
+                >
+                  <option value={1}>1 h</option>
+                  <option value={6}>6 h</option>
+                  <option value={24}>24 h</option>
+                  <option value={72}>3 días</option>
+                  <option value={168}>7 días</option>
+                </select>
+              </label>
+              {historyMetric === 'temperature' && (
+                <label>
+                  Zona
+                  <select
+                    value={historyZone}
+                    onChange={(event) => setHistoryZone(Number(event.target.value))}
+                  >
+                    {Array.from({ length: 7 }, (_, index) => (
+                      <option key={index} value={index + 1}>
+                        Zona CMS {index + 1}
+                      </option>
+                    ))}
+                    <option value={8}>Tolva</option>
+                    {Array.from({ length: 12 }, (_, index) => (
+                      <option key={`mold-${index}`} value={index + 9}>
+                        Molde Z{index + 1}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            {history.isPending ? (
+              <p>Cargando historial…</p>
+            ) : history.isError ? (
+              <p>No se pudo consultar el historial.</p>
+            ) : history.data.status !== 'AVAILABLE' ? (
+              <p>{history.data.message}</p>
+            ) : (
+              <div
+                className="injection-history__chart"
+                role="img"
+                aria-label={`Gráfica histórica de ${historyMetric} para ${machine.name}`}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={history.data.points}
+                    margin={{ top: 12, right: 24, left: 0, bottom: 12 }}
+                  >
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="timestamp"
+                      tickFormatter={(value: string) =>
+                        new Intl.DateTimeFormat('es-AR', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }).format(new Date(value))
+                      }
+                      stroke="var(--color-text)"
+                      minTickGap={28}
+                    />
+                    <YAxis stroke="var(--color-text)" width={56} domain={['auto', 'auto']} />
+                    <Tooltip labelFormatter={(value) => time(String(value))} />
+                    <Legend />
+                    {historyMetric === 'temperature' ? (
+                      <>
+                        <Line
+                          type="monotone"
+                          dataKey="target"
+                          name="Ajuste"
+                          stroke="var(--color-warning)"
+                          dot={false}
+                          connectNulls
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="measured"
+                          name="Medido"
+                          stroke="var(--color-primary)"
+                          dot={false}
+                          connectNulls
+                        />
+                      </>
+                    ) : (
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        name={historyMetric === 'cycle' ? 'Ciclo (s)' : 'Contador CMS'}
+                        stroke="var(--color-primary)"
+                        dot={false}
+                        connectNulls
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+        )}
       </aside>
     </div>
   );
@@ -404,7 +672,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           const hasAlarm = live && r?.alarm_status_code != null && r.alarm_status_code !== 0;
           const producing = isProducing(machine, snapshot);
           const loadedFile = live
-            ? machine.ultimo_ciclo_tecnico?.mold_name?.trim() || 'No informado'
+            ? machine.ultimo_ciclo_tecnico?.mold_name?.trim() || 'No vinculado'
             : 'Sin confirmar';
           const cardState = !live
             ? 'is-stale'
@@ -502,13 +770,17 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       <strong
                         className={flashShot === machine.code ? 'injection-shot-flash' : undefined}
                       >
-                        {live ? number(machine.ultimo_ciclo_tecnico?.shot_number) : 'Sin datos'}
+                        {live && machine.ultimo_ciclo_tecnico
+                          ? number(machine.ultimo_ciclo_tecnico.shot_number)
+                          : 'Sin vincular'}
                       </strong>
                     </div>
                     <div>
                       <small>CAVIDADES</small>
                       <strong>
-                        {live ? number(machine.ultimo_ciclo_tecnico?.cavity) : 'Sin datos'}
+                        {live && machine.ultimo_ciclo_tecnico
+                          ? number(machine.ultimo_ciclo_tecnico.cavity)
+                          : 'Sin vincular'}
                       </strong>
                     </div>
                   </div>
@@ -586,6 +858,18 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                           : `${number(r.avg_quantity_per_hour, 1)}/h`}
                       </strong>
                     </div>
+                    <div>
+                      <small>TOTAL CMS</small>
+                      <strong>{number(r?.total_quantity)}</strong>
+                    </div>
+                    <div>
+                      <small>TIEMPO DE PRODUCCIÓN</small>
+                      <strong>
+                        {r?.production_time_hour == null && r?.production_time_min == null
+                          ? 'No informado'
+                          : `${number(r?.production_time_hour)} h ${number(r?.production_time_min)} min`}
+                      </strong>
+                    </div>
                   </div>
                   <div className="injection-activity">
                     <strong className={live && machine.counterRecent ? 'is-recent' : ''}>
@@ -621,6 +905,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           batch={snapshot?.batch ?? null}
           source={snapshot?.source ?? 'NODE_RED_ENVASES'}
           schemaVersion={snapshot?.schemaVersion ?? 1}
+          simulated={simulated}
           onClose={() => setSelected(null)}
         />
       )}

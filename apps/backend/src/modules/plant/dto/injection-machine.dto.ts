@@ -18,9 +18,33 @@ import {
 } from 'class-validator';
 import { INJECTION_SIM_SOURCE, INJECTION_SOURCE } from '../injection-machines.config';
 
+// Cadenas por etapa tal como las entrega shot_data_rec; no se infieren unidades ni escalas.
+export class InjectionRecipeDto {
+  @IsOptional() @IsString() @MaxLength(128) inj_velocity?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) inj_pressure?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) inj_position?: string | null;
+  @IsOptional() @IsNumber() sov_time?: number | null;
+  @IsOptional() @IsNumber() sov_position?: number | null;
+  @IsOptional() @IsString() @MaxLength(64) hld_pressure?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) hld_time?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) hld_vel?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) chg_position?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) chg_speed?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) back_pressure?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) suckback_position?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) suckback_speed?: string | null;
+  @IsOptional() @IsString() @MaxLength(128) barrel_temperature?: string | null;
+  @IsOptional() @IsString() @MaxLength(256) mold_temperature?: string | null;
+  @IsOptional() @IsString() @MaxLength(64) timer?: string | null;
+}
+
 export class InjectionTechnicalCycleDto {
   @IsInt() @Min(0) shot_number!: number;
   @IsISO8601() timestamp!: string;
+  @IsOptional() @IsString() @MaxLength(45) machine_ip?: string | null;
+  @IsOptional()
+  @IsIn(['CMS_MACHINE_NAME', 'NODE_RED_MACHINE_CONTEXT', 'SIMULATED'])
+  identity_source?: 'CMS_MACHINE_NAME' | 'NODE_RED_MACHINE_CONTEXT' | 'SIMULATED';
   @IsOptional() @IsNumber() @Min(0) cycle_time?: number | null;
   @IsOptional() @IsString() @MaxLength(100) mold_name?: string | null;
   @IsOptional() @IsInt() @Min(0) cavity?: number | null;
@@ -69,6 +93,10 @@ export class InjectionTechnicalCycleDto {
   })
   mold_temperatures?: (number | null)[] | null;
   @IsOptional() @IsNumber() hopper_temperature?: number | null;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InjectionRecipeDto)
+  recipe?: InjectionRecipeDto | null;
 }
 
 export class InjectionMachineReadingDto {
@@ -96,8 +124,7 @@ export class InjectionMachineReadingDto {
   @IsOptional() @IsInt() @Min(0) @Max(1000000000) total_quantity?: number | null;
   @IsOptional() @IsNumber() @Min(0) @Max(1000000) avg_quantity_per_hour?: number | null;
   @IsOptional() @IsInt() @Min(-1000000000) @Max(1000000000) delta_contador_observado?:
-    | number
-    | null;
+    number | null;
   @IsOptional() @IsString() @MaxLength(80) tipo_cambio_contador?: string | null;
   @IsOptional() @IsString() @MaxLength(80) actividad_inferida?: string | null;
   @IsOptional() @IsISO8601() ultimo_incremento_detectado?: string | null;
@@ -109,8 +136,7 @@ export class InjectionMachineReadingDto {
 
 export class InjectionMachineBatchDto {
   @IsIn([INJECTION_SOURCE, INJECTION_SIM_SOURCE]) source!:
-    | typeof INJECTION_SOURCE
-    | typeof INJECTION_SIM_SOURCE;
+    typeof INJECTION_SOURCE | typeof INJECTION_SIM_SOURCE;
   @IsOptional() @IsIn(['SIMULATION']) mode?: 'SIMULATION';
   @IsOptional() @IsBoolean() simulated?: boolean;
   @IsIn([1]) schemaVersion!: 1;

@@ -333,6 +333,84 @@
   text-align: right;
   overflow-wrap: anywhere;
 }
+.injection-temperature-comparison {
+  grid-column: 1 / -1;
+}
+.injection-temperature-comparison > p {
+  margin: 0 0 0.8rem;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+.injection-temperature-comparison__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.injection-temperature-comparison__table {
+  min-width: 0;
+}
+.injection-temperature-comparison__table h4 {
+  margin: 0 0 0.45rem;
+  color: var(--color-text);
+}
+.injection-temperature-comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.injection-temperature-comparison th,
+.injection-temperature-comparison td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #547487;
+}
+.injection-temperature-comparison thead th {
+  color: var(--color-text);
+  font-weight: 800;
+}
+.injection-temperature-comparison tbody th {
+  color: var(--color-text);
+  text-align: left;
+  font-weight: 600;
+}
+.injection-temperature-comparison td,
+.injection-temperature-comparison thead th:not(:first-child) {
+  text-align: right;
+}
+.injection-temperature-comparison td:last-child {
+  font-weight: 800;
+}
+.injection-history {
+  grid-column: 1 / -1;
+}
+.injection-history > p {
+  margin: 0.3rem 0 0.8rem;
+  color: var(--color-text);
+}
+.injection-history__controls,
+.injection-history__controls > div,
+.injection-history__controls label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.injection-history__controls {
+  margin-bottom: 1rem;
+}
+.injection-history__controls select {
+  min-height: 2.3rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+.injection-history__chart {
+  width: 100%;
+  height: min(48vh, 430px);
+  min-height: 250px;
+}
 :root[data-theme='light'] .injection-page {
   color: var(--color-text);
   background: radial-gradient(circle at 50% -20%, #d5e7f3 0, var(--plant-bg) 34rem);
@@ -423,6 +501,10 @@
 :root[data-theme='light'] .injection-detail dl div {
   border-color: #c3d0dc;
 }
+:root[data-theme='light'] .injection-temperature-comparison th,
+:root[data-theme='light'] .injection-temperature-comparison td {
+  border-color: #c3d0dc;
+}
 .injection-page:not(.injection-page--tv) .injection-summary {
   gap: 0.55rem;
   margin-bottom: 0.65rem;
@@ -493,6 +575,9 @@
     grid-template-columns: 1fr;
   }
   .injection-detail {
+    grid-template-columns: 1fr;
+  }
+  .injection-temperature-comparison__grid {
     grid-template-columns: 1fr;
   }
 }

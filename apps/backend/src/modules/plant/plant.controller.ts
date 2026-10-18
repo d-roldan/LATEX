@@ -144,6 +144,29 @@ export class PlantScopedController {
   injectionTelemetry(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {
     return this.injectionMachines.privateSnapshot(u.companyId, u.sub, c);
   }
+  @Get(':plantCode/injection-machines/:code/history')
+  @Header('Cache-Control', 'no-store')
+  @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
+  injectionHistory(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('code') code: string,
+    @Query('source') source: string,
+    @Query('metric') metric: string,
+    @Query('hours') hours: string,
+    @Query('zone') zone = '1'
+  ) {
+    return this.injectionMachines.privateHistory(
+      u.companyId,
+      u.sub,
+      c,
+      code,
+      source,
+      metric,
+      hours,
+      zone
+    );
+  }
   @Get(':plantCode/config')
   @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
   config(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {
