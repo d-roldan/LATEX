@@ -19,6 +19,7 @@ import './InjectionMachinesPage.css';
 interface Reading {
   machine_ip: string;
   modelo?: string | null;
+  telemetry_origin?: 'DBS_API';
   machine_name_cms?: string | null;
   cms_timestamp: string;
   cms_age_seconds?: number | null;
@@ -37,6 +38,15 @@ interface Reading {
   production_time_min?: number | null;
   current_quantity?: number | null;
   total_quantity?: number | null;
+  target_quantity?: number | null;
+  defective_quantity?: number | null;
+  dbs_temperature_zones?:
+    | {
+        zone: string;
+        current?: number | null;
+        setting?: number | null;
+      }[]
+    | null;
   avg_quantity_per_hour?: number | null;
   delta_contador_observado?: number | null;
   tipo_cambio_contador?: string | null;
@@ -235,7 +245,10 @@ function Details({
           ['Motor', r?.motor_status_text],
           ['Calefacción', r?.heater_status_text],
           ['Alarma, código', r?.alarm_status_code],
-          ['Última lectura CMS', time(r?.cms_timestamp)]
+          [
+            r?.telemetry_origin === 'DBS_API' ? 'Última respuesta DBS' : 'Última lectura CMS',
+            time(r?.cms_timestamp)
+          ]
         ]
       ]
     ],
@@ -245,6 +258,8 @@ function Details({
         [
           ['Contador actual', r?.current_quantity],
           ['Total reportado', r?.total_quantity],
+          ['Objetivo reportado', r?.target_quantity],
+          ['Defectuosas reportadas', r?.defective_quantity],
           ['Promedio reportado por hora', r?.avg_quantity_per_hour],
           ['Ciclo actual (s, inferido)', r?.cycle_time_current],
           ['Ciclo anterior (s, inferido)', r?.cycle_time_before],
@@ -330,6 +345,7 @@ function Details({
           ['Recepción Node-RED', time(machine.nodeRedAt)],
           ['Recepción LATEX', time(machine.receivedAt)],
           ['Fuente', source],
+          ['Origen de lectura', r?.telemetry_origin ?? 'CMS SQL'],
           ['Versión del contrato', schemaVersion],
           ['Filas SQL informadas', batch?.sqlRows],
           ['Aviso', batch?.notice]
@@ -386,6 +402,36 @@ function Details({
             Las unidades de presión, posición, velocidad, peso y temperatura siguen pendientes de
             confirmación. Las series separadas por «/» se muestran como texto original de CMS.
           </p>
+        )}
+        {tab === 'PARÁMETROS DE INYECCIÓN' && r?.telemetry_origin === 'DBS_API' && (
+          <section className="injection-temperature-comparison">
+            <h3>Temperaturas de DBS · última consulta</h3>
+            <p>
+              {machine.cmsFresh && machine.communicationFresh
+                ? `Consulta recibida ${time(r.cms_timestamp)}. Escala y unidad física pendientes de confirmar.`
+                : 'Lectura obsoleta o sin comunicación reciente; estos valores no son actuales.'}
+            </p>
+            <div className="injection-temperature-comparison__table">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Zona</th>
+                    <th scope="col">Consigna</th>
+                    <th scope="col">Actual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(r.dbs_temperature_zones ?? []).map((zone) => (
+                    <tr key={zone.zone}>
+                      <th scope="row">{zone.zone.replaceAll('_', ' ')}</th>
+                      <td>{number(zone.setting, 1)}</td>
+                      <td>{number(zone.current, 1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
         {tab === 'PARÁMETROS DE INYECCIÓN' && (
           <section className="injection-temperature-comparison">
@@ -659,7 +705,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
         </div>
         <div>
           <strong>{summary.warnings}</strong>
-          <span>Con alarma CMS</span>
+          <span>Con alarma reportada</span>
         </div>
       </div>
       {query.isLoading && <p role="status">Cargando estado de las inyectoras…</p>}
@@ -671,9 +717,10 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           const mode = r?.operation_status_text?.trim().toUpperCase();
           const hasAlarm = live && r?.alarm_status_code != null && r.alarm_status_code !== 0;
           const producing = isProducing(machine, snapshot);
-          const loadedFile = live
-            ? machine.ultimo_ciclo_tecnico?.mold_name?.trim() || 'No vinculado'
-            : 'Sin confirmar';
+          const loadedFile =
+            live && r?.telemetry_origin !== 'DBS_API'
+              ? machine.ultimo_ciclo_tecnico?.mold_name?.trim() || 'No vinculado'
+              : 'Sin confirmar';
           const cardState = !live
             ? 'is-stale'
             : mode === 'PARO' || hasAlarm
@@ -688,7 +735,9 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
             : snapshot?.communication !== 'RECENT'
               ? 'Sin conexión reciente con Node-RED'
               : !machine.cmsFresh
-                ? 'CMS desactualizado'
+                ? r?.telemetry_origin === 'DBS_API'
+                  ? 'Respuesta DBS desactualizada'
+                  : 'CMS desactualizado'
                 : !machine.communicationFresh
                   ? 'Sin lectura nueva'
                   : 'Dato vigente';
@@ -727,7 +776,9 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                     </span>
                   </div>
                   <div className="injection-count">
-                    <span>ENVASES · CONTADOR ACTUAL CMS</span>
+                    <span>
+                      ENVASES · CONTADOR ACTUAL {r?.telemetry_origin === 'DBS_API' ? 'DBS' : 'CMS'}
+                    </span>
                     <strong
                       className={!live || r?.current_quantity == null ? 'is-empty' : undefined}
                     >
@@ -752,7 +803,9 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       </strong>
                     </div>
                     <div>
-                      <small>PROMEDIO CMS / H</small>
+                      <small>
+                        PROMEDIO {r?.telemetry_origin === 'DBS_API' ? 'DBS' : 'CMS'} / H
+                      </small>
                       <strong>
                         {live && r?.avg_quantity_per_hour != null
                           ? number(r.avg_quantity_per_hour, 1)
@@ -794,7 +847,9 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                     </strong>
                   </p>
                   {live && r?.alarm_status_code != null && r.alarm_status_code !== 0 && (
-                    <p className="injection-tv-alarm">Alarma CMS · código {r.alarm_status_code}</p>
+                    <p className="injection-tv-alarm">
+                      Alarma reportada · código {r.alarm_status_code}
+                    </p>
                   )}
                 </>
               ) : (
@@ -817,7 +872,9 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                     </div>
                     <span className="injection-state">{state}</span>
                   </div>
-                  <p className="injection-updated">CMS {time(r?.cms_timestamp)}</p>
+                  <p className="injection-updated">
+                    {r?.telemetry_origin === 'DBS_API' ? 'DBS' : 'CMS'} {time(r?.cms_timestamp)}
+                  </p>
                   <div className="injection-operation">
                     <span>
                       Operación <strong>{text(r?.operation_status_text)}</strong>
@@ -880,7 +937,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       {text(r?.tipo_cambio_contador)}
                     </span>
                     <span>Último incremento: {time(r?.ultimo_incremento_detectado)}</span>
-                    <span>Alarma CMS: código {text(r?.alarm_status_code)}</span>
+                    <span>Alarma reportada: código {text(r?.alarm_status_code)}</span>
                     <span>Adquisición industrial: {text(r?.adquisicion_industrial_fresca)}</span>
                   </div>
                   <div className="tank-actions injection-card__actions">

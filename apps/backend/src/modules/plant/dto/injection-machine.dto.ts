@@ -99,11 +99,19 @@ export class InjectionTechnicalCycleDto {
   recipe?: InjectionRecipeDto | null;
 }
 
+export class InjectionDbsTemperatureZoneDto {
+  @IsIn(['EXT_NOZZLE', 'NOZZLE', 'HEATER_1', 'HEATER_2', 'HEATER_3', 'HEATER_4', 'OIL', 'HOPPER'])
+  zone!: string;
+  @IsOptional() @IsNumber() current?: number | null;
+  @IsOptional() @IsNumber() setting?: number | null;
+}
+
 export class InjectionMachineReadingDto {
   @IsString() @MaxLength(45) machine_ip!: string;
   @IsOptional() @IsString() @MaxLength(20) equipment_code?: string;
   @IsOptional() @IsBoolean() simulated?: boolean;
   @IsOptional() @IsString() @MaxLength(50) modelo?: string | null;
+  @IsOptional() @IsIn(['DBS_API']) telemetry_origin?: 'DBS_API';
   @IsOptional() @IsString() @MaxLength(100) machine_name_cms?: string | null;
   @IsISO8601() cms_timestamp!: string;
   @IsOptional() @IsNumber() @Min(0) @Max(31536000) cms_age_seconds?: number | null;
@@ -122,10 +130,17 @@ export class InjectionMachineReadingDto {
   @IsOptional() @IsInt() @Min(0) @Max(59) production_time_min?: number | null;
   @IsOptional() @IsInt() @Min(0) @Max(1000000000) current_quantity?: number | null;
   @IsOptional() @IsInt() @Min(0) @Max(1000000000) total_quantity?: number | null;
+  @IsOptional() @IsInt() @Min(0) @Max(1000000000) target_quantity?: number | null;
+  @IsOptional() @IsInt() @Min(0) @Max(1000000000) defective_quantity?: number | null;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => InjectionDbsTemperatureZoneDto)
+  dbs_temperature_zones?: InjectionDbsTemperatureZoneDto[] | null;
   @IsOptional() @IsNumber() @Min(0) @Max(1000000) avg_quantity_per_hour?: number | null;
   @IsOptional() @IsInt() @Min(-1000000000) @Max(1000000000) delta_contador_observado?:
-    | number
-    | null;
+    number | null;
   @IsOptional() @IsString() @MaxLength(80) tipo_cambio_contador?: string | null;
   @IsOptional() @IsString() @MaxLength(80) actividad_inferida?: string | null;
   @IsOptional() @IsISO8601() ultimo_incremento_detectado?: string | null;
@@ -137,8 +152,7 @@ export class InjectionMachineReadingDto {
 
 export class InjectionMachineBatchDto {
   @IsIn([INJECTION_SOURCE, INJECTION_SIM_SOURCE]) source!:
-    | typeof INJECTION_SOURCE
-    | typeof INJECTION_SIM_SOURCE;
+    typeof INJECTION_SOURCE | typeof INJECTION_SIM_SOURCE;
   @IsOptional() @IsIn(['SIMULATION']) mode?: 'SIMULATION';
   @IsOptional() @IsBoolean() simulated?: boolean;
   @IsIn([1]) schemaVersion!: 1;

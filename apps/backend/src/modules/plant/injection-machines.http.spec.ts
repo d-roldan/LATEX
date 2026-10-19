@@ -114,6 +114,33 @@ describe('ENVASES HTTP', () => {
     expect(data.machines[1].reading).toBeNull();
   });
 
+  it('acepta el contrato DBS y rechaza una zona de temperatura desconocida', async () => {
+    const url = `${base}/api/plants/ENVASES/telemetry/injection-machines`;
+    const reading = {
+      ...payload().maquinas[0],
+      telemetry_origin: 'DBS_API',
+      target_quantity: 100,
+      defective_quantity: 2,
+      dbs_temperature_zones: [{ zone: 'EXT_NOZZLE', current: 210, setting: 215 }]
+    };
+    const accepted = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-node-red-key': key },
+      body: JSON.stringify({ ...payload(), maquinas: [reading] })
+    });
+    expect(accepted.status).toBe(201);
+    expect(await accepted.json()).toMatchObject({ accepted: 1 });
+    const rejected = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-node-red-key': key },
+      body: JSON.stringify({
+        ...payload(),
+        maquinas: [{ ...reading, dbs_temperature_zones: [{ zone: 'UNKNOWN', current: 210 }] }]
+      })
+    });
+    expect(rejected.status).toBe(400);
+  });
+
   it('rechaza simulación deshabilitada y valida el último ciclo técnico opcional', async () => {
     const url = `${base}/api/plants/ENVASES/telemetry/injection-machines`;
     const simulated = {

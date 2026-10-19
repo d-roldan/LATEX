@@ -4,14 +4,14 @@
     "type": "tab",
     "label": "ENVASES · Woojin real v2",
     "disabled": true,
-    "info": "Importar deshabilitado. Configurar MySQL y API; probar manualmente; luego habilitar."
+    "info": "Importar deshabilitado. Configurar MySQL y API; probar manualmente. Las dos ramas InfluxDB permanecen deshabilitadas hasta configurar su bucket y token."
   },
   {
     "id": "w5_comment_externo_v2",
     "type": "comment",
     "z": "envases_woojin_live_v2",
     "name": "LEER ANTES: configurar y probar manual; auto deshabilitado",
-    "info": "Este flujo sustituye al anterior, no debe ejecutarse en paralelo. Configurar nodo MySQL con usuario SELECT exclusivo y variables DISAL_API_BASE_URL (termina en /api) y DISAL_ENVASES_INTEGRATION_KEY. Para atribuir ciclos, CMS debe guardar en shot_data.Machine_Name el apodo exacto de itgr_machine_list.Machine_Nickname. Habilitar la pestaña y ejecutar Manual; revisar 5 modelos, atribución por IP y respuesta API. Sólo después habilitar auto 5 s. No escribe en Woojin ni en InfluxDB.",
+    "info": "Este flujo sustituye al anterior, no debe ejecutarse en paralelo. Configurar MySQL sólo SELECT, API LATEX y, por separado, las variables DISAL_ENVASES_INFLUX_*. Los nodos InfluxDB llegan DESHABILITADOS. Estados de real_data: IP verificada. Disparos: sólo si Machine_Name coincide de forma única con itgr_machine_list.Machine_Nickname; los históricos con - siguen SIN INYECTORA IDENTIFICADA y NO se escriben por máquina. Probar Manual, luego habilitar auto 5 s y finalmente cada rama InfluxDB. No escribe en Woojin.",
     "x": 370,
     "y": 60,
     "wires": []
@@ -114,8 +114,8 @@
     "id": "w5_normalize_externo_v2",
     "type": "function",
     "z": "envases_woojin_live_v2",
-    "name": "Woojin · normalizar lectura actual",
-    "func": "if (!Array.isArray(msg.payload)) {\n    flow.set('envases_sql_busy_until', 0);\n    node.status({fill:'red',shape:'ring',text:'Resultado SQL inválido'});\n    return [null, null, {payload:{status:'SQL_INVALIDO'}}];\n}\nconst catalogo = {\n    '172.16.0.141':'INY01', '172.16.0.146':'INY02',\n    '172.16.0.143':'INY03', '172.16.0.144':'INY04', '172.16.0.145':'INY05'\n};\nconst ahora = Date.now();\nconst historial = context.get('envases_contadores') || {};\nconst siguiente = {...historial};\nconst maquinas = [];\nconst eventos = [];\nconst problemas = [];\nconst vistos = new Set();\nfunction numero(value) {\n    if (value === null || value === undefined || value === '') return null;\n    const parsed = Number(typeof value === 'string' ? value.replace(',', '.') : value);\n    return Number.isFinite(parsed) ? parsed : null;\n}\nfunction estado(value, nombres) { return Object.prototype.hasOwnProperty.call(nombres, value) ? nombres[value] : 'NO_VALIDADO'; }\nfor (const fila of msg.payload) {\n    const ip = String(fila && fila.Machine_IP || '');\n    if (!catalogo[ip] || vistos.has(ip)) {\n        problemas.push({tipo:'IP_DESCONOCIDA_O_REPETIDA', machine_ip:ip});\n        continue;\n    }\n    vistos.add(ip);\n    const marca = fila.cms_timestamp_iso;\n    if (typeof marca !== 'string' || !Number.isFinite(Date.parse(marca))) {\n        problemas.push({tipo:'TIMESTAMP_INVALIDO', machine_ip:ip});\n        continue;\n    }\n    const edad = numero(fila.cms_age_seconds);\n    const fresca = edad !== null && edad >= 0 && edad <= 10;\n    const actual = numero(fila.Current_Quantity);\n    const previo = historial[ip];\n    let delta = null;\n    let cambio = fresca ? 'LINEA_BASE_INICIAL' : 'SIN_EVALUAR_POR_FRESCURA';\n    let ultimo = previo && previo.ultimo_incremento_ms || null;\n    if (fresca && actual === null) cambio = 'CONTADOR_INVALIDO';\n    else if (fresca && previo && typeof previo.contador === 'number' && previo.cms_timestamp !== marca) {\n        delta = actual - previo.contador;\n        if (delta > 0) {\n            cambio = 'INCREMENTO_DETECTADO';\n            ultimo = ahora;\n            eventos.push({payload:{evento:cambio,machine_ip:ip,delta,observado_en:new Date(ahora).toISOString()}});\n        } else if (delta < 0) {\n            cambio = 'REINICIO_O_RETROCESO_CONTADOR';\n            ultimo = null;\n            eventos.push({payload:{evento:cambio,machine_ip:ip,contador_actual:actual}});\n        } else cambio = 'SIN_INCREMENTO_EN_ESTA_LECTURA';\n    } else if (fresca && previo) cambio = 'SIN_CAMBIO';\n    if (fresca && actual !== null) siguiente[ip] = {contador:actual,cms_timestamp:marca,ultimo_incremento_ms:ultimo};\n    const op = numero(fila.Operation_Status);\n    const motor = numero(fila.Motor_Status);\n    const heater = numero(fila.Heater_Status);\n    const ciclo = numero(fila.Cycle_Time_Current);\n    const actividadReciente = ultimo && ahora - ultimo <= Math.max(90000, (ciclo || 0) * 3000);\n    maquinas.push({\n        machine_ip:ip, equipment_code:catalogo[ip],\n        modelo:typeof fila.Modelo === 'string' && fila.Modelo.trim() ? fila.Modelo.trim() : null,\n        machine_name_cms:fila.Machine_Name || null,\n        cms_timestamp:marca, cms_age_seconds:edad !== null && edad >= 0 ? edad : null,\n        cms_row_fresh:fresca, adquisicion_industrial_fresca:'NO_VERIFICADA',\n        operation_status_code:op, operation_status_text:estado(op,{0:'PARO',1:'AUTO',2:'MANUAL'}),\n        motor_status_code:motor, motor_status_text:estado(motor,{0:'STOP',1:'RUN'}),\n        heater_status_code:heater, heater_status_text:estado(heater,{0:'OFF',1:'ON'}),\n        alarm_status_code:numero(fila.Alarm_Status),\n        cycle_time_before:numero(fila.Cycle_Time_Before), cycle_time_current:ciclo,\n        production_time_hour:numero(fila.Production_Time_Hour), production_time_min:numero(fila.Production_Time_Min),\n        total_quantity:numero(fila.Total_Quantity), current_quantity:actual,\n        avg_quantity_per_hour:numero(fila.Avg_Quantity_Per_Hour),\n        delta_contador_observado:delta, tipo_cambio_contador:cambio,\n        actividad_inferida:!fresca ? 'DATOS_CMS_DESACTUALIZADOS' : actividadReciente ? 'INCREMENTO_RECIENTE' : 'SIN_INCREMENTO_RECIENTE',\n        ultimo_incremento_detectado:ultimo ? new Date(ultimo).toISOString() : null\n    });\n}\nfor (const ip of Object.keys(catalogo)) if (!vistos.has(ip)) problemas.push({tipo:'SIN_FILA_SQL',machine_ip:ip});\ncontext.set('envases_contadores', siguiente);\nconst frescas = maquinas.filter(item => item.cms_row_fresh).length;\nnode.status({fill:maquinas.length === 5 ? 'green' : 'yellow',shape:'dot',text:maquinas.length + '/5 filas válidas; ' + frescas + ' frescas'});\nconst resumen = {payload:{\n    fecha_recepcion_nodered:new Date(ahora).toISOString(),\n    cantidad_filas_sql:msg.payload.length, cantidad_maquinas_frescas_cms:frescas,\n    duracion_consulta_ms:typeof msg.woojin_inicio_ms === 'number' ? ahora - msg.woojin_inicio_ms : null,\n    aviso:'Frescura CMS no confirma señal Modbus ni producción. Ciclos históricos sin IP no se asignan.',\n    maquinas\n}};\nreturn [resumen, eventos.length ? eventos : null, problemas.length ? {payload:{problemas}} : null];",
+    "name": "Woojin · normalizar último estado SQL",
+    "func": "if (!Array.isArray(msg.payload)) {\n    flow.set('envases_sql_busy_until', 0);\n    node.status({fill:'red',shape:'ring',text:'Resultado SQL inválido'});\n    return [null, null, {payload:{status:'SQL_INVALIDO'}}];\n}\nconst catalogo = {\n    '172.16.0.141':'INY01', '172.16.0.146':'INY02',\n    '172.16.0.143':'INY03', '172.16.0.144':'INY04', '172.16.0.145':'INY05'\n};\nconst ahora = Date.now();\nconst historial = context.get('envases_contadores') || {};\nconst siguiente = {...historial};\nconst maquinas = [];\nconst eventos = [];\nconst problemas = [];\nconst vistos = new Set();\nfunction numero(value) {\n    if (value === null || value === undefined || value === '') return null;\n    const parsed = Number(typeof value === 'string' ? value.replace(',', '.') : value);\n    return Number.isFinite(parsed) ? parsed : null;\n}\nfunction estado(value, nombres) { return Object.prototype.hasOwnProperty.call(nombres, value) ? nombres[value] : 'NO_VALIDADO'; }\nfor (const fila of msg.payload) {\n    const ip = String(fila && fila.Machine_IP || '');\n    if (!catalogo[ip] || vistos.has(ip)) {\n        problemas.push({tipo:'IP_DESCONOCIDA_O_REPETIDA', machine_ip:ip});\n        continue;\n    }\n    vistos.add(ip);\n    const marca = fila.cms_timestamp_iso;\n    if (typeof marca !== 'string' || !Number.isFinite(Date.parse(marca))) {\n        problemas.push({tipo:'TIMESTAMP_INVALIDO', machine_ip:ip});\n        continue;\n    }\n    const edad = numero(fila.cms_age_seconds);\n    const fresca = edad !== null && edad >= 0 && edad <= 10;\n    const actual = numero(fila.Current_Quantity);\n    const previo = historial[ip];\n    let delta = null;\n    let cambio = fresca ? 'LINEA_BASE_INICIAL' : 'SIN_EVALUAR_POR_FRESCURA';\n    let ultimo = previo && previo.ultimo_incremento_ms || null;\n    if (fresca && actual === null) cambio = 'CONTADOR_INVALIDO';\n    else if (fresca && previo && typeof previo.contador === 'number' && previo.cms_timestamp !== marca) {\n        delta = actual - previo.contador;\n        if (delta > 0) {\n            cambio = 'INCREMENTO_DETECTADO';\n            ultimo = ahora;\n            eventos.push({payload:{evento:cambio,machine_ip:ip,delta,observado_en:new Date(ahora).toISOString()}});\n        } else if (delta < 0) {\n            cambio = 'REINICIO_O_RETROCESO_CONTADOR';\n            ultimo = null;\n            eventos.push({payload:{evento:cambio,machine_ip:ip,contador_actual:actual}});\n        } else cambio = 'SIN_INCREMENTO_EN_ESTA_LECTURA';\n    } else if (fresca && previo) cambio = 'SIN_CAMBIO';\n    if (fresca && actual !== null) siguiente[ip] = {contador:actual,cms_timestamp:marca,ultimo_incremento_ms:ultimo};\n    const op = numero(fila.Operation_Status);\n    const motor = numero(fila.Motor_Status);\n    const heater = numero(fila.Heater_Status);\n    const ciclo = numero(fila.Cycle_Time_Current);\n    const actividadReciente = ultimo && ahora - ultimo <= Math.max(90000, (ciclo || 0) * 3000);\n    maquinas.push({\n        machine_ip:ip, equipment_code:catalogo[ip],\n        modelo:typeof fila.Modelo === 'string' && fila.Modelo.trim() ? fila.Modelo.trim() : null,\n        machine_name_cms:fila.Machine_Name || null,\n        cms_timestamp:marca, cms_age_seconds:edad !== null && edad >= 0 ? edad : null,\n        cms_row_fresh:fresca, adquisicion_industrial_fresca:'NO_VERIFICADA',\n        operation_status_code:op, operation_status_text:estado(op,{0:'PARO',1:'AUTO',2:'SEMI AUTO',3:'MANUAL',4:'MANUAL'}),\n        motor_status_code:motor, motor_status_text:estado(motor,{0:'STOP',1:'RUN'}),\n        heater_status_code:heater, heater_status_text:estado(heater,{0:'OFF',1:'ON'}),\n        alarm_status_code:numero(fila.Alarm_Status),\n        cycle_time_before:numero(fila.Cycle_Time_Before), cycle_time_current:ciclo,\n        production_time_hour:numero(fila.Production_Time_Hour), production_time_min:numero(fila.Production_Time_Min),\n        total_quantity:numero(fila.Total_Quantity), current_quantity:actual,\n        avg_quantity_per_hour:numero(fila.Avg_Quantity_Per_Hour),\n        delta_contador_observado:delta, tipo_cambio_contador:cambio,\n        actividad_inferida:!fresca ? 'DATOS_CMS_DESACTUALIZADOS' : actividadReciente ? 'INCREMENTO_RECIENTE' : 'SIN_INCREMENTO_RECIENTE',\n        ultimo_incremento_detectado:ultimo ? new Date(ultimo).toISOString() : null\n    });\n}\nfor (const ip of Object.keys(catalogo)) if (!vistos.has(ip)) problemas.push({tipo:'SIN_FILA_SQL',machine_ip:ip});\ncontext.set('envases_contadores', siguiente);\nconst frescas = maquinas.filter(item => item.cms_row_fresh).length;\nconst origenDesactualizado = maquinas.length > 0 && frescas === 0;\nnode.status({fill:origenDesactualizado ? 'red' : maquinas.length === 5 ? 'green' : 'yellow',shape:origenDesactualizado ? 'ring' : 'dot',text:origenDesactualizado ? 'REAL_DATA SIN ACTUALIZAR: 0/' + maquinas.length : maquinas.length + '/5 filas válidas; ' + frescas + ' frescas'});\nconst resumen = {payload:{\n    fecha_recepcion_nodered:new Date(ahora).toISOString(),\n    cantidad_filas_sql:msg.payload.length, cantidad_maquinas_frescas_cms:frescas,\n    duracion_consulta_ms:typeof msg.woojin_inicio_ms === 'number' ? ahora - msg.woojin_inicio_ms : null,\n    estado_origen:origenDesactualizado ? 'REAL_DATA_DESACTUALIZADA' : frescas < maquinas.length ? 'REAL_DATA_PARCIALMENTE_DESACTUALIZADA' : 'REAL_DATA_RECIENTE',\n    aviso:origenDesactualizado ? 'Las filas SQL son antiguas: PARO y ceros son últimos valores almacenados, NO el estado actual. CMS Board usa la API de DBS. Revisar actualización DBS a real_data y conexión a MariaDB.' : 'Frescura SQL no confirma señal Modbus ni producción. Ciclos históricos sin IP no se asignan.',\n    filas_desactualizadas:maquinas.filter(item => !item.cms_row_fresh).map(item => ({machine_ip:item.machine_ip,modelo:item.modelo,ultimo_timestamp:item.cms_timestamp,edad_segundos:item.cms_age_seconds})),\n    maquinas\n}};\nreturn [resumen, eventos.length ? eventos : null, problemas.length ? {payload:{problemas}} : null];",
     "outputs": 3,
     "timeout": 0,
     "noerr": 0,
@@ -127,7 +127,8 @@
     "wires": [
       [
         "w5_debug_summary_externo_v2",
-        "envases_technical_sql_v3"
+        "envases_technical_sql_v3",
+        "envases_influx_status_prepare_v1"
       ],
       [
         "w5_debug_delta_externo_v2"
@@ -141,7 +142,7 @@
     "id": "w5_debug_summary_externo_v2",
     "type": "debug",
     "z": "envases_woojin_live_v2",
-    "name": "Resumen Woojin · lectura actual",
+    "name": "Resumen Woojin · último estado SQL",
     "active": true,
     "tosidebar": true,
     "console": false,
@@ -193,7 +194,7 @@
     "type": "function",
     "z": "envases_woojin_live_v2",
     "name": "ENVASES · preparar envío real",
-    "func": "if (Number(flow.get('envases_http_busy_until') || 0) > Date.now())\n    return [null,{payload:{status:'ENVIO_OCUPADO'}}];\nconst base = env.get('DISAL_API_BASE_URL');\nconst key = env.get('DISAL_ENVASES_INTEGRATION_KEY');\nif (!base || !key) return [null,{payload:{status:'CONFIG_ERROR',message:'Falta URL de API o clave de integración'}}];\nif (!msg.payload || !Array.isArray(msg.payload.maquinas) || !msg.payload.maquinas.length)\n    return [null,{payload:{status:'SIN_LECTURAS_VALIDAS'}}];\nflow.set('envases_http_busy_until', Date.now() + 25000);\nmsg.method = 'POST';\nmsg.url = String(base).replace(/\\/+$/, '') + '/plants/ENVASES/telemetry/injection-machines';\nmsg.headers = {'content-type':'application/json','x-node-red-key':key};\nmsg.payload = {...msg.payload,source:'NODE_RED_ENVASES',schemaVersion:1};\nmsg.envasesBody = msg.payload;\nmsg.envasesAttempt = 0;\nmsg.envasesMachineCount = msg.payload.maquinas.length;\nreturn [msg,null];",
+    "func": "if (Number(flow.get('envases_http_busy_until') || 0) > Date.now())\n    return [null,{payload:{status:'ENVIO_OCUPADO'}}];\nconst base = env.get('DISAL_API_BASE_URL');\nconst key = env.get('DISAL_ENVASES_INTEGRATION_KEY');\nif (!base || !key) return [null,{payload:{status:'CONFIG_ERROR',message:'Falta URL de API o clave de integración'}}];\nif (!msg.payload || !Array.isArray(msg.payload.maquinas) || !msg.payload.maquinas.length)\n    return [null,{payload:{status:'SIN_LECTURAS_VALIDAS'}}];\nflow.set('envases_http_busy_until', Date.now() + 25000);\nmsg.method = 'POST';\nmsg.url = String(base).replace(/\\/+$/, '') + '/plants/ENVASES/telemetry/injection-machines';\nmsg.headers = {'content-type':'application/json','x-node-red-key':key};\n// El resumen Debug contiene campos operativos que el DTO estricto de la API no admite.\n// Construir explícitamente el contrato HTTP para no filtrarlos por accidente.\nmsg.payload = {\n    source:'NODE_RED_ENVASES',schemaVersion:1,\n    fecha_recepcion_nodered:msg.payload.fecha_recepcion_nodered,\n    cantidad_filas_sql:msg.payload.cantidad_filas_sql,\n    cantidad_maquinas_frescas_cms:msg.payload.cantidad_maquinas_frescas_cms,\n    duracion_consulta_ms:msg.payload.duracion_consulta_ms,\n    aviso:msg.payload.aviso,\n    maquinas:msg.payload.maquinas\n};\nmsg.envasesBody = msg.payload;\nmsg.envasesAttempt = 0;\nmsg.envasesMachineCount = msg.payload.maquinas.length;\nreturn [msg,null];",
     "outputs": 2,
     "timeout": 0,
     "noerr": 0,
@@ -241,7 +242,7 @@
     "type": "function",
     "z": "envases_woojin_live_v2",
     "name": "ENVASES · resultado y reintento",
-    "func": "const statusCode = Number(msg.statusCode || 0);\nconst attempt = Number(msg.envasesAttempt || 0);\nconst retry = statusCode === 0 || statusCode === 429 || statusCode >= 500;\nif (retry && attempt < 2) {\n    msg.envasesAttempt = attempt + 1;\n    msg.payload = msg.envasesBody;\n    msg.headers = {'content-type':'application/json','x-node-red-key':env.get('DISAL_ENVASES_INTEGRATION_KEY')};\n    return [msg,null];\n}\nflow.set('envases_http_busy_until',0);\nreturn [null,{payload:{statusCode,attempts:attempt + 1,sent:msg.envasesMachineCount,\n    accepted:msg.payload && msg.payload.accepted,rejected:msg.payload && msg.payload.rejected,\n    ignored:msg.payload && msg.payload.ignored,\n    results:msg.payload && msg.payload.results || null,\n    error:statusCode >= 400 ? 'API rechazo el lote; revisar respuesta sin publicar secretos' : null}}];",
+    "func": "const statusCode = Number(msg.statusCode || 0);\nconst attempt = Number(msg.envasesAttempt || 0);\nconst retry = statusCode === 0 || statusCode === 429 || statusCode >= 500;\nif (retry && attempt < 2) {\n    msg.envasesAttempt = attempt + 1;\n    msg.payload = msg.envasesBody;\n    msg.headers = {'content-type':'application/json','x-node-red-key':env.get('DISAL_ENVASES_INTEGRATION_KEY')};\n    return [msg,null];\n}\nflow.set('envases_http_busy_until',0);\nconst messages = msg.payload && msg.payload.message;\nconst validation = (Array.isArray(messages) ? messages : [messages])\n    .filter(value => typeof value === 'string' && /^property [a-zA-Z0-9_]+ should not exist$/.test(value))\n    .slice(0,5);\nreturn [null,{payload:{statusCode,attempts:attempt + 1,sent:msg.envasesMachineCount,\n    accepted:msg.payload && msg.payload.accepted,rejected:msg.payload && msg.payload.rejected,\n    ignored:msg.payload && msg.payload.ignored,\n    results:msg.payload && msg.payload.results || null,\n    validation,\n    error:statusCode >= 400 ? 'API rechazo el lote; revisar respuesta sin publicar secretos' : null}}];",
     "outputs": 2,
     "timeout": 0,
     "noerr": 0,
@@ -386,14 +387,15 @@
     "type": "function",
     "z": "envases_woojin_live_v2",
     "name": "Asignar ciclo sólo a IP verificada",
-    "func": "flow.set('envases_sql_busy_until',0);\nconst summary = msg.envasesSummary;\nif (!summary || !Array.isArray(summary.maquinas)) return null;\nconst rows = Array.isArray(msg.payload) ? msg.payload : [];\nconst countsIp = {};\nconst countsShot = {};\nfor (const row of rows) {\n    countsIp[row.source_ip] = (countsIp[row.source_ip] || 0) + 1;\n    countsShot[row.shot_idx] = (countsShot[row.shot_idx] || 0) + 1;\n}\nconst reasons = [];\nconst number = (v) => {\n    if (v === null || v === undefined || v === '') return null;\n    const n = Number(v);\n    return Number.isFinite(n) ? n : null;\n};\nconst text = (v) => v === null || v === undefined ? null : String(v);\nfor (const row of rows) {\n    const reading = summary.maquinas.find(item => item.machine_ip === row.source_ip);\n    const shot = number(row.Shot_Number);\n    const stamp = row.shot_timestamp_iso;\n    const cavity = number(row.Cavity);\n    const ngmark = number(row.NGmark);\n    if (!reading || countsIp[row.source_ip] !== 1 || countsShot[row.shot_idx] !== 1 ||\n        row.source_machine_name !== row.source_model || reading.modelo !== row.source_model ||\n        number(row.shot_idx) !== number(row.recipe_idx) ||\n        !Number.isInteger(shot) || shot < 0 ||\n        (cavity !== null && (!Number.isInteger(cavity) || cavity < 0)) ||\n        (ngmark !== null && (!Number.isInteger(ngmark) || ngmark < 0)) ||\n        typeof stamp !== 'string' || !Number.isFinite(Date.parse(stamp)) ||\n        Date.parse(stamp) > Date.now() + 30000) {\n        reasons.push({machine_ip:row.source_ip,reason:'VINCULO_O_CICLO_INVALIDO'});\n        continue;\n    }\n    reading.ultimo_ciclo_tecnico = {\n        machine_ip:row.source_ip, identity_source:'CMS_MACHINE_NAME',\n        shot_number:shot, timestamp:stamp, mold_name:text(row.archivo_historico),\n        cavity, ngmark, cycle_time:number(row.Cycle_Time),\n        injection_time:number(row.Injection_Time), filling_time:number(row.Filling_Time),\n        max_injection_pressure:number(row.Max_Injection_Pressure), max_injection_speed:number(row.Max_Injection_Speed),\n        switch_over_position:number(row.Switch_Over_Position), max_switch_over_pressure:number(row.Max_Switch_Over_Pressure),\n        cushion_position:number(row.Cushion_Position), plasticizing_time:number(row.Plasticizing_Time),\n        plasticizing_position:number(row.Plasticizing_Position), average_screw_rpm:number(row.Average_Screw_RPM),\n        max_screw_rpm:number(row.Max_Screw_RPM), average_back_pressure:number(row.Average_Back_Pressure),\n        max_back_pressure:number(row.Max_Back_Pressure), clamp_close_time:number(row.Clamp_Close_Time),\n        clamp_open_time:number(row.Clamp_open_time), clamp_open_position:number(row.Clamp_Open_Position),\n        resin_weight:number(row.Resin_weight),\n        barrel_temperatures:Array.from({length:7},(_,i)=>number(row['Barrel_Temperature_' + (i+1)])),\n        mold_temperatures:Array.from({length:12},(_,i)=>number(row['Mold_Temperature_' + (i+1)])),\n        hopper_temperature:number(row.Hopper_Temperature),\n        recipe:{\n            inj_velocity:text(row.Inj_Velocity), inj_pressure:text(row.Inj_Pressure), inj_position:text(row.Inj_Position),\n            sov_time:number(row.SOV_Time), sov_position:number(row.SOV_Position),\n            hld_pressure:text(row.Hld_Pressure), hld_time:text(row.Hld_Time), hld_vel:text(row.Hld_Vel),\n            chg_position:text(row.Chg_Position), chg_speed:text(row.Chg_Speed),\n            back_pressure:text(row.BackPressure), suckback_position:text(row.Suckback_Position),\n            suckback_speed:text(row.Suckback_Speed), barrel_temperature:text(row.Barrel_Temperature),\n            mold_temperature:text(row.Mold_Temperature), timer:text(row.Timer)\n        }\n    };\n}\nmsg.payload = summary;\nconst attached = summary.maquinas.filter(item => item.ultimo_ciclo_tecnico).length;\nnode.status({fill:attached ? 'green' : 'yellow',shape:'dot',text:attached + '/5 ciclos con IP verificada'});\nreturn [msg,{payload:{technical_attached:attached,rows:rows.length,rejected:reasons,\n    note:attached ? 'Machine_Name unido de forma unica al catalogo' : 'CMS aun no entrega Machine_Name util'}}];",
+    "func": "flow.set('envases_sql_busy_until',0);\nconst summary = msg.envasesSummary;\nif (!summary || !Array.isArray(summary.maquinas)) return null;\nconst rows = Array.isArray(msg.payload) ? msg.payload : [];\nconst countsIp = {};\nconst countsShot = {};\nfor (const row of rows) {\n    countsIp[row.source_ip] = (countsIp[row.source_ip] || 0) + 1;\n    countsShot[row.shot_idx] = (countsShot[row.shot_idx] || 0) + 1;\n}\nconst reasons = [];\nconst number = (v) => {\n    if (v === null || v === undefined || v === '') return null;\n    const n = Number(v);\n    return Number.isFinite(n) ? n : null;\n};\nconst text = (v) => v === null || v === undefined ? null : String(v);\nfor (const row of rows) {\n    const reading = summary.maquinas.find(item => item.machine_ip === row.source_ip);\n    const shot = number(row.Shot_Number);\n    const stamp = row.shot_timestamp_iso;\n    const cavity = number(row.Cavity);\n    const ngmark = number(row.NGmark);\n    if (!reading || countsIp[row.source_ip] !== 1 || countsShot[row.shot_idx] !== 1 ||\n        row.source_machine_name !== row.source_model || reading.modelo !== row.source_model ||\n        number(row.shot_idx) !== number(row.recipe_idx) ||\n        !Number.isInteger(shot) || shot < 0 ||\n        (cavity !== null && (!Number.isInteger(cavity) || cavity < 0)) ||\n        (ngmark !== null && (!Number.isInteger(ngmark) || ngmark < 0)) ||\n        typeof stamp !== 'string' || !Number.isFinite(Date.parse(stamp)) ||\n        Date.parse(stamp) > Date.now() + 30000) {\n        reasons.push({machine_ip:row.source_ip,reason:'VINCULO_O_CICLO_INVALIDO'});\n        continue;\n    }\n    reading.ultimo_ciclo_tecnico = {\n        machine_ip:row.source_ip, identity_source:'CMS_MACHINE_NAME',\n        shot_number:shot, timestamp:stamp, mold_name:text(row.archivo_historico),\n        cavity, ngmark, cycle_time:number(row.Cycle_Time),\n        injection_time:number(row.Injection_Time), filling_time:number(row.Filling_Time),\n        max_injection_pressure:number(row.Max_Injection_Pressure), max_injection_speed:number(row.Max_Injection_Speed),\n        switch_over_position:number(row.Switch_Over_Position), max_switch_over_pressure:number(row.Max_Switch_Over_Pressure),\n        cushion_position:number(row.Cushion_Position), plasticizing_time:number(row.Plasticizing_Time),\n        plasticizing_position:number(row.Plasticizing_Position), average_screw_rpm:number(row.Average_Screw_RPM),\n        max_screw_rpm:number(row.Max_Screw_RPM), average_back_pressure:number(row.Average_Back_Pressure),\n        max_back_pressure:number(row.Max_Back_Pressure), clamp_close_time:number(row.Clamp_Close_Time),\n        clamp_open_time:number(row.Clamp_open_time), clamp_open_position:number(row.Clamp_Open_Position),\n        resin_weight:number(row.Resin_weight),\n        barrel_temperatures:Array.from({length:7},(_,i)=>number(row['Barrel_Temperature_' + (i+1)])),\n        mold_temperatures:Array.from({length:12},(_,i)=>number(row['Mold_Temperature_' + (i+1)])),\n        hopper_temperature:number(row.Hopper_Temperature),\n        recipe:{\n            inj_velocity:text(row.Inj_Velocity), inj_pressure:text(row.Inj_Pressure), inj_position:text(row.Inj_Position),\n            sov_time:number(row.SOV_Time), sov_position:number(row.SOV_Position),\n            hld_pressure:text(row.Hld_Pressure), hld_time:text(row.Hld_Time), hld_vel:text(row.Hld_Vel),\n            chg_position:text(row.Chg_Position), chg_speed:text(row.Chg_Speed),\n            back_pressure:text(row.BackPressure), suckback_position:text(row.Suckback_Position),\n            suckback_speed:text(row.Suckback_Speed), barrel_temperature:text(row.Barrel_Temperature),\n            mold_temperature:text(row.Mold_Temperature), timer:text(row.Timer)\n        }\n    };\n}\nmsg.payload = summary;\nconst attached = summary.maquinas.filter(item => item.ultimo_ciclo_tecnico).length;\nnode.status({fill:attached ? 'green' : 'yellow',shape:'dot',text:attached + '/5 ciclos con IP verificada'});\nreturn [msg,{payload:{technical_attached:attached,rows:rows.length,rejected:reasons,\n    note:attached ? 'Machine_Name unido de forma unica al catalogo' : 'PENDIENTE_IDENTIFICAR_MAQUINA: CMS aun no entrega Machine_Name util; no escribir disparos por IP'}}];",
     "outputs": 2,
     "noerr": 0,
     "x": 1090,
     "y": 230,
     "wires": [
       [
-        "envases-disal-prepare_externo_v2"
+        "envases-disal-prepare_externo_v2",
+        "envases_influx_shot_prepare_v1"
       ],
       [
         "envases_technical_debug_v3"
@@ -488,8 +490,8 @@
     "id": "envases_shot_comment_v2",
     "type": "comment",
     "z": "envases_woojin_live_v2",
-    "name": "Diagnóstico manual global: no se envía a LATEX",
-    "info": "shot_data y shot_data_rec no contienen IP; los registros históricos observados tenían Machine_Name = -. El archivo Additional_Info_1 es histórico. Esta rama consulta un solo par y sólo lo muestra en Debug. La rama automática superior sí atribuye por apodo único cuando CMS lo informe.",
+    "name": "PENDIENTE: identificar inyectora de disparos antiguos",
+    "info": "shot_data y shot_data_rec no contienen IP; los registros históricos observados tenían Machine_Name = -. Esta rama consulta un solo par y sólo lo muestra en Debug: no llega a LATEX ni a InfluxDB por máquina. Después de identificar y verificar cada inyectora, configurar CMS para guardar Machine_Name igual al apodo único de itgr_machine_list. No inferir IP por archivo, contador u hora.",
     "x": 370,
     "y": 610,
     "wires": []
@@ -577,6 +579,194 @@
     "targetType": "msg",
     "x": 1220,
     "y": 670,
+    "wires": []
+  },
+  {
+    "id": "envases_influx_comment_v1",
+    "type": "comment",
+    "z": "envases_woojin_live_v2",
+    "name": "InfluxDB optativo · disparos sin identidad quedan pendientes",
+    "info": "Configurar DISAL_ENVASES_INFLUX_WRITE_ENABLED=true, DISAL_ENVASES_INFLUX_URL, DISAL_ENVASES_INFLUX_ORG, DISAL_ENVASES_INFLUX_BUCKET y DISAL_ENVASES_INFLUX_TOKEN en el entorno de Node-RED. Habilitar cada rama tras prueba manual. Estados: IP validada y fila fresca. Disparos: sólo Machine_Name que coincide de forma única con Machine_Nickname e IP validada. Los históricos con Machine_Name=- siguen PENDIENTE_IDENTIFICAR_MAQUINA y no se escriben por máquina. Mediciones raw separadas del historial curado de la API. Este sondeo de último disparo no garantiza capturar todos los ciclos.",
+    "x": 410,
+    "y": 790,
+    "wires": []
+  },
+  {
+    "id": "envases_influx_status_prepare_v1",
+    "type": "function",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · estados por IP validada",
+    "d": true,
+    "func": "const enabled = String(env.get('DISAL_ENVASES_INFLUX_WRITE_ENABLED') || '').toLowerCase() === 'true';\nconst base = String(env.get('DISAL_ENVASES_INFLUX_URL') || '').replace(/\\/$/, '');\nconst org = String(env.get('DISAL_ENVASES_INFLUX_ORG') || '');\nconst bucket = String(env.get('DISAL_ENVASES_INFLUX_BUCKET') || '');\nconst token = String(env.get('DISAL_ENVASES_INFLUX_TOKEN') || '');\nif (!enabled || !/^https?:\\/\\/[^/?#]+$/.test(base) || !org || !bucket || !token) {\n    node.status({fill:'yellow',shape:'ring',text:'Influx desactivado o incompleto'});\n    return [null,{payload:{status:'INFLUX_NO_CONFIGURADO'}}];\n}\nconst url = base + '/api/v2/write?org=' + encodeURIComponent(org) + '&bucket=' + encodeURIComponent(bucket) + '&precision=ms';\nconst catalog = {'172.16.0.141':['INY01','DL650G5'],'172.16.0.146':['INY02','DL450G5'],'172.16.0.143':['INY03','TB280G5-1'],'172.16.0.144':['INY04','TB280G5-2'],'172.16.0.145':['INY05','TB200G5']};\nconst valid = (r) => r && catalog[r.machine_ip] && catalog[r.machine_ip][0] === r.equipment_code && catalog[r.machine_ip][1] === r.modelo;\nconst num = (v) => typeof v === 'number' && Number.isFinite(v) ? v : null;\nconst str = (v) => typeof v === 'string' ? '\"' + v.replace(/\\\\/g,'\\\\\\\\').replace(/\"/g,'\\\\\"').replace(/\\n/g,' ') + '\"' : null;\nconst stamp = (v) => { const t = Date.parse(v); return Number.isFinite(t) && t <= Date.now() + 30000 ? t : null; };\nconst machines = msg.payload && Array.isArray(msg.payload.maquinas) ? msg.payload.maquinas : [];\nconst lines = [];\nconst kind = 'STATUS';\nfor (const r of machines) {\n    if (!valid(r) || r.cms_row_fresh !== true) continue;\n    const t = stamp(r.cms_timestamp);\n    if (t === null) continue;\n    const fields = [];\n    for (const key of [\"operation_status_code\",\"motor_status_code\",\"heater_status_code\",\"alarm_status_code\",\"cycle_time_before\",\"cycle_time_current\",\"production_time_hour\",\"production_time_min\",\"total_quantity\",\"current_quantity\",\"avg_quantity_per_hour\"]) { const v = num(r[key]); if (v !== null) fields.push(key + '=' + v); }\n    if (fields.length) lines.push('woojin_nodered_status,machine=' + r.equipment_code + ',source=NODE_RED_ENVASES ' + fields.join(',') + ' ' + t);\n}\nif (!lines.length) return [null,{payload:{status:'SIN_PUNTOS',kind,reason:kind === 'SHOT' ? 'PENDIENTE_IDENTIFICAR_MAQUINA para disparos sin Machine_Name' : 'SIN_FILAS_CMS_FRESCAS'}}];\nnode.status({fill:'green',shape:'dot',text:kind + ': ' + lines.length + ' puntos'});\nreturn [{url,method:'POST',headers:{Authorization:'Token ' + token,'Content-Type':'text/plain; charset=utf-8'},payload:lines.join('\\n'),influxKind:kind,influxPoints:lines.length},null];",
+    "outputs": 2,
+    "noerr": 0,
+    "x": 400,
+    "y": 830,
+    "wires": [
+      [
+        "envases_influx_status_http_v1"
+      ],
+      [
+        "envases_influx_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_shot_prepare_v1",
+    "type": "function",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · sólo disparo atribuido",
+    "d": true,
+    "func": "const enabled = String(env.get('DISAL_ENVASES_INFLUX_WRITE_ENABLED') || '').toLowerCase() === 'true';\nconst base = String(env.get('DISAL_ENVASES_INFLUX_URL') || '').replace(/\\/$/, '');\nconst org = String(env.get('DISAL_ENVASES_INFLUX_ORG') || '');\nconst bucket = String(env.get('DISAL_ENVASES_INFLUX_BUCKET') || '');\nconst token = String(env.get('DISAL_ENVASES_INFLUX_TOKEN') || '');\nif (!enabled || !/^https?:\\/\\/[^/?#]+$/.test(base) || !org || !bucket || !token) {\n    node.status({fill:'yellow',shape:'ring',text:'Influx desactivado o incompleto'});\n    return [null,{payload:{status:'INFLUX_NO_CONFIGURADO'}}];\n}\nconst url = base + '/api/v2/write?org=' + encodeURIComponent(org) + '&bucket=' + encodeURIComponent(bucket) + '&precision=ms';\nconst catalog = {'172.16.0.141':['INY01','DL650G5'],'172.16.0.146':['INY02','DL450G5'],'172.16.0.143':['INY03','TB280G5-1'],'172.16.0.144':['INY04','TB280G5-2'],'172.16.0.145':['INY05','TB200G5']};\nconst valid = (r) => r && catalog[r.machine_ip] && catalog[r.machine_ip][0] === r.equipment_code && catalog[r.machine_ip][1] === r.modelo;\nconst num = (v) => typeof v === 'number' && Number.isFinite(v) ? v : null;\nconst str = (v) => typeof v === 'string' ? '\"' + v.replace(/\\\\/g,'\\\\\\\\').replace(/\"/g,'\\\\\"').replace(/\\n/g,' ') + '\"' : null;\nconst stamp = (v) => { const t = Date.parse(v); return Number.isFinite(t) && t <= Date.now() + 30000 ? t : null; };\nconst machines = msg.payload && Array.isArray(msg.payload.maquinas) ? msg.payload.maquinas : [];\nconst lines = [];\nconst kind = 'SHOT';\nfor (const r of machines) {\n    const s = r.ultimo_ciclo_tecnico;\n    if (!valid(r) || !s || s.machine_ip !== r.machine_ip || s.identity_source !== 'CMS_MACHINE_NAME') continue;\n    const t = stamp(s.timestamp);\n    if (t === null || !Number.isInteger(s.shot_number) || s.shot_number < 0) continue;\n    const fields = [];\n    for (const key of [\"shot_number\",\"cavity\",\"ngmark\",\"cycle_time\",\"injection_time\",\"filling_time\",\"max_injection_pressure\",\"max_injection_speed\",\"switch_over_position\",\"max_switch_over_pressure\",\"cushion_position\",\"plasticizing_time\",\"plasticizing_position\",\"average_screw_rpm\",\"max_screw_rpm\",\"average_back_pressure\",\"max_back_pressure\",\"clamp_close_time\",\"clamp_open_time\",\"clamp_open_position\",\"resin_weight\",\"hopper_temperature\"]) { const v = num(s[key]); if (v !== null) fields.push(key + '=' + v); }\n    const mold = str(s.mold_name); if (mold !== null) fields.push('mold_name=' + mold);\n    for (const key of ['inj_velocity','inj_pressure','inj_position','hld_pressure','hld_time','hld_vel','chg_position','chg_speed','back_pressure','suckback_position','suckback_speed','barrel_temperature','mold_temperature','timer']) {\n        const value = str(s.recipe && s.recipe[key]); if (value !== null) fields.push('recipe_' + key + '=' + value);\n    }\n    for (const key of ['sov_time','sov_position']) {\n        const value = num(s.recipe && s.recipe[key]); if (value !== null) fields.push('recipe_' + key + '=' + value);\n    }\n    for (const [key,values] of [['barrel_temp',s.barrel_temperatures],['mold_temp',s.mold_temperatures]]) {\n        if (Array.isArray(values)) values.forEach((value,index) => { const v = num(value); if (v !== null) fields.push(key + '_' + (index+1) + '=' + v); });\n    }\n    lines.push('woojin_nodered_shot,machine=' + r.equipment_code + ',source=NODE_RED_ENVASES ' + fields.join(',') + ' ' + t);\n}\nif (!lines.length) return [null,{payload:{status:'SIN_PUNTOS',kind,reason:kind === 'SHOT' ? 'PENDIENTE_IDENTIFICAR_MAQUINA para disparos sin Machine_Name' : 'SIN_FILAS_CMS_FRESCAS'}}];\nnode.status({fill:'green',shape:'dot',text:kind + ': ' + lines.length + ' puntos'});\nreturn [{url,method:'POST',headers:{Authorization:'Token ' + token,'Content-Type':'text/plain; charset=utf-8'},payload:lines.join('\\n'),influxKind:kind,influxPoints:lines.length},null];",
+    "outputs": 2,
+    "noerr": 0,
+    "x": 400,
+    "y": 880,
+    "wires": [
+      [
+        "envases_influx_shot_http_v1"
+      ],
+      [
+        "envases_influx_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_status_http_v1",
+    "type": "http request",
+    "z": "envases_woojin_live_v2",
+    "name": "InfluxDB 2 · escribir estados",
+    "d": true,
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "timeout": "4000",
+    "x": 700,
+    "y": 830,
+    "wires": [
+      [
+        "envases_influx_status_result_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_shot_http_v1",
+    "type": "http request",
+    "z": "envases_woojin_live_v2",
+    "name": "InfluxDB 2 · escribir disparos",
+    "d": true,
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "timeout": "4000",
+    "x": 700,
+    "y": 880,
+    "wires": [
+      [
+        "envases_influx_shot_result_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_status_result_v1",
+    "type": "function",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · resultado status sin credenciales",
+    "d": true,
+    "func": "const code = Number(msg.statusCode);\nreturn {payload:{kind:msg.influxKind,points:msg.influxPoints,statusCode:code,status:code === 204 ? 'ESCRITO' : 'INFLUX_ERROR'}};",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 970,
+    "y": 830,
+    "wires": [
+      [
+        "envases_influx_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_shot_result_v1",
+    "type": "function",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · resultado shot sin credenciales",
+    "d": true,
+    "func": "const code = Number(msg.statusCode);\nreturn {payload:{kind:msg.influxKind,points:msg.influxPoints,statusCode:code,status:code === 204 ? 'ESCRITO' : 'INFLUX_ERROR'}};",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 970,
+    "y": 880,
+    "wires": [
+      [
+        "envases_influx_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_catch_v1",
+    "type": "catch",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · error HTTP",
+    "d": true,
+    "scope": [
+      "envases_influx_status_http_v1",
+      "envases_influx_shot_http_v1"
+    ],
+    "uncaught": false,
+    "x": 700,
+    "y": 930,
+    "wires": [
+      [
+        "envases_influx_error_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_error_v1",
+    "type": "function",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · error sin secretos",
+    "d": true,
+    "func": "return {payload:{status:'INFLUX_HTTP_ERROR',kind:msg.influxKind || 'UNKNOWN'}};",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 970,
+    "y": 930,
+    "wires": [
+      [
+        "envases_influx_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_influx_debug_v1",
+    "type": "debug",
+    "z": "envases_woojin_live_v2",
+    "name": "Influx · diagnóstico sin credenciales",
+    "d": true,
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 1260,
+    "y": 880,
     "wires": []
   }
 ]

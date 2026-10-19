@@ -88,6 +88,26 @@ describe('InjectionHistoryService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('registra pares de temperatura DBS sólo para una lectura aceptada y fresca', async () => {
+    const history = new InjectionHistoryService(config);
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    const reading = {
+      machine_ip: '172.16.0.141',
+      telemetry_origin: 'DBS_API' as const,
+      cms_timestamp: '2026-10-19T12:00:00.000Z',
+      cms_row_fresh: true,
+      current_quantity: 42,
+      dbs_temperature_zones: [{ zone: 'EXT_NOZZLE', current: 249.5, setting: 250 }]
+    };
+    expect(await history.record('INY01', 'NODE_RED_ENVASES', reading, null)).toBe(true);
+    const body = (global.fetch as jest.Mock).mock.calls[0][1].body;
+    expect(body).toContain('woojin_dbs_temperature,machine=INY01,source=NODE_RED_ENVASES');
+    expect(body).toContain('ext_nozzle_current=249.5');
+    expect(body).toContain('ext_nozzle_setting=250');
+    expect(await history.record('INY01', 'NODE_RED_ENVASES', reading, null, false)).toBe(false);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('registra un disparo nuevo aunque real_data repita su timestamp', async () => {
     const history = new InjectionHistoryService(config);
     global.fetch = jest.fn().mockResolvedValue({ ok: true });

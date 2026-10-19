@@ -8,6 +8,7 @@ Para la próxima versión, seguir [el procedimiento de publicación](../RELEASE_
 
 | Versión                             | Fecha      | Contenido principal                                                                                                                       |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [V0.0.45](RELEASE_NOTES_V0.0.45.md) | 19/10/2026 | Lectura DBS de cinco inyectoras Woojin, contrato ENVASES ampliado, temperatura actual/consigna e historial opcional.                     |
 | [V0.0.44](RELEASE_NOTES_V0.0.44.md) | 18/10/2026 | Corrección del formato del DTO Woojin para aprobar el lint de CI de la versión anterior.                                                   |
 | [V0.0.43](RELEASE_NOTES_V0.0.43.md) | 18/10/2026 | Historial y receta Woojin por inyectora, flujo externo preparado y documentación del origen de temperaturas.                              |
 | [V0.0.42](RELEASE_NOTES_V0.0.42.md) | 17/10/2026 | Planta ENVASES y TV de inyectoras Woojin, simulador Node-RED local, telemetría y autogestión de plantas del administrador.              |

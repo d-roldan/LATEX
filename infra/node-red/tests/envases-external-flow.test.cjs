@@ -10,8 +10,12 @@ const id = (base) => `${base}_externo_v2`;
 assert.equal(byId.get('envases_woojin_live_v2').disabled, true);
 assert.equal(byId.get(id('w5_auto_5s')).d, true);
 assert.equal(nodes.filter((item) => item.type === 'mysql').length, 3);
-assert.equal(nodes.filter((item) => item.type === 'http request').length, 1);
+assert.equal(nodes.filter((item) => item.type === 'http request').length, 3);
 assert.equal(nodes.some((item) => item.type === 'influxdb out'), false);
+for (const branch of ['status','shot']) {
+  assert.equal(byId.get(`envases_influx_${branch}_prepare_v1`).d, true);
+  assert.equal(byId.get(`envases_influx_${branch}_http_v1`).d, true);
+}
 for (const item of nodes) {
   for (const output of item.wires || []) {
     for (const target of output) assert.ok(byId.has(target), `Cable sin nodo: ${target}`);
@@ -24,13 +28,13 @@ const embedded = guide.match(/## JSON listo para Import → Clipboard[\s\S]*?```
 assert.ok(embedded, 'La guía debe contener el JSON completo');
 assert.deepEqual(JSON.parse(embedded[1]), nodes);
 
-function run(base, msg, store = {}, local = {}) {
+function run(base, msg, store = {}, local = {}, envValues = {}) {
   const item = byId.get(base);
   const flow = { get: (key) => store[key], set: (key, value) => (store[key] = value) };
   const context = { get: (key) => local[key], set: (key, value) => (local[key] = value) };
   const node = { status: () => {} };
   const env = {
-    get: (key) =>
+    get: (key) => Object.hasOwn(envValues,key) ? envValues[key] :
       key === 'DISAL_API_BASE_URL'
         ? 'http://localhost:8081/api/'
         : key === 'DISAL_ENVASES_INTEGRATION_KEY'
@@ -93,6 +97,13 @@ assert.equal(state.envases_sql_busy_until, 0);
 const stale = run(id('w5_normalize'), { payload: [{ ...row, cms_age_seconds: 30000 }] }, state, local);
 assert.equal(stale[0].payload.maquinas[0].cms_row_fresh, false);
 assert.equal(stale[0].payload.maquinas.length, 1);
+assert.equal(stale[0].payload.estado_origen, 'REAL_DATA_DESACTUALIZADA');
+assert.match(stale[0].payload.aviso, /NO el estado actual/);
+assert.deepEqual(stale[0].payload.filas_desactualizadas.map(item => item.machine_ip), ['172.16.0.141']);
+for (const [code,expected] of [[0,'PARO'],[1,'AUTO'],[2,'SEMI AUTO'],[3,'MANUAL'],[4,'MANUAL']]) {
+  const reading = run(id('w5_normalize'), {payload:[{...row,Operation_Status:code}]}, {}, {});
+  assert.equal(reading[0].payload.maquinas[0].operation_status_text,expected);
+}
 
 const duplicate = run(id('w5_normalize'), { payload: [row, row] }, state, local);
 assert.equal(duplicate[0].payload.maquinas.length, 1);
@@ -153,10 +164,46 @@ assert.equal(merged[0].payload.maquinas[0].ultimo_ciclo_tecnico.machine_ip, '172
 assert.equal(merged[0].payload.maquinas[0].ultimo_ciclo_tecnico.identity_source, 'CMS_MACHINE_NAME');
 assert.equal(merged[0].payload.maquinas[0].ultimo_ciclo_tecnico.recipe.inj_velocity, '80/90');
 assert.equal(merged[0].payload.maquinas[0].ultimo_ciclo_tecnico.barrel_temperatures.length, 7);
+const influxEnv = {
+  DISAL_ENVASES_INFLUX_WRITE_ENABLED:'true',
+  DISAL_ENVASES_INFLUX_URL:'http://influx:8086',
+  DISAL_ENVASES_INFLUX_ORG:'disal',
+  DISAL_ENVASES_INFLUX_BUCKET:'envases',
+  DISAL_ENVASES_INFLUX_TOKEN:'token-de-prueba'
+};
+const influxStatus = run('envases_influx_status_prepare_v1', {payload:result[0].payload}, {}, {}, influxEnv);
+assert.match(influxStatus[0].url,/\/api\/v2\/write\?org=disal&bucket=envases&precision=ms/);
+assert.match(influxStatus[0].payload,/woojin_nodered_status,machine=INY01,source=NODE_RED_ENVASES /);
+assert.match(influxStatus[0].payload,/current_quantity=105/);
+assert.equal(influxStatus[0].headers.Authorization,'Token token-de-prueba');
+const unidentified = structuredClone(result[0].payload);
+for (const machine of unidentified.maquinas) delete machine.ultimo_ciclo_tecnico;
+const noShot = run('envases_influx_shot_prepare_v1', {payload:unidentified}, {}, {}, influxEnv);
+assert.equal(noShot[0],null);
+assert.match(noShot[1].payload.reason,/PENDIENTE_IDENTIFICAR_MAQUINA/);
+const influxShot = run('envases_influx_shot_prepare_v1', {payload:merged[0].payload}, {}, {}, influxEnv);
+assert.match(influxShot[0].payload,/woojin_nodered_shot,machine=INY01,source=NODE_RED_ENVASES /);
+assert.match(influxShot[0].payload,/shot_number=/);
+assert.equal(JSON.stringify(influxShot[1]).includes('token-de-prueba'),false);
+const influxResult = run('envases_influx_shot_result_v1',{...influxShot[0],statusCode:204,payload:''});
+assert.equal(influxResult.payload.status,'ESCRITO');
+assert.equal(JSON.stringify(influxResult).includes('token-de-prueba'),false);
+const noConfig = run('envases_influx_status_prepare_v1',{payload:result[0].payload});
+assert.equal(noConfig[0],null);
+assert.equal(noConfig[1].payload.status,'INFLUX_NO_CONFIGURADO');
+const staleInflux = structuredClone(result[0].payload);
+staleInflux.maquinas[0].cms_row_fresh = false;
+assert.equal(run('envases_influx_status_prepare_v1',{payload:staleInflux},{},{},influxEnv)[0],null);
 const prepared = run(id('envases-disal-prepare'), merged[0], state);
 assert.equal(prepared[0].url, 'http://localhost:8081/api/plants/ENVASES/telemetry/injection-machines');
 assert.equal(prepared[0].payload.source, 'NODE_RED_ENVASES');
 assert.equal(prepared[0].payload.maquinas.length, 1);
+assert.deepEqual(Object.keys(prepared[0].payload).sort(), [
+  'source','schemaVersion','fecha_recepcion_nodered','cantidad_filas_sql',
+  'cantidad_maquinas_frescas_cms','duracion_consulta_ms','aviso','maquinas'
+].sort());
+assert.equal('estado_origen' in prepared[0].payload,false);
+assert.equal('filas_desactualizadas' in prepared[0].payload,false);
 assert.equal(prepared[0].headers['x-node-red-key'], 'clave-de-prueba');
 const httpResult = run(
   id('envases-disal-result'),
@@ -166,6 +213,12 @@ const httpResult = run(
 assert.equal(httpResult[1].payload.accepted, 1);
 assert.equal(state.envases_http_busy_until, 0);
 assert.equal(JSON.stringify(httpResult[1]).includes('clave-de-prueba'), false);
+const validationResult = run(id('envases-disal-result'), {
+  ...prepared[0], statusCode:400,
+  payload:{message:['property estado_origen should not exist','detalle privado']}
+}, state);
+assert.deepEqual(validationResult[1].payload.validation,['property estado_origen should not exist']);
+assert.equal(JSON.stringify(validationResult[1]).includes('detalle privado'),false);
 
 const freshSummary = structuredClone(result[0].payload);
 for (const machine of freshSummary.maquinas) delete machine.ultimo_ciclo_tecnico;

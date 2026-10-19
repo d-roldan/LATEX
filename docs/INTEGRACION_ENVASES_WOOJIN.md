@@ -8,7 +8,7 @@ La consulta fija de cinco máquinas del Node-RED industrial puede tomar el model
 [`envases-woojin-real-data.sql`](../infra/node-red/examples/envases-woojin-real-data.sql).
 Se conserva el flujo existente que ya consulta CMS; el archivo es una propuesta de sustitución
 de su sentencia SQL, no una consulta adicional ni un despliegue del Node-RED compartido.
-`real_data` aporta los 14 campos de estado actual que admite la API. Durante el descanso de fin
+`real_data` aporta los 14 campos de estado que admite la API cuando su timestamp avanza. El 19/10/2026 se comprobó una discrepancia operativa: CMS Board mostraba cinco máquinas en AUTO mientras las cinco filas SQL conservaban fechas del 17/10 y ceros. Por eso el flujo marca `REAL_DATA_DESACTUALIZADA` y no se debe presentar esos ceros como estado actual. La [guía del flujo externo](FLUJO_NODERED_EXTERNO_ENVASES.md#cuando-cms-board-muestra-producción-y-real_data-está-detenida) contiene la consulta de contraste y las comprobaciones del tramo DBS → MariaDB. Durante el descanso de fin
 de semana su última lectura puede quedar antigua aunque la adquisición funcione normalmente
 en los días de producción.
 
@@ -85,7 +85,7 @@ Configurar en el backend `INFLUXDB_URL`, `INFLUXDB_TOKEN`, `INFLUXDB_ORG` o `INF
 
 El backend escribe `woojin_status` por IP validada y timestamp de `real_data`, con ciclo actual, contador actual, total, promedio y código de operación. Un `woojin_shot` por disparo **atribuido** guarda número, ciclo y temperaturas medidas/ajustadas de cilindro, tolva y molde cuando estén presentes. Los tags `machine=INY01..INY05` y `source=NODE_RED_ENVASES` o `NODE_RED_ENVASES_SIM` impiden mezclar equipos y simulación. Las lecturas rechazadas, repetidas, antiguas o marcadas como obsoletas no alimentan el estado histórico; un disparo nuevo atribuido sí puede registrarse aunque `real_data` repita timestamp. El endpoint autenticado `GET /api/plants/ENVASES/injection-machines/:code/history` exige asignación de ENVASES y acepta `source`, `metric=cycle|quantity|temperature`, `hours=1|6|24|72|168` y `zone=1..20`. Las zonas 1–7 son cilindro, 8 es tolva y 9–20 son molde. La TV no consulta ni muestra este historial.
 
-Este registro comienza **desde su activación**. El flujo externo actual envía el último ciclo técnico, por lo que un disparo omitido entre dos consultas no se recupera automáticamente. El histórico anterior de `shot_data`/`shot_data_rec` permanece sin IP verificable; no se atribuye por similitud de contador o de molde. Para importarlo por inyectora hace falta comprobar la correspondencia contador/archivo/IP con producción y validar los cambios de molde. En ausencia de un ciclo atribuido, la gráfica de temperaturas indica que aún no hay datos.
+Este registro comienza **desde su activación**. El flujo externo envía el último ciclo técnico y ahora ofrece dos ramas optativas para escribir en InfluxDB las mediciones raw `woojin_nodered_status` y `woojin_nodered_shot`, separadas de las series curadas del backend que consulta la interfaz. Un disparo omitido entre dos consultas no se recupera automáticamente por ninguna de estas rutas. El histórico anterior de `shot_data`/`shot_data_rec` permanece sin IP verificable; no se atribuye por similitud de contador o de molde. Para importarlo por inyectora hace falta comprobar la correspondencia contador/archivo/IP con producción y validar los cambios de molde. En ausencia de un ciclo atribuido, la gráfica de temperaturas indica que aún no hay datos.
 
 La gráfica `metric=temperature` representa temperaturas asociadas a **disparos atribuidos**, no la evolución continua de `Setting`/`Current` que presenta CMS Board. Para obtener esa serie continua hace falta una adquisición adicional de la API DBS, validada operativamente, con IP, timestamp y frescura propios; no se debe etiquetar la gráfica actual como temperatura en vivo.
 
@@ -131,4 +131,8 @@ El simulador local tiene fuente, clave y caché propias (`NODE_RED_ENVASES_SIM`,
 
 ## Validación y límites
 
-La verificación local debe incluir contrato válido/inválido, permisos, parcialidad, duplicados, códigos desconocidos, nulidad, caída de señal, compilaciones y vista en 1920 × 1080 y tamaños menores. Una muestra de prueba local demuestra el recorrido de aplicación; no demuestra conectividad productiva con CMS ni la asignación de disparos antiguos. El nuevo historial requiere probar un bucket dedicado antes de habilitarlo en producción. La rama `PREPARADO InfluxDB (NO escribe)` del flujo externo queda intacta: la escritura opcional la realiza el backend.
+La ruta de lectura directa de DBS, confirmada el 19/10/2026 y preparada como flujo importable
+deshabilitado, se documenta en [Integración ENVASES por API DBS](INTEGRACION_ENVASES_DBS_API.md).
+El flujo SQL anterior y el nuevo flujo DBS no deben publicar simultáneamente la misma fuente.
+
+La verificación local debe incluir contrato válido/inválido, permisos, parcialidad, duplicados, códigos desconocidos, nulidad, caída de señal, compilaciones y vista en 1920 × 1080 y tamaños menores. Una muestra de prueba local demuestra el recorrido de aplicación; no demuestra conectividad productiva con CMS ni la asignación de disparos antiguos. El nuevo historial requiere probar un bucket dedicado antes de habilitarlo en producción. El flujo externo incluye ramas de escritura InfluxDB deshabilitadas por defecto, con token y bucket definidos en el entorno de Node-RED; la escritura curada para las gráficas sigue a cargo del backend.

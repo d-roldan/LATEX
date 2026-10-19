@@ -30,11 +30,26 @@ export class InjectionHistoryService {
         cycle_current: reading.cycle_time_current,
         current_quantity: reading.current_quantity,
         total_quantity: reading.total_quantity,
+        target_quantity: reading.target_quantity,
+        defective_quantity: reading.defective_quantity,
         avg_quantity_per_hour: reading.avg_quantity_per_hour,
         operation_status: reading.operation_status_code
       });
       if (fields)
         lines.push(`woojin_status,machine=${code},source=${source} ${fields} ${timestamp}`);
+      if (reading.telemetry_origin === 'DBS_API') {
+        const temperatureFields: Record<string, number | null | undefined> = {};
+        for (const item of reading.dbs_temperature_zones ?? []) {
+          const key = item.zone.toLowerCase();
+          temperatureFields[`${key}_current`] = item.current;
+          temperatureFields[`${key}_setting`] = item.setting;
+        }
+        const temperatureValues = this.fields(temperatureFields);
+        if (temperatureValues)
+          lines.push(
+            `woojin_dbs_temperature,machine=${code},source=${source} ${temperatureValues} ${timestamp}`
+          );
+      }
     }
     if (shot) {
       const shotTimestamp = Date.parse(shot.timestamp);
