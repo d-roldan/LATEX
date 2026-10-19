@@ -1,0 +1,291 @@
+[
+  {
+    "id": "envases_dbs_local_comment_v1",
+    "type": "comment",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Espejo API local: conectar salida 2 de Decodificar",
+    "x": 370,
+    "y": 610,
+    "info": "Importar en la pestaña ENVASES · DBS API (solo lectura). Conectar la salida 2 de «Decodificar y vincular por IP» también a «Espejo local · preparar POST». No desconectar la rama productiva. Al iniciar queda apagado. Configurar DISAL_LOCAL_API_BASE_URL (http://IP_PC:PUERTO/api) y DISAL_LOCAL_ENVASES_INTEGRATION_KEY en el entorno seguro del Node-RED externo. La clave local debe diferir de la productiva. No agregar otro sondeo TCP de DBS.",
+    "wires": []
+  },
+  {
+    "id": "envases_dbs_local_startup_off_v1",
+    "type": "inject",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Al iniciar · espejo local apagado",
+    "x": 170,
+    "y": 680,
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": 0.1,
+    "payload": "false",
+    "payloadType": "bool",
+    "wires": [
+      [
+        "envases_dbs_local_toggle_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_enable_v1",
+    "type": "inject",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Activar envío a ApiDisal local",
+    "x": 170,
+    "y": 730,
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "payload": "true",
+    "payloadType": "bool",
+    "wires": [
+      [
+        "envases_dbs_local_toggle_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_disable_v1",
+    "type": "inject",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Pausar envío a ApiDisal local",
+    "x": 170,
+    "y": 780,
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "payload": "false",
+    "payloadType": "bool",
+    "wires": [
+      [
+        "envases_dbs_local_toggle_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_toggle_v1",
+    "type": "function",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Espejo local · activar o pausar",
+    "x": 430,
+    "y": 730,
+    "func": "const enabled = msg.payload === true;\nflow.set('envases_dbs_local_enabled', enabled);\nnode.status({fill:enabled?'green':'grey',shape:'dot',text:enabled?'envío local activo':'envío local pausado'});\nreturn {payload:{evento:enabled?'ESPEJO_LOCAL_ACTIVADO':'ESPEJO_LOCAL_PAUSADO'}};",
+    "outputs": 1,
+    "noerr": 0,
+    "wires": [
+      [
+        "envases_dbs_local_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_prepare_v1",
+    "type": "function",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Espejo local · preparar POST",
+    "x": 670,
+    "y": 650,
+    "func": "if (flow.get('envases_dbs_local_enabled') !== true) return null;\nconst bad = (reason) => {\n  const now = Date.now();\n  const last = flow.get('envases_dbs_local_error_at') || 0;\n  if (now - last < 60000) return null;\n  flow.set('envases_dbs_local_error_at', now);\n  return [null,{payload:{evento:'ESPEJO_LOCAL_CONFIG_ERROR',motivo:reason}}];\n};\nconst base = String(env.get('DISAL_LOCAL_API_BASE_URL') || '').trim().replace(/\\/+$/,'');\nconst key = String(env.get('DISAL_LOCAL_ENVASES_INTEGRATION_KEY') || '');\nconst productionBase = String(env.get('DISAL_API_BASE_URL') || '').trim().replace(/\\/+$/,'');\nconst productionKey = String(env.get('DISAL_ENVASES_INTEGRATION_KEY') || '');\nif (!/^https?:\\/\\/[^/?#]+\\/api$/i.test(base)) return bad('URL local inválida; debe terminar en /api');\nif (/^https?:\\/\\/(localhost|127(?:\\.\\d+){3}|0\\.0\\.0\\.0)(?::\\d+)?\\/api$/i.test(base)) return bad('Usar la IP de la PC, no localhost de la VM');\nif (base.toLowerCase() === productionBase.toLowerCase()) return bad('La URL local coincide con producción');\nif (key.length < 32) return bad('Falta la clave de la integración local');\nif (productionKey && key === productionKey) return bad('La clave local debe ser independiente');\nconst batch = msg.payload;\nif (!batch || batch.source !== 'NODE_RED_ENVASES' || batch.schemaVersion !== 1 ||\n    !Array.isArray(batch.maquinas) || batch.maquinas.length !== 1 ||\n    typeof batch.maquinas[0].machine_ip !== 'string') return bad('Lote DBS inesperado');\nreturn [{machine_ip:batch.maquinas[0].machine_ip,\n  method:'POST',url:base + '/plants/ENVASES/telemetry/injection-machines',\n  headers:{'Content-Type':'application/json','X-Node-Red-Key':key},payload:batch},null];",
+    "outputs": 2,
+    "noerr": 0,
+    "wires": [
+      [
+        "envases_dbs_local_http_v1"
+      ],
+      [
+        "envases_dbs_local_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_http_v1",
+    "type": "http request",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "POST a ApiDisal local",
+    "x": 930,
+    "y": 650,
+    "method": "use",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "timeout": "5000",
+    "wires": [
+      [
+        "envases_dbs_local_result_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_result_v1",
+    "type": "function",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Resultado API local · sin clave",
+    "x": 1180,
+    "y": 650,
+    "func": "let body = msg.payload || {};\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }\nconst ip = msg.machine_ip || null;\nif ((msg.statusCode === 200 || msg.statusCode === 201) && body.accepted === 1 && !body.rejected)\n  return {payload:{evento:'ESPEJO_LOCAL_ACEPTADO',ip,persistido_en_influx:body.persisted === true}};\nconst details = Array.isArray(body.message) ? body.message : typeof body.message === 'string' ? [body.message] : [];\nreturn {payload:{evento:'ESPEJO_LOCAL_ERROR_API',ip,status:msg.statusCode || null,\n  validacion:details.slice(0,5).map(value=>String(value).slice(0,160))}};",
+    "outputs": 1,
+    "noerr": 0,
+    "wires": [
+      [
+        "envases_dbs_local_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_test_v1",
+    "type": "inject",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Probar acceso HTTP a mi PC una vez",
+    "x": 170,
+    "y": 870,
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "payload": "",
+    "payloadType": "date",
+    "wires": [
+      [
+        "envases_dbs_local_test_prepare_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_test_prepare_v1",
+    "type": "function",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Preparar prueba local sin clave",
+    "x": 430,
+    "y": 870,
+    "func": "const base = String(env.get('DISAL_LOCAL_API_BASE_URL') || '').trim().replace(/\\/+$/,'');\nif (!/^https?:\\/\\/[^/?#]+\\/api$/i.test(base) ||\n    /^https?:\\/\\/(localhost|127(?:\\.\\d+){3}|0\\.0\\.0\\.0)(?::\\d+)?\\/api$/i.test(base))\n  return [null,{payload:{evento:'ESPEJO_LOCAL_URL_INVALIDA'}}];\nreturn [{method:'GET',url:base + '/auth/status',headers:{},payload:null},null];",
+    "outputs": 2,
+    "noerr": 0,
+    "wires": [
+      [
+        "envases_dbs_local_test_http_v1"
+      ],
+      [
+        "envases_dbs_local_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_test_http_v1",
+    "type": "http request",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "GET estado de ApiDisal local",
+    "x": 670,
+    "y": 870,
+    "method": "use",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "timeout": "5000",
+    "wires": [
+      [
+        "envases_dbs_local_test_result_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_test_result_v1",
+    "type": "function",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Resultado de conexión local",
+    "x": 920,
+    "y": 870,
+    "func": "return {payload:{evento:msg.statusCode === 200?'ESPEJO_LOCAL_ACCESIBLE':'ESPEJO_LOCAL_HTTP_INESPERADO',status:msg.statusCode || null}};",
+    "outputs": 1,
+    "noerr": 0,
+    "wires": [
+      [
+        "envases_dbs_local_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_catch_v1",
+    "type": "catch",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Errores HTTP del espejo local",
+    "x": 670,
+    "y": 950,
+    "scope": [
+      "envases_dbs_local_http_v1",
+      "envases_dbs_local_test_http_v1"
+    ],
+    "uncaught": false,
+    "wires": [
+      [
+        "envases_dbs_local_catch_format_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_catch_format_v1",
+    "type": "function",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Error de conexión local resumido",
+    "x": 920,
+    "y": 950,
+    "func": "return {payload:{evento:'ESPEJO_LOCAL_ERROR_RED',ip:msg.machine_ip || null,\n  error:String(msg.error?.message || 'Error de conexión').slice(0,160)}};",
+    "outputs": 1,
+    "noerr": 0,
+    "wires": [
+      [
+        "envases_dbs_local_debug_v1"
+      ]
+    ]
+  },
+  {
+    "id": "envases_dbs_local_debug_v1",
+    "type": "debug",
+    "z": "envases_dbs_api_tab_v1",
+    "name": "Espejo local · estado y errores, sin clave",
+    "x": 1190,
+    "y": 820,
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "wires": []
+  }
+]

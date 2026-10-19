@@ -104,14 +104,14 @@ describe('ENVASES HTTP', () => {
     expect(snapshot.status).toBe(200);
     const data = await snapshot.json();
     expect(data.machines.map((machine: { code: string }) => machine.code)).toEqual([
-      'INY01',
-      'INY02',
-      'INY03',
+      'INY05',
       'INY04',
-      'INY05'
+      'INY03',
+      'INY02',
+      'INY01'
     ]);
-    expect(data.machines[0].reading.current_quantity).toBe(12);
-    expect(data.machines[1].reading).toBeNull();
+    expect(data.machines[4].reading.current_quantity).toBe(12);
+    expect(data.machines[3].reading).toBeNull();
   });
 
   it('acepta el contrato DBS y rechaza una zona de temperatura desconocida', async () => {
@@ -119,6 +119,7 @@ describe('ENVASES HTTP', () => {
     const reading = {
       ...payload().maquinas[0],
       telemetry_origin: 'DBS_API',
+      current_file_name: '10litros_jca.db',
       target_quantity: 100,
       defective_quantity: 2,
       dbs_temperature_zones: [{ zone: 'EXT_NOZZLE', current: 210, setting: 215 }]
@@ -130,6 +131,8 @@ describe('ENVASES HTTP', () => {
     });
     expect(accepted.status).toBe(201);
     expect(await accepted.json()).toMatchObject({ accepted: 1 });
+    const snapshot = await (await fetch(`${base}/api/plants/ENVASES/tv/injection-machines`)).json();
+    expect(snapshot.machines[4].reading.current_file_name).toBe('10litros_jca.db');
     const rejected = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-node-red-key': key },
@@ -139,6 +142,15 @@ describe('ENVASES HTTP', () => {
       })
     });
     expect(rejected.status).toBe(400);
+    const invalidFile = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-node-red-key': key },
+      body: JSON.stringify({
+        ...payload(),
+        maquinas: [{ ...reading, current_file_name: 'x'.repeat(101) }]
+      })
+    });
+    expect(invalidFile.status).toBe(400);
   });
 
   it('rechaza simulación deshabilitada y valida el último ciclo técnico opcional', async () => {
@@ -185,7 +197,7 @@ describe('ENVASES HTTP', () => {
     expect(accepted.status).toBe(201);
     expect((await accepted.json()).accepted).toBe(1);
     const snapshot = await (await fetch(`${base}/api/plants/ENVASES/tv/injection-machines`)).json();
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico).toMatchObject({
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico).toMatchObject({
       shot_number: 99,
       barrel_temperatures: [null, 191, 192, 193, 194, 195, 196],
       recipe: { inj_velocity: '95/95/95', sov_time: 3.1 }

@@ -6,18 +6,18 @@ export const INJECTION_SIM_SOURCE = 'NODE_RED_ENVASES_SIM';
 export const injectionMachines = [
   {
     code: 'INY01',
-    name: 'INYECTORA 1',
+    name: 'INYECTORA 5',
     model: 'DL650G5',
     ip: '172.16.0.141',
-    order: 1,
+    order: 5,
     visible: true
   },
   {
     code: 'INY02',
-    name: 'INYECTORA 2',
+    name: 'INYECTORA 4',
     model: 'DL450G5',
     ip: '172.16.0.146',
-    order: 2,
+    order: 4,
     visible: true
   },
   {
@@ -30,18 +30,18 @@ export const injectionMachines = [
   },
   {
     code: 'INY04',
-    name: 'INYECTORA 4',
+    name: 'INYECTORA 2',
     model: 'TB280G5-2',
     ip: '172.16.0.144',
-    order: 4,
+    order: 2,
     visible: true
   },
   {
     code: 'INY05',
-    name: 'INYECTORA 5',
+    name: 'INYECTORA 1',
     model: 'TB200G5',
     ip: '172.16.0.145',
-    order: 5,
+    order: 1,
     visible: true
   }
 ] as const;

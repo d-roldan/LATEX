@@ -37,6 +37,7 @@ function response(ip, kind) {
     fields[12] = '25.0'; fields[13] = '26.0'; fields[14] = '4';
     fields[15] = '31'; fields[16] = '100'; fields[17] = '42';
     fields[18] = '12'; fields[25] = '0';
+    fields[23] = '10litros_jca.db';
     for (let index = 35; index < 43; index += 1) fields[index] = String(200 + index - 35);
   }
   if (kind === '8') fields[4] = '2';
@@ -81,9 +82,32 @@ test('cada máquina consulta 0 → 8 → 2 y recién entonces prepara el POST', 
   assert.equal(reading.equipment_code, 'INY01');
   assert.equal(reading.current_quantity, 42);
   assert.equal(reading.defective_quantity, 2);
+  assert.equal(reading.current_file_name, '10litros_jca.db');
   assert.equal(reading.dbs_temperature_zones[0].current, 200);
   assert.equal(reading.dbs_temperature_zones[0].setting, 210);
   assert.equal(result[2].payload.evento, 'DBS_LOTE_PREPARADO');
+});
+
+test('conserva vacío el archivo no informado y rechaza nombres inválidos', () => {
+  state.clear();
+  const msg = run(prepare.func, {}, 1000)[0][0];
+  const fields = response(msg.machine_ip, '0').slice(0, -1).split(',');
+  fields[23] = '';
+  msg.payload = `${fields.join(',')}*`;
+  let result = run(decode.func, msg, 1100);
+  assert.equal(result[0].payload.toString(), `8,${msg.machine_ip}`);
+  msg.payload = response(msg.machine_ip, '8');
+  result = run(decode.func, msg, 1200);
+  msg.payload = response(msg.machine_ip, '2');
+  result = run(decode.func, msg, 1300);
+  assert.equal(result[1].payload.maquinas[0].current_file_name, null);
+  state.clear();
+  const invalid = run(prepare.func, {}, 2000)[0][0];
+  fields[23] = 'x'.repeat(101);
+  invalid.payload = `${fields.join(',')}*`;
+  result = run(decode.func, invalid, 2100);
+  assert.equal(result[0], null);
+  assert.equal(result[2].payload.reason, 'Nombre de archivo inválido');
 });
 
 test('rechaza una IP distinta y no continúa la secuencia', () => {

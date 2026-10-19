@@ -21,6 +21,7 @@ interface Reading {
   modelo?: string | null;
   telemetry_origin?: 'DBS_API';
   machine_name_cms?: string | null;
+  current_file_name?: string | null;
   cms_timestamp: string;
   cms_age_seconds?: number | null;
   cms_row_fresh?: boolean | null;
@@ -653,22 +654,6 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
     return () => window.clearTimeout(timeout);
   }, [machines]);
   const selectedMachine = machines.find((machine) => machine.code === selected);
-  const summary = {
-    cms:
-      snapshot?.communication === 'RECENT'
-        ? machines.filter((machine) => machine.cmsFresh && machine.communicationFresh).length
-        : 0,
-    increments: machines.filter((machine) => isProducing(machine, snapshot)).length,
-    warnings: machines.filter(
-      (machine) =>
-        snapshot?.communication === 'RECENT' &&
-        machine.cmsFresh &&
-        machine.communicationFresh &&
-        machine.reading?.alarm_status_code != null &&
-        machine.reading.alarm_status_code !== 0
-    ).length
-  };
-
   if (!tv && !isLoading && !allowed)
     return (
       <section className="injection-page">
@@ -690,24 +675,6 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           pantalla.
         </p>
       )}
-      <div className="injection-summary" aria-label="Resumen de ENVASES">
-        <div>
-          <strong>{machines.length || 5}</strong>
-          <span>Inyectoras</span>
-        </div>
-        <div>
-          <strong>{summary.cms}</strong>
-          <span>Con datos recientes</span>
-        </div>
-        <div>
-          <strong>{summary.increments}</strong>
-          <span>Con producción detectada</span>
-        </div>
-        <div>
-          <strong>{summary.warnings}</strong>
-          <span>Con alarma reportada</span>
-        </div>
-      </div>
       {query.isLoading && <p role="status">Cargando estado de las inyectoras…</p>}
       <div className="injection-grid">
         {machines.map((machine) => {
@@ -715,21 +682,34 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           const live =
             machine.cmsFresh && machine.communicationFresh && snapshot?.communication === 'RECENT';
           const mode = r?.operation_status_text?.trim().toUpperCase();
+          const motor = r?.motor_status_text?.trim().toUpperCase();
           const hasAlarm = live && r?.alarm_status_code != null && r.alarm_status_code !== 0;
           const producing = isProducing(machine, snapshot);
-          const loadedFile =
-            live && r?.telemetry_origin !== 'DBS_API'
-              ? machine.ultimo_ciclo_tecnico?.mold_name?.trim() || 'No vinculado'
-              : 'Sin confirmar';
+          const loadedFile = machine.ultimo_ciclo_tecnico?.mold_name?.trim();
+          const fileLabel =
+            r?.telemetry_origin === 'DBS_API' ? 'Archivo actual' : 'Archivo del último ciclo';
+          const fileValue =
+            r?.telemetry_origin === 'DBS_API'
+              ? live
+                ? r.current_file_name?.trim() || 'No informado por DBS'
+                : 'Sin datos recientes'
+              : loadedFile || 'No vinculado';
           const cardState = !live
             ? 'is-stale'
-            : mode === 'PARO' || hasAlarm
+            : mode === 'PARO' || mode === 'MANUAL' || motor === 'STOP' || hasAlarm
               ? 'is-stopped'
-              : mode === 'MANUAL'
-                ? 'is-manual'
+              : producing
+                ? 'is-producing'
+                : 'is-live';
+          const operatingState = !live
+            ? 'Sin datos recientes'
+            : hasAlarm
+              ? 'Alarma'
+              : mode === 'PARO' || mode === 'MANUAL' || motor === 'STOP'
+                ? 'Detenida'
                 : producing
-                  ? 'is-producing'
-                  : 'is-live';
+                  ? 'Produciendo'
+                  : 'En marcha';
           const state = !r
             ? 'Sin datos'
             : snapshot?.communication !== 'RECENT'
@@ -755,17 +735,15 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                         <h2>{machine.name}</h2>
                         <span
                           className="injection-card__file"
-                          title="Archivo informado por el último ciclo técnico"
-                          aria-label={`Archivo informado por el último ciclo técnico: ${loadedFile}`}
+                          title={fileLabel}
+                          aria-label={`${fileLabel}: ${fileValue}`}
                         >
-                          · <strong>{loadedFile}</strong>
+                          {fileLabel}: <strong>{fileValue}</strong>
                         </span>
                       </div>
                     </div>
                   </div>
-                  <span className="injection-state">
-                    {live ? `Modo ${text(r?.operation_status_text)}` : 'Sin datos recientes'}
-                  </span>
+                  <span className="injection-state">{operatingState}</span>
                   <div className="injection-tv-status">
                     <span>
                       Motor <strong>{live ? text(r?.motor_status_text) : 'Sin datos'}</strong>
@@ -857,20 +835,17 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                   <div className="injection-card__top">
                     <div>
                       <small>
-                        {machine.code} · {machine.model}
+                        {machine.model}
                         {simulated && <span className="injection-simulation"> · SIMULACIÓN</span>}
                       </small>
                       <div className="injection-card__identity">
                         <h2>{machine.name}</h2>
-                        <span
-                          className="injection-card__file"
-                          title="Archivo informado por el último ciclo técnico"
-                        >
-                          Archivo: <strong>{loadedFile}</strong>
+                        <span className="injection-card__file" title={fileLabel}>
+                          {fileLabel}: <strong>{fileValue}</strong>
                         </span>
                       </div>
                     </div>
-                    <span className="injection-state">{state}</span>
+                    <span className="injection-state">{live ? operatingState : state}</span>
                   </div>
                   <p className="injection-updated">
                     {r?.telemetry_origin === 'DBS_API' ? 'DBS' : 'CMS'} {time(r?.cms_timestamp)}

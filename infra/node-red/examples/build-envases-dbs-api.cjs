@@ -67,7 +67,9 @@ const number = (v) => /^-?\\d+(?:\\.\\d+)?$/.test(v) ? Number(v) : null;
 const valid = (v) => v === null || Number.isFinite(v);
 let value;
 if (kind === '0') {
-  value = {motor:int(fields[9]),heater:int(fields[10]),mode:int(fields[11]),cycle:number(fields[12]),before:number(fields[13]),hours:int(fields[14]),minutes:int(fields[15]),target:int(fields[16]),current:int(fields[17]),hourly:number(fields[18]),alarm:int(fields[25]),temps:fields.slice(35,43).map(number)};
+  const currentFile = fields[23].trim();
+  if (currentFile.length > 100 || /[\\x00-\\x1f\\x7f]/.test(currentFile)) return error('Nombre de archivo inválido');
+  value = {motor:int(fields[9]),heater:int(fields[10]),mode:int(fields[11]),cycle:number(fields[12]),before:number(fields[13]),hours:int(fields[14]),minutes:int(fields[15]),target:int(fields[16]),current:int(fields[17]),hourly:number(fields[18]),currentFile:currentFile || null,alarm:int(fields[25]),temps:fields.slice(35,43).map(number)};
   if ([value.motor,value.heater,value.mode,value.cycle,value.before,value.hours,value.minutes,value.target,value.current,value.hourly,value.alarm,...value.temps].some(v=>!valid(v))) return error('Número inválido');
 } else if (kind === '8') {
   value = {defective:int(fields[4])};
@@ -98,7 +100,7 @@ const settings = saved['2'].value.settings;
 const zones = ['EXT_NOZZLE','NOZZLE','HEATER_1','HEATER_2','HEATER_3','HEATER_4','OIL','HOPPER'];
 const timestamp = new Date(now).toISOString();
 const modeText = {1:'AUTO',2:'SEMI AUTO',3:'MANUAL',4:'MANUAL'}[status.mode] || 'STOP';
-const reading = {machine_ip:ip,equipment_code:identity.code,modelo:identity.model,telemetry_origin:'DBS_API',cms_timestamp:timestamp,cms_row_fresh:true,adquisicion_industrial_fresca:'NO_VERIFICADA',operation_status_code:status.mode,operation_status_text:modeText,motor_status_code:status.motor,motor_status_text:status.motor>0?'RUN':'STOP',heater_status_code:status.heater,heater_status_text:status.heater>0?'RUN':'STOP',alarm_status_code:status.alarm,cycle_time_current:status.cycle,cycle_time_before:status.before,production_time_hour:status.hours,production_time_min:status.minutes,target_quantity:status.target,current_quantity:status.current,avg_quantity_per_hour:status.hourly,defective_quantity:defects.defective,dbs_temperature_zones:zones.map((zone,i)=>({zone,current:status.temps[i],setting:settings[i]}))};
+const reading = {machine_ip:ip,equipment_code:identity.code,modelo:identity.model,telemetry_origin:'DBS_API',cms_timestamp:timestamp,cms_row_fresh:true,adquisicion_industrial_fresca:'NO_VERIFICADA',operation_status_code:status.mode,operation_status_text:modeText,motor_status_code:status.motor,motor_status_text:status.motor>0?'RUN':'STOP',heater_status_code:status.heater,heater_status_text:status.heater>0?'RUN':'STOP',alarm_status_code:status.alarm,current_file_name:status.currentFile,cycle_time_current:status.cycle,cycle_time_before:status.before,production_time_hour:status.hours,production_time_min:status.minutes,target_quantity:status.target,current_quantity:status.current,avg_quantity_per_hour:status.hourly,defective_quantity:defects.defective,dbs_temperature_zones:zones.map((zone,i)=>({zone,current:status.temps[i],setting:settings[i]}))};
 if (reading.current_quantity !== null && (reading.current_quantity < 0 || reading.current_quantity > 1000000000)) return error('Contador fuera de rango');
 const previous = flow.get('dbs_counter_' + ip);
 if (previous && Number.isInteger(previous.value) && Number.isInteger(reading.current_quantity)) {

@@ -120,15 +120,14 @@
   font-size: 0.75rem;
 }
 .injection-card__identity {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 0.5rem;
+  display: grid;
+  gap: 0.2rem;
 }
 .injection-card__file {
+  display: block;
   min-width: 0;
   color: var(--color-text);
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   font-weight: 600;
   line-height: 1.2;
   overflow-wrap: anywhere;

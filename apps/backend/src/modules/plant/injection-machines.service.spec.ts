@@ -41,18 +41,25 @@ describe('InjectionMachinesService', () => {
   it('ordena cinco equipos y conserva ausencia de datos al reiniciar', async () => {
     const snapshot = await service.publicSnapshot('ENVASES');
     expect(snapshot.machines.map((machine) => machine.code)).toEqual([
-      'INY01',
-      'INY02',
-      'INY03',
+      'INY05',
       'INY04',
-      'INY05'
+      'INY03',
+      'INY02',
+      'INY01'
     ]);
     expect(snapshot.machines.map((machine) => machine.ip)).toEqual([
-      '172.16.0.141',
-      '172.16.0.146',
-      '172.16.0.143',
+      '172.16.0.145',
       '172.16.0.144',
-      '172.16.0.145'
+      '172.16.0.143',
+      '172.16.0.146',
+      '172.16.0.141'
+    ]);
+    expect(snapshot.machines.map((machine) => [machine.name, machine.model])).toEqual([
+      ['INYECTORA 1', 'TB200G5'],
+      ['INYECTORA 2', 'TB280G5-2'],
+      ['INYECTORA 3', 'TB280G5-1'],
+      ['INYECTORA 4', 'DL450G5'],
+      ['INYECTORA 5', 'DL650G5']
     ]);
     expect(snapshot.machines.every((machine) => machine.reading === null)).toBe(true);
     expect(snapshot.communication).toBe('NO_RECENT_DATA');
@@ -113,9 +120,9 @@ describe('InjectionMachinesService', () => {
     );
     expect(duplicate.ignored).toBe(1);
     const snapshot = await service.publicSnapshot('ENVASES');
-    expect(snapshot.machines[0].reading?.current_quantity).toBeNull();
-    expect(snapshot.machines[0].reading?.operation_status_code).toBe(77);
-    expect(snapshot.machines[1].reading?.current_quantity).toBe(10);
+    expect(snapshot.machines[4].reading?.current_quantity).toBeNull();
+    expect(snapshot.machines[4].reading?.operation_status_code).toBe(77);
+    expect(snapshot.machines[3].reading?.current_quantity).toBe(10);
     expect(snapshot.machines[2].reading).toBeNull();
   });
 
@@ -159,8 +166,8 @@ describe('InjectionMachinesService', () => {
     expect(auth.authenticate).toHaveBeenCalledWith('ENVASES', 'NODE_RED_ENVASES_SIM', 'sim-key');
     let snapshot = await service.publicSnapshot('ENVASES');
     expect(snapshot.source).toBe('NODE_RED_ENVASES_SIM');
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.shot_number).toBe(42);
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('95/95/95');
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico?.shot_number).toBe(42);
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('95/95/95');
     const next = new Date().toISOString();
     await service.receive('ENVASES', 'sim-key', {
       ...simBatch,
@@ -177,12 +184,12 @@ describe('InjectionMachinesService', () => {
       ]
     });
     snapshot = await service.publicSnapshot('ENVASES');
-    expect(snapshot.machines[0].reading?.current_quantity).toBe(0);
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.cycle_time).toBe(26);
+    expect(snapshot.machines[4].reading?.current_quantity).toBe(0);
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico?.cycle_time).toBe(26);
     config.get.mockReturnValue('empresa');
     snapshot = await service.publicSnapshot('ENVASES');
     expect(snapshot.source).toBe('NODE_RED_ENVASES');
-    expect(snapshot.machines[0].reading).toBeNull();
+    expect(snapshot.machines[4].reading).toBeNull();
     await expect(service.receive('ENVASES', 'sim-key', simBatch)).rejects.toBeInstanceOf(
       ForbiddenException
     );
@@ -231,9 +238,9 @@ describe('InjectionMachinesService', () => {
     );
     let snapshot = await service.publicSnapshot('ENVASES');
     expect(unlinked.results[0]).toMatchObject({ technical: 'UNATTRIBUTED' });
-    expect(snapshot.machines[0].reading?.current_quantity).toBe(99);
-    expect(snapshot.machines[0].reading?.ultimo_ciclo_tecnico).toBeUndefined();
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico).toBeNull();
+    expect(snapshot.machines[4].reading?.current_quantity).toBe(99);
+    expect(snapshot.machines[4].reading?.ultimo_ciclo_tecnico).toBeUndefined();
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico).toBeNull();
 
     const linked = await service.receive(
       'ENVASES',
@@ -255,7 +262,7 @@ describe('InjectionMachinesService', () => {
     );
     snapshot = await service.publicSnapshot('ENVASES');
     expect(linked.results[0]).toMatchObject({ status: 'IGNORED_OLDER', technical: 'UPDATED' });
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('95.0/95.0/95.0');
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('95.0/95.0/95.0');
   });
 
   it('asigna un ciclo CMS sólo a la IP indicada por el nombre verificado', async () => {
@@ -289,8 +296,8 @@ describe('InjectionMachinesService', () => {
     expect(result.results[0]).toMatchObject({ technical: 'UPDATED' });
     expect(result.results[1]).toMatchObject({ technical: 'UNATTRIBUTED' });
     const snapshot = await service.publicSnapshot('ENVASES');
-    expect(snapshot.machines[0].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('80/90');
-    expect(snapshot.machines[1].ultimo_ciclo_tecnico).toBeNull();
+    expect(snapshot.machines[4].ultimo_ciclo_tecnico?.recipe?.inj_velocity).toBe('80/90');
+    expect(snapshot.machines[3].ultimo_ciclo_tecnico).toBeNull();
   });
 
   it('marca datos obsoletos sin alterar el último contador', async () => {
@@ -301,8 +308,8 @@ describe('InjectionMachinesService', () => {
       jest.setSystemTime(new Date(Date.now() + 31_000));
       const snapshot = await service.publicSnapshot('ENVASES');
       expect(snapshot.communication).toBe('NO_RECENT_DATA');
-      expect(snapshot.machines[0]).toMatchObject({ cmsFresh: false, communicationFresh: false });
-      expect(snapshot.machines[0].reading?.current_quantity).toBe(123);
+      expect(snapshot.machines[4]).toMatchObject({ cmsFresh: false, communicationFresh: false });
+      expect(snapshot.machines[4].reading?.current_quantity).toBe(123);
     } finally {
       jest.useRealTimers();
     }
@@ -317,7 +324,7 @@ describe('InjectionMachinesService', () => {
     };
     await service.receive('ENVASES', 'key', batch([reset]));
     const snapshot = await service.publicSnapshot('ENVASES');
-    expect(snapshot.machines[0].reading).toMatchObject({
+    expect(snapshot.machines[4].reading).toMatchObject({
       current_quantity: 3,
       delta_contador_observado: -200,
       tipo_cambio_contador: 'REINICIO_O_RETROCESO_CONTADOR'
@@ -328,7 +335,7 @@ describe('InjectionMachinesService', () => {
     const future = new Date(Date.now() + 20_000).toISOString();
     await service.receive('ENVASES', 'key', batch([reading('172.16.0.141', future)]));
     const snapshot = await service.publicSnapshot('ENVASES');
-    expect(snapshot.machines[0].cmsFresh).toBe(false);
+    expect(snapshot.machines[4].cmsFresh).toBe(false);
   });
 
   it('autentica exclusivamente la fuente y clave registradas para ENVASES', async () => {
