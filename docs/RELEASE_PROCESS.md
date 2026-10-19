@@ -7,6 +7,7 @@ Desarrollo local, publicación en GitHub y actualización productiva son solicit
 1. Revisar `git status`, rama, remotos efectivos y cambios ajenos. No incluirlos sin autorización.
 2. Consultar tags locales y los de cada remoto autorizado con `git ls-remote --tags <remoto>`; comparar nombres, objeto anotado y commit destino. Investigar divergencias y tags recientes. No sobrescribir ni reutilizar tags.
 3. Identificar el último tag publicado consistente y revisar el diff completo desde ese commit. No asumir que el número mayor corresponde a una publicación válida.
+4. Antes de validar formato o crear el tag, ejecutar `node scripts/check-release-toolchain.mjs`. Si `node_modules` no coincide con los lockfiles, reinstalar con `npm ci` en los paquetes indicados y volver a comprobar. No usar un Prettier local de otra versión: puede aprobar un formato que la CI rechace.
 
 ## 2. Validación y notas
 
@@ -26,7 +27,7 @@ Antes del push, ejecutar `node scripts/verify-release.mjs Vx.x.x`. Comprueba que
 
 ## 4. Publicación autorizada
 
-Verificar `git remote -v` y la rama destino. `origin` es GitHub personal; `laboral` es GitHub corporativo. Si se pidió uno, usar sólo ese. Si se pidieron ambos, enviar el mismo commit y tag a los dos y cotejar los destinos. Sin destino predeterminado autorizado, preguntar antes del push. No usar `--force`. Ante divergencia, detener el remoto afectado.
+Verificar `git remote -v` y la rama destino. `origin` es GitHub personal; `laboral` es GitHub corporativo. La preferencia permanente del usuario es publicar **siempre en ambos**; enviar el mismo commit y tag a los dos y cotejar los destinos. Si el usuario indica expresamente uno solo para una publicación, usar sólo ese. No usar `--force`. Ante divergencia, detener el remoto afectado.
 
 Cuando se solicite una publicación completa y la herramienta esté disponible, crear GitHub Release con el contenido íntegro del Markdown. Si no es posible, registrar la limitación sin confundir un push de rama con una release completa. Verificar en los remotos commit, tag y notas; consultar el estado de CI y distinguir jobs aprobados de pendientes. Informar versión, commit, destino, migraciones, servicios y estado.
 

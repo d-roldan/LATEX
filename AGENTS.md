@@ -11,6 +11,8 @@ Responder en español. Este repositorio contiene la aplicación industrial multi
 
 Conservar esta distinción en futuras tareas. Si el usuario pide publicar en ambos, subir el mismo commit a cada destino y verificar ambas ramas remotas. Si especifica uno, usar sólo ese destino. No confundir las credenciales o cuentas ni hacer push forzado para resolver divergencias.
 
+Preferencia permanente del usuario desde el 19/10/2026: publicar **todas las versiones** en `origin` y `laboral`, con el mismo commit y el mismo tag anotado. Sólo usar un destino si el usuario lo indica expresamente para esa publicación. Verificar ambos remotos después de cada push.
+
 ## Publicación de versiones y notas en tags
 
 Cuando se publique una versión, la nota completa es parte obligatoria del tag y no sólo un archivo
