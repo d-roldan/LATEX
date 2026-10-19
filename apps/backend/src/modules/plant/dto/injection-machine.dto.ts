@@ -140,7 +140,8 @@ export class InjectionMachineReadingDto {
   dbs_temperature_zones?: InjectionDbsTemperatureZoneDto[] | null;
   @IsOptional() @IsNumber() @Min(0) @Max(1000000) avg_quantity_per_hour?: number | null;
   @IsOptional() @IsInt() @Min(-1000000000) @Max(1000000000) delta_contador_observado?:
-    number | null;
+    | number
+    | null;
   @IsOptional() @IsString() @MaxLength(80) tipo_cambio_contador?: string | null;
   @IsOptional() @IsString() @MaxLength(80) actividad_inferida?: string | null;
   @IsOptional() @IsISO8601() ultimo_incremento_detectado?: string | null;
@@ -152,7 +153,8 @@ export class InjectionMachineReadingDto {
 
 export class InjectionMachineBatchDto {
   @IsIn([INJECTION_SOURCE, INJECTION_SIM_SOURCE]) source!:
-    typeof INJECTION_SOURCE | typeof INJECTION_SIM_SOURCE;
+    | typeof INJECTION_SOURCE
+    | typeof INJECTION_SIM_SOURCE;
   @IsOptional() @IsIn(['SIMULATION']) mode?: 'SIMULATION';
   @IsOptional() @IsBoolean() simulated?: boolean;
   @IsIn([1]) schemaVersion!: 1;

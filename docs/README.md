@@ -48,7 +48,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.45](releases/RELEASE_NOTES_V0.0.45.md): lectura DBS de cinco inyectoras y contrato ENVASES ampliado.
+- [Versión vigente · V0.0.46](releases/RELEASE_NOTES_V0.0.46.md): lectura DBS de cinco inyectoras y corrección de formato para la CI.
 
 ## Criterio de actualización
 
