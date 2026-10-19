@@ -1,0 +1,165 @@
+[
+  {
+    "id": "envases-disal-comment",
+    "type": "comment",
+    "z": "w5_tab",
+    "name": "Conectar aquí la salida 1 de w5_normalize",
+    "info": "Conectar la primera salida de 'Normalizar, frescura, contador e Influx' a 'ENVASES · preparar lote real'. No desconectar los Debug, eventos ni la salida preparada para InfluxDB.",
+    "x": 1480,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "envases-disal-prepare",
+    "type": "function",
+    "z": "w5_tab",
+    "name": "ENVASES · preparar lote real",
+    "func": "if (Number(flow.get('envases_http_busy_until') || 0) > Date.now()) {\n    return [null, { payload: { status: 'SKIPPED_BUSY', message: 'Solicitud anterior pendiente' } }];\n}\n\nconst base = env.get('DISAL_API_BASE_URL');\nconst key = env.get('DISAL_ENVASES_INTEGRATION_KEY');\n\nif (!base || !key) {\n    return [null, { payload: { status: 'CONFIG_ERROR', message: 'Falta DISAL_API_BASE_URL o DISAL_ENVASES_INTEGRATION_KEY' } }];\n}\n\nif (!msg.payload || !Array.isArray(msg.payload.maquinas)) {\n    return [null, { payload: { status: 'INVALID_SUMMARY', message: 'msg.payload.maquinas no es un arreglo' } }];\n}\n\n// El normalizador agrega marcadores SIN_FILA_SQL sin cms_timestamp.\n// La API acepta lotes parciales, pero cada lectura enviada debe tener timestamp ISO válido.\nconst maquinas = msg.payload.maquinas.filter((maquina) =>\n    maquina &&\n    typeof maquina.machine_ip === 'string' &&\n    typeof maquina.cms_timestamp === 'string' &&\n    Number.isFinite(Date.parse(maquina.cms_timestamp))\n);\n\nif (maquinas.length === 0) {\n    return [null, { payload: { status: 'NO_VALID_READINGS', received: msg.payload.maquinas.length, sent: 0 } }];\n}\n\nflow.set('envases_http_busy_until', Date.now() + 25000);\n\nmsg.method = 'POST';\nmsg.url = base.replace(/\\\/$/, '') + '/plants/ENVASES/telemetry/injection-machines';\nmsg.headers = {\n    'content-type': 'application/json',\n    'x-node-red-key': key\n};\nmsg.payload = {\n    ...msg.payload,\n    source: 'NODE_RED_ENVASES',\n    schemaVersion: 1,\n    maquinas\n};\nmsg.envasesBody = msg.payload;\nmsg.envasesAttempt = 0;\nmsg.envasesMachineCount = maquinas.length;\nreturn [msg, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1500,
+    "y": 320,
+    "wires": [
+      [
+        "envases-disal-http"
+      ],
+      [
+        "envases-disal-debug"
+      ]
+    ]
+  },
+  {
+    "id": "envases-disal-http",
+    "type": "http request",
+    "z": "w5_tab",
+    "name": "ENVASES · POST API LATEX",
+    "method": "use",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "timeout": "4000",
+    "x": 1770,
+    "y": 320,
+    "wires": [
+      [
+        "envases-disal-result"
+      ]
+    ]
+  },
+  {
+    "id": "envases-disal-result",
+    "type": "function",
+    "z": "w5_tab",
+    "name": "ENVASES · resultado y reintento",
+    "func": "const statusCode = Number(msg.statusCode || 0);\nconst attempt = Number(msg.envasesAttempt || 0);\nconst shouldRetry = statusCode === 0 || statusCode === 429 || statusCode >= 500;\n\nif (shouldRetry && attempt < 2) {\n    msg.envasesAttempt = attempt + 1;\n    msg.payload = msg.envasesBody;\n    msg.headers = {\n        'content-type': 'application/json',\n        'x-node-red-key': env.get('DISAL_ENVASES_INTEGRATION_KEY')\n    };\n    return [msg, null];\n}\n\nflow.set('envases_http_busy_until', 0);\nreturn [null, {\n    payload: {\n        statusCode,\n        attempts: attempt + 1,\n        sent: msg.envasesMachineCount,\n        accepted: msg.payload && msg.payload.accepted,\n        rejected: msg.payload && msg.payload.rejected,\n        ignored: msg.payload && msg.payload.ignored,\n        error: statusCode >= 400 ? (msg.payload && msg.payload.message) || 'Respuesta HTTP no exitosa' : undefined\n    }\n}];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 2040,
+    "y": 320,
+    "wires": [
+      [
+        "envases-disal-delay"
+      ],
+      [
+        "envases-disal-debug"
+      ]
+    ]
+  },
+  {
+    "id": "envases-disal-delay",
+    "type": "delay",
+    "z": "w5_tab",
+    "name": "ENVASES · reintento en 3 s",
+    "pauseType": "delay",
+    "timeout": "3",
+    "timeoutUnits": "seconds",
+    "rate": "1",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 1790,
+    "y": 390,
+    "wires": [
+      [
+        "envases-disal-http"
+      ]
+    ]
+  },
+  {
+    "id": "envases-disal-catch",
+    "type": "catch",
+    "z": "w5_tab",
+    "name": "ENVASES · capturar error HTTP",
+    "scope": [
+      "envases-disal-http"
+    ],
+    "uncaught": false,
+    "x": 1510,
+    "y": 450,
+    "wires": [
+      [
+        "envases-disal-error"
+      ]
+    ]
+  },
+  {
+    "id": "envases-disal-error",
+    "type": "function",
+    "z": "w5_tab",
+    "name": "ENVASES · error sin secretos",
+    "func": "const attempt = Number(msg.envasesAttempt || 0);\nif (attempt < 2) {\n    msg.envasesAttempt = attempt + 1;\n    msg.payload = msg.envasesBody;\n    msg.headers = {\n        'content-type': 'application/json',\n        'x-node-red-key': env.get('DISAL_ENVASES_INTEGRATION_KEY')\n    };\n    return [msg, null];\n}\n\nflow.set('envases_http_busy_until', 0);\nreturn [null, {\n    payload: {\n        status: 'HTTP_ERROR',\n        attempts: attempt + 1,\n        sent: msg.envasesMachineCount,\n        message: String((msg.error && msg.error.message) || 'Error de red').slice(0, 180)\n    }\n}];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1780,
+    "y": 450,
+    "wires": [
+      [
+        "envases-disal-delay"
+      ],
+      [
+        "envases-disal-debug"
+      ]
+    ]
+  },
+  {
+    "id": "envases-disal-debug",
+    "type": "debug",
+    "z": "w5_tab",
+    "name": "ENVASES · diagnóstico API sin clave",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 2070,
+    "y": 450,
+    "wires": []
+  }
+]
