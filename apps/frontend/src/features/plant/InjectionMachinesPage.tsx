@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import {
   CartesianGrid,
@@ -14,6 +14,8 @@ import {
 import { api } from '../../shared/api/http';
 import { Button } from '../../shared/ui/Button';
 import { useActivePlant } from './useActivePlant';
+import { injectionMachineState } from './injectionMachineState';
+import { injectionStateTimeline } from './injectionStateTimeline';
 import './InjectionMachinesPage.css';
 
 interface Reading {
@@ -33,6 +35,7 @@ interface Reading {
   heater_status_code?: number | null;
   heater_status_text?: string | null;
   alarm_status_code?: number | null;
+  alarm_status_text?: string | null;
   cycle_time_current?: number | null;
   cycle_time_before?: number | null;
   production_time_hour?: number | null;
@@ -140,6 +143,27 @@ interface InjectionHistory {
   message: string;
   points: { timestamp: string; value?: number; target?: number; measured?: number }[];
 }
+interface CmsShots {
+  status: 'AVAILABLE' | 'NO_DATA' | 'NO_CURRENT_FILE' | 'CONFIGURATION_PENDING' | 'UNAVAILABLE';
+  attribution?: 'CURRENT_FILE_MATCH';
+  file: string | null;
+  fileObservedAt?: string | null;
+  nextCursor: number | null;
+  rows: {
+    idx: number;
+    timestamp: string;
+    shotNumber: number;
+    cycleTime: number | null;
+    cavity: number | null;
+    injectionTime: number | null;
+    maxInjectionPressure: number | null;
+    resinWeight: number | null;
+    recipeBarrelTemperature: string | null;
+    recipeInjVelocity: string | null;
+    recipeInjPressure: string | null;
+    recipeLinked: boolean;
+  }[];
+}
 
 const number = (value: number | null | undefined, digits = 0) =>
   value == null ? 'No informado' : value.toLocaleString('es-AR', { maximumFractionDigits: digits });
@@ -158,14 +182,8 @@ const temperatureTargets = (value: string | null | undefined, sizes: number[]) =
   const values = parts.map((part) => (part !== '' ? Number(part) : NaN));
   return values.every(Number.isFinite) ? values : null;
 };
-const isProducing = (machine: Machine, snapshot: Snapshot | undefined) =>
-  snapshot?.communication === 'RECENT' &&
-  machine.cmsFresh &&
-  machine.communicationFresh &&
-  machine.counterRecent &&
-  machine.reading?.operation_status_text?.trim().toUpperCase() === 'AUTO' &&
-  machine.reading?.motor_status_text?.trim().toUpperCase() === 'RUN' &&
-  machine.reading?.alarm_status_code === 0;
+const alarmDescription = (reading: Reading | null) =>
+  reading?.alarm_status_text?.trim() || 'Descripción no disponible';
 
 function Details({
   machine,
@@ -185,7 +203,9 @@ function Details({
   const r = machine.reading;
   const shot = machine.ultimo_ciclo_tecnico;
   const [tab, setTab] = useState('GENERAL');
-  const [historyMetric, setHistoryMetric] = useState<'cycle' | 'quantity' | 'temperature'>('cycle');
+  const [historyMetric, setHistoryMetric] = useState<
+    'state' | 'cycle' | 'quantity' | 'temperature'
+  >('state');
   const [historyHours, setHistoryHours] = useState(24);
   const [historyZone, setHistoryZone] = useState(1);
   const history = useQuery({
@@ -200,8 +220,32 @@ function Details({
         )
       ).data,
     enabled: tab === 'HISTÓRICO',
-    staleTime: 60_000
+    staleTime: 60_000,
+    refetchInterval: historyMetric === 'state' ? 30_000 : false
   });
+  const cmsShots = useInfiniteQuery({
+    queryKey: ['injection-cms-shots', machine.code, machine.reading?.current_file_name],
+    queryFn: async ({ pageParam }) =>
+      (
+        await api.get<CmsShots>(`/plants/ENVASES/injection-machines/${machine.code}/cms-shots`, {
+          params: pageParam ? { before: pageParam } : undefined
+        })
+      ).data,
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: tab === 'HISTÓRICO' && !simulated,
+    staleTime: 30_000
+  });
+  const cmsFirst = cmsShots.data?.pages[0];
+  const cmsRows = Array.from(
+    new Map(
+      (cmsShots.data?.pages.flatMap((page) => page.rows) ?? []).map((row) => [row.shotNumber, row])
+    ).values()
+  );
+  const stateSegments =
+    historyMetric === 'state' && history.data?.status === 'AVAILABLE'
+      ? injectionStateTimeline(history.data.points, historyHours, Date.now())
+      : [];
   const barrelTargets = temperatureTargets(shot?.recipe?.barrel_temperature, [7, 8]);
   const moldTargets = temperatureTargets(shot?.recipe?.mold_temperature, [12]);
   const barrelTemperatures = [
@@ -246,6 +290,9 @@ function Details({
           ['Motor', r?.motor_status_text],
           ['Calefacción', r?.heater_status_text],
           ['Alarma, código', r?.alarm_status_code],
+          ...(r?.alarm_status_code != null && r.alarm_status_code !== 0
+            ? ([['Alarma, descripción', alarmDescription(r)]] as Entry[])
+            : []),
           [
             r?.telemetry_origin === 'DBS_API' ? 'Última respuesta DBS' : 'Última lectura CMS',
             time(r?.cms_timestamp)
@@ -487,12 +534,14 @@ function Details({
             <h3>Histórico de {machine.name}</h3>
             <p>
               {simulated ? 'Serie simulada' : 'Serie real'} identificada por IP desde que se activó
-              el registro. Los disparos antiguos sin vínculo comprobado no se incluyen.
+              el registro. Debajo se muestran por separado los disparos históricos que coinciden con
+              el archivo actual.
             </p>
             <div className="injection-history__controls">
               <div aria-label="Variable histórica">
                 {(
                   [
+                    ['state', 'Estado'],
                     ['cycle', 'Ciclo'],
                     ['quantity', 'Contador'],
                     ['temperature', 'Temperaturas']
@@ -550,6 +599,61 @@ function Details({
               <p>No se pudo consultar el historial.</p>
             ) : history.data.status !== 'AVAILABLE' ? (
               <p>{history.data.message}</p>
+            ) : historyMetric === 'state' ? (
+              <div className="injection-state-history">
+                <div
+                  className="injection-state-history__bar"
+                  role="img"
+                  aria-label={`Línea de estados de ${machine.name}: verde produciendo, rojo detenida y gris sin datos`}
+                >
+                  {stateSegments.map((segment) => (
+                    <span
+                      key={`${segment.start}-${segment.state}`}
+                      className={`injection-state-history__segment is-${segment.state}`}
+                      style={{ flexGrow: segment.end - segment.start }}
+                      title={`${segment.state === 'producing' ? 'Produciendo' : segment.state === 'stopped' ? 'Detenida' : 'Sin datos'} · ${time(new Date(segment.start).toISOString())} a ${time(new Date(segment.end).toISOString())}`}
+                    />
+                  ))}
+                </div>
+                <div className="injection-state-history__legend">
+                  <span>
+                    <i className="is-producing" /> Produciendo
+                  </span>
+                  <span>
+                    <i className="is-stopped" /> Detenida
+                  </span>
+                  <span>
+                    <i className="is-unknown" /> Sin datos
+                  </span>
+                </div>
+                <p>
+                  Los cambios se registran desde la activación de esta serie. Los intervalos sin
+                  lecturas recientes quedan en gris; no se infiere una detención.
+                </p>
+                <ol className="injection-state-history__events">
+                  {stateSegments
+                    .filter(
+                      (segment, index) =>
+                        index === 0 || segment.state !== stateSegments[index - 1].state
+                    )
+                    .slice(-30)
+                    .reverse()
+                    .map((segment) => (
+                      <li key={`${segment.start}-${segment.state}`}>
+                        <time dateTime={new Date(segment.start).toISOString()}>
+                          {time(new Date(segment.start).toISOString())}
+                        </time>
+                        <strong>
+                          {segment.state === 'producing'
+                            ? 'Produciendo'
+                            : segment.state === 'stopped'
+                              ? 'Detenida'
+                              : 'Sin datos'}
+                        </strong>
+                      </li>
+                    ))}
+                </ol>
+              </div>
             ) : (
               <div
                 className="injection-history__chart"
@@ -609,6 +713,100 @@ function Details({
                 </ResponsiveContainer>
               </div>
             )}
+            {!simulated && (
+              <section className="injection-cms-shots">
+                <h4>Disparos históricos de CMS</h4>
+                {cmsShots.isPending ? (
+                  <p>Consultando shot_data y shot_data_rec…</p>
+                ) : cmsShots.isError || cmsFirst?.status === 'UNAVAILABLE' ? (
+                  <p>No se pudo consultar la base de datos CMS.</p>
+                ) : cmsFirst?.status === 'CONFIGURATION_PENDING' ? (
+                  <p>Falta configurar la conexión de solo lectura a CMS.</p>
+                ) : cmsFirst?.status === 'NO_CURRENT_FILE' ? (
+                  <p>Esperando un nombre de archivo actual y reciente de esta inyectora.</p>
+                ) : (
+                  <>
+                    <p>
+                      Archivo actual: <strong>{cmsFirst?.file}</strong>. Coincidencia por nombre de
+                      archivo; el CMS no guarda la IP en estos disparos y un molde pudo haberse
+                      usado antes en otra máquina.
+                    </p>
+                    {cmsRows.length === 0 ? (
+                      <p>No hay disparos guardados con ese nombre de archivo.</p>
+                    ) : (
+                      <>
+                        <p>
+                          Último disparo guardado con este archivo: {time(cmsRows[0].timestamp)}.
+                          {Date.now() - Date.parse(cmsRows[0].timestamp) > 5 * 60_000 &&
+                            ' La captura de disparos no está al día con el contador actual.'}
+                        </p>
+                        <p>
+                          {cmsRows.length} disparos mostrados, sin contar inserciones duplicadas.
+                        </p>
+                        <ol className="injection-cms-shots__list">
+                          {cmsRows.map((row) => (
+                            <li key={row.idx}>
+                              <details>
+                                <summary>
+                                  <time dateTime={row.timestamp}>{time(row.timestamp)}</time>
+                                  <strong>Disparo {number(row.shotNumber)}</strong>
+                                  <span>Ciclo {number(row.cycleTime, 1)} s</span>
+                                </summary>
+                                <dl>
+                                  <div>
+                                    <dt>Cavidades</dt>
+                                    <dd>{number(row.cavity)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Inyección</dt>
+                                    <dd>{number(row.injectionTime, 2)} s</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Presión máxima</dt>
+                                    <dd>{number(row.maxInjectionPressure, 1)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Peso de resina</dt>
+                                    <dd>{number(row.resinWeight, 2)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Receta vinculada</dt>
+                                    <dd>{row.recipeLinked ? 'Sí' : 'No'}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Velocidad programada</dt>
+                                    <dd>{text(row.recipeInjVelocity)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Presión programada</dt>
+                                    <dd>{text(row.recipeInjPressure)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Temperaturas programadas</dt>
+                                    <dd>{text(row.recipeBarrelTemperature)}</dd>
+                                  </div>
+                                </dl>
+                              </details>
+                            </li>
+                          ))}
+                        </ol>
+                        {cmsShots.hasNextPage && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={cmsShots.isFetchingNextPage}
+                            onClick={() => void cmsShots.fetchNextPage()}
+                          >
+                            {cmsShots.isFetchingNextPage ? 'Cargando…' : 'Cargar más disparos'}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
           </section>
         )}
       </aside>
@@ -619,8 +817,6 @@ function Details({
 export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
   const { active, isLoading } = useActivePlant({ enabled: !tv });
   const [selected, setSelected] = useState<string | null>(null);
-  const [flashShot, setFlashShot] = useState<string | null>(null);
-  const lastShots = useRef<Record<string, number>>({});
   const allowed = tv || active?.code === 'ENVASES';
   const query = useQuery({
     queryKey: ['plant-injection-machines', tv ? 'public' : active?.id],
@@ -639,20 +835,6 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
   const snapshot = query.data;
   const simulated = snapshot?.simulated === true;
   const machines = useMemo(() => snapshot?.machines ?? [], [snapshot?.machines]);
-  useEffect(() => {
-    let changed: string | null = null;
-    for (const machine of machines) {
-      const shot = machine.ultimo_ciclo_tecnico?.shot_number;
-      if (shot == null) continue;
-      if (lastShots.current[machine.code] !== undefined && lastShots.current[machine.code] !== shot)
-        changed = machine.code;
-      lastShots.current[machine.code] = shot;
-    }
-    if (!changed) return;
-    setFlashShot(changed);
-    const timeout = window.setTimeout(() => setFlashShot(null), 1500);
-    return () => window.clearTimeout(timeout);
-  }, [machines]);
   const selectedMachine = machines.find((machine) => machine.code === selected);
   if (!tv && !isLoading && !allowed)
     return (
@@ -681,10 +863,11 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           const r = machine.reading;
           const live =
             machine.cmsFresh && machine.communicationFresh && snapshot?.communication === 'RECENT';
-          const mode = r?.operation_status_text?.trim().toUpperCase();
-          const motor = r?.motor_status_text?.trim().toUpperCase();
           const hasAlarm = live && r?.alarm_status_code != null && r.alarm_status_code !== 0;
-          const producing = isProducing(machine, snapshot);
+          const { label: operatingState, cardClass: cardState } = injectionMachineState(
+            live,
+            r?.operation_status_text
+          );
           const loadedFile = machine.ultimo_ciclo_tecnico?.mold_name?.trim();
           const fileLabel =
             r?.telemetry_origin === 'DBS_API' ? 'Archivo actual' : 'Archivo del último ciclo';
@@ -694,22 +877,6 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                 ? r.current_file_name?.trim() || 'No informado por DBS'
                 : 'Sin datos recientes'
               : loadedFile || 'No vinculado';
-          const cardState = !live
-            ? 'is-stale'
-            : mode === 'PARO' || mode === 'MANUAL' || motor === 'STOP' || hasAlarm
-              ? 'is-stopped'
-              : producing
-                ? 'is-producing'
-                : 'is-live';
-          const operatingState = !live
-            ? 'Sin datos recientes'
-            : hasAlarm
-              ? 'Alarma'
-              : mode === 'PARO' || mode === 'MANUAL' || motor === 'STOP'
-                ? 'Detenida'
-                : producing
-                  ? 'Produciendo'
-                  : 'En marcha';
           const state = !r
             ? 'Sin datos'
             : snapshot?.communication !== 'RECENT'
@@ -746,6 +913,10 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                   <span className="injection-state">{operatingState}</span>
                   <div className="injection-tv-status">
                     <span>
+                      Operación{' '}
+                      <strong>{live ? text(r?.operation_status_text) : 'Sin datos'}</strong>
+                    </span>
+                    <span>
                       Motor <strong>{live ? text(r?.motor_status_text) : 'Sin datos'}</strong>
                     </span>
                     <span>
@@ -781,52 +952,34 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       </strong>
                     </div>
                     <div>
-                      <small>
-                        PROMEDIO {r?.telemetry_origin === 'DBS_API' ? 'DBS' : 'CMS'} / H
-                      </small>
+                      <small>VELOCIDAD PROMEDIO · ENVASES/H</small>
                       <strong>
                         {live && r?.avg_quantity_per_hour != null
                           ? number(r.avg_quantity_per_hour, 1)
                           : 'Sin datos'}
                       </strong>
                     </div>
-                    <div>
-                      <small>TOTAL REPORTADO CMS</small>
-                      <strong>
-                        {live && r?.total_quantity != null ? number(r.total_quantity) : 'Sin datos'}
-                      </strong>
-                    </div>
-                    <div>
-                      <small>ÚLTIMO DISPARO</small>
-                      <strong
-                        className={flashShot === machine.code ? 'injection-shot-flash' : undefined}
-                      >
-                        {live && machine.ultimo_ciclo_tecnico
-                          ? number(machine.ultimo_ciclo_tecnico.shot_number)
-                          : 'Sin vincular'}
-                      </strong>
-                    </div>
-                    <div>
-                      <small>CAVIDADES</small>
-                      <strong>
-                        {live && machine.ultimo_ciclo_tecnico
-                          ? number(machine.ultimo_ciclo_tecnico.cavity)
-                          : 'Sin vincular'}
-                      </strong>
-                    </div>
+                    {live && r?.production_time_hour != null && r.production_time_min != null ? (
+                      <div>
+                        <small>TIEMPO DE PRODUCCIÓN</small>
+                        <strong>
+                          {number(r.production_time_hour)} h {number(r.production_time_min)} min
+                        </strong>
+                      </div>
+                    ) : null}
                   </div>
                   <p className="injection-activity">
-                    <strong className={producing ? 'is-recent' : ''}>
-                      {producing
-                        ? 'Producción detectada'
-                        : live
-                          ? 'Sin incremento reciente'
-                          : 'Producción sin confirmar'}
+                    <strong className={live && machine.counterRecent ? 'is-recent' : ''}>
+                      {live
+                        ? machine.counterRecent
+                          ? 'Incremento reciente del contador'
+                          : 'Sin incremento reciente del contador'
+                        : 'Actividad sin confirmar'}
                     </strong>
                   </p>
-                  {live && r?.alarm_status_code != null && r.alarm_status_code !== 0 && (
-                    <p className="injection-tv-alarm">
-                      Alarma reportada · código {r.alarm_status_code}
+                  {hasAlarm && (
+                    <p className="injection-tv-alarm" role="alert">
+                      Alarma reportada · código {r?.alarm_status_code} · {alarmDescription(r)}
                     </p>
                   )}
                 </>
@@ -912,9 +1065,13 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       {text(r?.tipo_cambio_contador)}
                     </span>
                     <span>Último incremento: {time(r?.ultimo_incremento_detectado)}</span>
-                    <span>Alarma reportada: código {text(r?.alarm_status_code)}</span>
                     <span>Adquisición industrial: {text(r?.adquisicion_industrial_fresca)}</span>
                   </div>
+                  {hasAlarm && (
+                    <p className="injection-tv-alarm" role="alert">
+                      Alarma reportada · código {r?.alarm_status_code} · {alarmDescription(r)}
+                    </p>
+                  )}
                   <div className="tank-actions injection-card__actions">
                     <Button
                       type="button"

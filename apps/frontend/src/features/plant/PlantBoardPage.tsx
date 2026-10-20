@@ -847,8 +847,8 @@ export function PlantBoardPage({
                           </>
                         )
                       ) : null}
-                      {tank.activeLot?.specificWeight ? (
-                        <div>
+                      {tank.activeLot?.specificWeight != null ? (
+                        <div className="tank-specific-weight">
                           <dt>P. específico</dt>
                           <dd>{tank.activeLot.specificWeight}</dd>
                         </div>

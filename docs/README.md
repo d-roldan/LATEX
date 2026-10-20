@@ -48,7 +48,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.46](releases/RELEASE_NOTES_V0.0.46.md): lectura DBS de cinco inyectoras y corrección de formato para la CI.
+- [Versión vigente · V0.0.47](releases/RELEASE_NOTES_V0.0.47.md): mejoras de TV, estado histórico Woojin y consulta de disparos CMS por archivo actual.
 
 ## Criterio de actualización
 

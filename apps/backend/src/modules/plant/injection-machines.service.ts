@@ -14,6 +14,7 @@ import {
 } from './dto/injection-machine.dto';
 import { PlantIntegrationAuthService } from './plant-integration-auth.service';
 import { InjectionHistoryMetric, InjectionHistoryService } from './injection-history.service';
+import { InjectionCmsHistoryService } from './injection-cms-history.service';
 import {
   INJECTION_PLANT_CODE,
   INJECTION_SIM_SOURCE,
@@ -47,7 +48,8 @@ export class InjectionMachinesService {
     private readonly prisma: PrismaService,
     private readonly integrationAuth: PlantIntegrationAuthService,
     private readonly config: ConfigService,
-    @Optional() private readonly history?: InjectionHistoryService
+    @Optional() private readonly history?: InjectionHistoryService,
+    @Optional() private readonly cmsHistory?: InjectionCmsHistoryService
   ) {}
 
   async receive(plantCode: string, key: string | undefined, dto: InjectionMachineBatchDto) {
@@ -234,7 +236,7 @@ export class InjectionMachinesService {
     if (
       !machine ||
       ![INJECTION_SOURCE, INJECTION_SIM_SOURCE].includes(source) ||
-      !['cycle', 'quantity', 'temperature'].includes(metric) ||
+      !['cycle', 'quantity', 'temperature', 'state'].includes(metric) ||
       ![1, 6, 24, 72, 168].includes(hours) ||
       !Number.isInteger(zone) ||
       zone < 1 ||
@@ -255,6 +257,44 @@ export class InjectionMachinesService {
     return this.history
       ? this.history.read(code, source, metric as InjectionHistoryMetric, hours, zone)
       : { status: 'CONFIGURATION_PENDING', message: 'Historial no configurado.', points: [] };
+  }
+
+  async privateCmsShots(
+    companyId: string,
+    userId: string,
+    plantCode: string,
+    code: string,
+    beforeText?: string
+  ) {
+    this.assertCode(plantCode);
+    const machine = injectionMachines.find((item) => item.code === code && item.visible);
+    const before = beforeText === undefined ? undefined : Number(beforeText);
+    if (!machine || (before !== undefined && (!Number.isSafeInteger(before) || before < 1)))
+      throw new BadRequestException('Consulta de disparos inválida');
+    const plant = await this.prisma.plant.findFirst({
+      where: {
+        companyId,
+        code: INJECTION_PLANT_CODE,
+        isActive: true,
+        userAccesses: { some: { userId } }
+      }
+    });
+    if (!plant) throw new NotFoundException('Planta no encontrada o no autorizada');
+    const cached = this.latest.get(`${plant.id}:${INJECTION_SOURCE}:${machine.code}`);
+    const file = cached?.reading.current_file_name?.trim();
+    const observedAt = cached?.receivedAt ?? null;
+    if (!file || !observedAt || Date.now() - Date.parse(observedAt) > 120_000)
+      return {
+        status: 'NO_CURRENT_FILE',
+        file: file ?? null,
+        fileObservedAt: observedAt,
+        rows: [],
+        nextCursor: null
+      };
+    const result = this.cmsHistory
+      ? await this.cmsHistory.readByFile(file, before)
+      : { status: 'CONFIGURATION_PENDING', file, rows: [], nextCursor: null };
+    return { ...result, fileObservedAt: observedAt };
   }
 
   private snapshot(plantId: string) {

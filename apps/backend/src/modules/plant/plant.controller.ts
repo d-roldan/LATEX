@@ -167,6 +167,17 @@ export class PlantScopedController {
       zone
     );
   }
+  @Get(':plantCode/injection-machines/:code/cms-shots')
+  @Header('Cache-Control', 'no-store')
+  @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
+  injectionCmsShots(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') plantCode: string,
+    @Param('code') code: string,
+    @Query('before') before?: string
+  ) {
+    return this.injectionMachines.privateCmsShots(u.companyId, u.sub, plantCode, code, before);
+  }
   @Get(':plantCode/config')
   @Roles('FABRICACION', 'LABORATORIO', 'ENVASADO', 'MONITOREO', 'JEFATURA', 'ADMIN')
   config(@CurrentUser() u: JwtUser, @Param('plantCode') c: string) {

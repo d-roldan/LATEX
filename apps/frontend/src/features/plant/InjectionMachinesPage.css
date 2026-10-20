@@ -381,6 +381,56 @@
 .injection-history {
   grid-column: 1 / -1;
 }
+.injection-state-history__bar {
+  display: flex;
+  width: 100%;
+  height: 2rem;
+  overflow: hidden;
+  border-radius: 0.45rem;
+  background: #64748b;
+}
+.injection-state-history__segment {
+  min-width: 0;
+}
+.injection-state-history__segment.is-producing,
+.injection-state-history__legend .is-producing {
+  background: #22a55b;
+}
+.injection-state-history__segment.is-stopped,
+.injection-state-history__legend .is-stopped {
+  background: #dd4b46;
+}
+.injection-state-history__segment.is-unknown,
+.injection-state-history__legend .is-unknown {
+  background: #64748b;
+}
+.injection-state-history__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.65rem;
+}
+.injection-state-history__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.injection-state-history__legend i {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 0.2rem;
+}
+.injection-state-history__events {
+  max-height: 13rem;
+  overflow: auto;
+  padding-left: 1.5rem;
+}
+.injection-state-history__events li {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+}
 .injection-history > p {
   margin: 0.3rem 0 0.8rem;
   color: var(--color-text);
@@ -409,6 +459,35 @@
   width: 100%;
   height: min(48vh, 430px);
   min-height: 250px;
+}
+.injection-cms-shots {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+.injection-cms-shots h4 {
+  margin: 0 0 0.5rem;
+}
+.injection-cms-shots__list {
+  max-height: 26rem;
+  overflow: auto;
+  padding-left: 1.6rem;
+}
+.injection-cms-shots__list li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.injection-cms-shots__list summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  cursor: pointer;
+}
+.injection-cms-shots__list summary::before {
+  content: '▸';
+}
+.injection-cms-shots__list details[open] summary::before {
+  content: '▾';
 }
 :root[data-theme='light'] .injection-page {
   color: var(--color-text);
@@ -685,20 +764,6 @@
   overflow-wrap: anywhere;
   font-size: clamp(0.95rem, 1.1vw, 1.4rem);
   font-variant-numeric: tabular-nums;
-}
-@keyframes injection-shot-update {
-  50% {
-    color: #ffdc60;
-    text-shadow: 0 0 0.5rem #ffdc60;
-  }
-}
-.injection-shot-flash {
-  animation: injection-shot-update 1.5s ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  .injection-shot-flash {
-    animation: none;
-  }
 }
 .injection-page--tv .injection-activity {
   margin: 0;

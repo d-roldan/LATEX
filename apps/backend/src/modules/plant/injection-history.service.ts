@@ -5,12 +5,13 @@ import {
   InjectionTechnicalCycleDto
 } from './dto/injection-machine.dto';
 
-export type InjectionHistoryMetric = 'cycle' | 'quantity' | 'temperature';
+export type InjectionHistoryMetric = 'cycle' | 'quantity' | 'temperature' | 'state';
 type HistoryStatus = 'AVAILABLE' | 'NO_DATA' | 'CONFIGURATION_PENDING' | 'UNAVAILABLE';
 
 @Injectable()
 export class InjectionHistoryService {
   private readonly logger = new Logger(InjectionHistoryService.name);
+  private readonly lastState = new Map<string, { value: number; timestamp: number }>();
 
   constructor(private readonly config: ConfigService) {}
 
@@ -25,6 +26,15 @@ export class InjectionHistoryService {
     if (!connection) return false;
     const lines: string[] = [];
     const timestamp = Date.parse(reading.cms_timestamp);
+    const state = this.operatingState(reading.operation_status_text);
+    const stateKey = `${source}:${code}`;
+    const lastState = this.lastState.get(stateKey);
+    const writeState =
+      writeStatus &&
+      reading.cms_row_fresh !== false &&
+      Number.isFinite(timestamp) &&
+      state !== null &&
+      (!lastState || lastState.value !== state || timestamp - lastState.timestamp >= 30_000);
     if (writeStatus && reading.cms_row_fresh !== false && Number.isFinite(timestamp)) {
       const fields = this.fields({
         cycle_current: reading.cycle_time_current,
@@ -37,6 +47,10 @@ export class InjectionHistoryService {
       });
       if (fields)
         lines.push(`woojin_status,machine=${code},source=${source} ${fields} ${timestamp}`);
+      if (writeState)
+        lines.push(
+          `woojin_operating_state,machine=${code},source=${source} producing=${state}i ${timestamp}`
+        );
       if (reading.telemetry_origin === 'DBS_API') {
         const temperatureFields: Record<string, number | null | undefined> = {};
         for (const item of reading.dbs_temperature_zones ?? []) {
@@ -85,6 +99,7 @@ export class InjectionHistoryService {
         }
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (writeState) this.lastState.set(stateKey, { value: state!, timestamp });
       return true;
     } catch (error) {
       this.logger.warn(`No se pudo registrar el historial Woojin: ${String(error)}`);
@@ -103,24 +118,35 @@ export class InjectionHistoryService {
     const empty = (status: HistoryStatus, message: string) => ({ status, message, points: [] });
     if (!connection)
       return empty('CONFIGURATION_PENDING', 'Falta configurar el bucket histórico de ENVASES.');
-    const measurement = metric === 'temperature' ? 'woojin_shot' : 'woojin_status';
+    const measurement =
+      metric === 'temperature'
+        ? 'woojin_shot'
+        : metric === 'state'
+          ? 'woojin_operating_state'
+          : 'woojin_status';
     const fields =
-      metric === 'cycle'
-        ? ['cycle_current']
-        : metric === 'quantity'
-          ? ['current_quantity']
-          : zone === 8
-            ? ['hopper_target', 'hopper_measured']
-            : zone > 8
-              ? [`mold_${zone - 8}_target`, `mold_${zone - 8}_measured`]
-              : [`barrel_${zone}_target`, `barrel_${zone}_measured`];
+      metric === 'state'
+        ? ['producing']
+        : metric === 'cycle'
+          ? ['cycle_current']
+          : metric === 'quantity'
+            ? ['current_quantity']
+            : zone === 8
+              ? ['hopper_target', 'hopper_measured']
+              : zone > 8
+                ? [`mold_${zone - 8}_target`, `mold_${zone - 8}_measured`]
+                : [`barrel_${zone}_target`, `barrel_${zone}_measured`];
     const escapedBucket = this.escapeFlux(connection.bucket);
     const query = [
       `from(bucket: "${escapedBucket}")`,
       `  |> range(start: -${hours}h)`,
       `  |> filter(fn: (r) => r._measurement == "${measurement}" and r.machine == "${code}" and r.source == "${source}")`,
       `  |> filter(fn: (r) => ${fields.map((field) => `r._field == "${field}"`).join(' or ')})`,
-      `  |> aggregateWindow(every: ${Math.max(1, Math.ceil((hours * 60) / 360))}m, fn: last, createEmpty: false)`,
+      ...(metric === 'state'
+        ? []
+        : [
+            `  |> aggregateWindow(every: ${Math.max(1, Math.ceil((hours * 60) / 360))}m, fn: last, createEmpty: false)`
+          ]),
       '  |> keep(columns: ["_time", "_field", "_value"])',
       '  |> group()',
       '  |> sort(columns: ["_time"])'
@@ -153,7 +179,9 @@ export class InjectionHistoryService {
 
   private connection() {
     const url = this.config.get<string>('INFLUXDB_URL')?.replace(/\/$/, '');
-    const token = this.config.get<string>('INFLUXDB_TOKEN');
+    const token =
+      this.config.get<string>('INFLUXDB_ENVASES_TOKEN') ||
+      this.config.get<string>('INFLUXDB_TOKEN');
     const org = this.config.get<string>('INFLUXDB_ORG');
     const orgId = this.config.get<string>('INFLUXDB_ORG_ID');
     const bucket = this.config.get<string>('INFLUXDB_ENVASES_BUCKET');
@@ -163,6 +191,19 @@ export class InjectionHistoryService {
         ? `org=${encodeURIComponent(org)}`
         : null;
     return url && token && orgQuery && bucket ? { url, token, orgQuery, bucket } : null;
+  }
+
+  private operatingState(mode: string | null | undefined): number | null {
+    switch (mode?.trim().toUpperCase()) {
+      case 'AUTO':
+        return 1;
+      case 'MANUAL':
+      case 'PARO':
+      case 'STOP':
+        return 0;
+      default:
+        return null;
+    }
   }
 
   private fields(values: Record<string, number | null | undefined>): string {

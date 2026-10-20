@@ -12,6 +12,7 @@ import { IntegrationInboxService } from './integration-inbox.service';
 import { PlantIntegrationAuthService } from './plant-integration-auth.service';
 import { InjectionMachinesService } from './injection-machines.service';
 import { InjectionHistoryService } from './injection-history.service';
+import { InjectionCmsHistoryService } from './injection-cms-history.service';
 
 @Module({
   imports: [NotificationsModule],
@@ -27,6 +28,7 @@ import { InjectionHistoryService } from './injection-history.service';
     PlantIntegrationAuthService,
     InjectionMachinesService,
     InjectionHistoryService,
+    InjectionCmsHistoryService,
     IntegrationInboxService
   ]
 })

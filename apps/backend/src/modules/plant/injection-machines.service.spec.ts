@@ -38,6 +38,37 @@ describe('InjectionMachinesService', () => {
     service = new InjectionMachinesService(prisma, auth, config);
   });
 
+  it('consulta disparos sólo del archivo actual tras verificar acceso a ENVASES', async () => {
+    const cmsHistory = {
+      readByFile: jest.fn().mockResolvedValue({
+        status: 'AVAILABLE',
+        file: 'cuerpo_4l_iml_JCA.db',
+        rows: [{ idx: 42 }],
+        nextCursor: null
+      })
+    } as any;
+    service = new InjectionMachinesService(prisma, auth, config, undefined, cmsHistory);
+    await service.receive(
+      'ENVASES',
+      'key',
+      batch([
+        {
+          ...reading('172.16.0.146', new Date().toISOString()),
+          current_file_name: 'cuerpo_4l_iml_JCA.db'
+        }
+      ])
+    );
+    const result = await service.privateCmsShots('empresa', 'usuario', 'ENVASES', 'INY02');
+    expect(result).toMatchObject({ status: 'AVAILABLE', file: 'cuerpo_4l_iml_JCA.db' });
+    expect(cmsHistory.readByFile).toHaveBeenCalledWith('cuerpo_4l_iml_JCA.db', undefined);
+
+    prisma.plant.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.privateCmsShots('empresa', 'sin-acceso', 'ENVASES', 'INY02')
+    ).rejects.toThrow(NotFoundException);
+    expect(cmsHistory.readByFile).toHaveBeenCalledTimes(1);
+  });
+
   it('ordena cinco equipos y conserva ausencia de datos al reiniciar', async () => {
     const snapshot = await service.publicSnapshot('ENVASES');
     expect(snapshot.machines.map((machine) => machine.code)).toEqual([
@@ -99,6 +130,18 @@ describe('InjectionMachinesService', () => {
         'INY01',
         'NODE_RED_ENVASES',
         'cycle',
+        '24',
+        '1'
+      )
+    ).resolves.toMatchObject({ status: 'CONFIGURATION_PENDING' });
+    await expect(
+      service.privateHistory(
+        'empresa',
+        'usuario',
+        'ENVASES',
+        'INY01',
+        'NODE_RED_ENVASES',
+        'state',
         '24',
         '1'
       )
@@ -395,5 +438,27 @@ describe('InjectionMachinesService', () => {
       ]
     });
     expect(await validate(invalidRecipe)).not.toEqual([]);
+  });
+
+  it('acepta una descripción de alarma opcional y la devuelve con el código de la máquina', async () => {
+    const t = new Date(Date.now() - 1000).toISOString();
+    const alarmReading = {
+      ...reading('172.16.0.141', t),
+      alarm_status_code: 204,
+      alarm_status_text: 'Texto informado por la fuente'
+    };
+    const dto = plainToInstance(InjectionMachineBatchDto, batch([alarmReading]));
+    expect(await validate(dto)).toEqual([]);
+    await service.receive('ENVASES', 'key', dto);
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines[4].reading).toMatchObject({
+      alarm_status_code: 204,
+      alarm_status_text: 'Texto informado por la fuente'
+    });
+    const invalid = plainToInstance(InjectionMachineBatchDto, {
+      ...batch([alarmReading]),
+      maquinas: [{ ...alarmReading, alarm_status_text: 'x'.repeat(201) }]
+    });
+    expect(await validate(invalid)).not.toEqual([]);
   });
 });

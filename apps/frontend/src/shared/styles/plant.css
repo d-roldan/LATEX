@@ -4325,6 +4325,43 @@ body {
   }
 }
 
+/* Todas las tarjetas secundarias de la TV de Envasado comparten los recuadros. */
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) .tank-card__content {
+  padding-right: 0.9rem;
+}
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) .tank-gauge,
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) .tank-capacity,
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) dl .tank-description {
+  display: none;
+}
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) dl div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--state) 45%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--state) 9%, transparent);
+}
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) dl div:first-child,
+.plant-tv
+  .plant-page--tv-envasado
+  .tank-card:not(.tank-card--tv-featured)
+  dl
+  .tank-specific-weight {
+  grid-column: 1 / -1;
+}
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) dt,
+.plant-tv .plant-page--tv-envasado .tank-card:not(.tank-card--tv-featured) dd {
+  text-align: center;
+}
+
 /* En la TV de Envasado, las tarjetas secundarias aprovechan todo su ancho. */
 @media (min-width: 1100px) and (min-height: 650px) {
   .plant-tv
@@ -4381,12 +4418,11 @@ body {
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card:not(.tank-card--tv-featured)
     dl {
-    display: flex;
+    display: grid;
     width: 100%;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 0.1rem 0.55rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: center;
+    gap: clamp(0.12rem, 0.35vh, 0.35rem);
     margin: 0.15rem 0 0;
     padding: 0;
   }
@@ -4396,17 +4432,27 @@ body {
     dl
     div {
     display: flex;
-    align-items: baseline;
-    gap: 0.2rem;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.05rem;
     min-width: 0;
+    padding: clamp(0.1rem, 0.3vh, 0.3rem) 0.2rem;
+    border: 1px solid color-mix(in srgb, var(--state) 45%, transparent);
+    border-radius: 0.45rem;
+    background: color-mix(in srgb, var(--state) 9%, transparent);
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card:not(.tank-card--tv-featured)
     dl
-    div:first-child {
-    flex: 0 0 100%;
-    justify-content: center;
+    div:first-child,
+  .plant-tv
+    .plant-page--monitoreo.plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured)
+    dl
+    .tank-specific-weight {
+    grid-column: auto;
   }
   .plant-tv
     .plant-page--monitoreo.plant-page--tv-packaging-active
@@ -4419,83 +4465,22 @@ body {
     .plant-page--monitoreo.plant-page--tv-packaging-active
     .tank-card:not(.tank-card--tv-featured)
     dd {
-    font-size: clamp(0.88rem, 1vw, 1.2rem);
-    white-space: nowrap;
+    max-width: 100%;
+    font-size: clamp(0.8rem, 0.95vw, 1.15rem);
+    text-align: center;
+    white-space: normal;
   }
 
   .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    .tank-card__content {
-    justify-content: space-evenly;
-    padding: clamp(0.7rem, 1.2vh, 1rem) clamp(0.6rem, 0.9vw, 1rem);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    h2 {
-    font-size: clamp(1.3rem, 1.5vw, 1.85rem);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    .tank-state {
-    padding: 0.4rem 0.5rem;
-    font-size: clamp(1rem, 1.1vw, 1.4rem);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    .tank-weight {
-    font-size: clamp(2.5rem, 3.1vw, 4rem);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    dl {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35rem;
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    dl
-    div {
-    min-width: 0;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.12rem;
-    padding: 0.35rem;
-    border: 1px solid color-mix(in srgb, var(--state) 45%, transparent);
-    border-radius: 0.45rem;
-    background: color-mix(in srgb, var(--state) 9%, transparent);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    dl
-    div:first-child {
-    grid-column: 1 / -1;
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    dt {
-    font-size: clamp(0.8rem, 0.95vw, 1.1rem);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured):nth-child(8)
-    dd {
-    font-size: clamp(1rem, 1.25vw, 1.5rem);
-  }
-  .plant-tv
-    .plant-page--monitoreo.plant-page--tv-packaging-active
+    .plant-page--tv-packaging-active
     .tank-card:not(.tank-card--tv-featured)
     dl
-    div:nth-child(n + 4) {
+    .tank-description,
+  .plant-tv
+    .plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured)
+    dl
+    div:nth-child(n + 4):not(.tank-specific-weight) {
     display: none;
   }
 }
@@ -4601,7 +4586,7 @@ body {
     .plant-page--tv-packaging-active
     .tank-card:not(.tank-card--tv-featured)
     .tank-card__content {
-    padding: 0.35rem 2.5rem 0.3rem 0.45rem;
+    padding: 0.35rem 0.5rem 0.3rem;
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) h2 {
     font-size: 0.78rem;
@@ -4610,16 +4595,13 @@ body {
     font-size: clamp(1.3rem, 2vw, 2rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) dl {
-    gap: 0.03rem;
+    gap: clamp(0.12rem, 0.35vh, 0.35rem);
     margin-top: 0.1rem;
     padding-top: 0;
   }
-  .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) dl div {
-    grid-template-columns: 3rem minmax(0, 1fr);
-  }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) dt,
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) dd {
-    font-size: 0.6rem;
+    font-size: clamp(0.62rem, min(0.8vw, 1.4vh), 0.9rem);
   }
   .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) .tank-gauge,
   .plant-tv
@@ -4627,6 +4609,80 @@ body {
     .tank-card:not(.tank-card--tv-featured)
     .tank-capacity {
     display: none;
+  }
+}
+
+/* Las tarjetas de una sola fila muestran todos sus datos en una fila de recuadros. */
+@media (min-width: 1100px) and (min-height: 650px) {
+  .plant-tv
+    .plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured):is(
+      :nth-child(4),
+      :nth-child(5),
+      :nth-child(6),
+      :nth-child(7),
+      :nth-child(9)
+    )
+    .tank-card__content {
+    justify-content: space-between;
+    padding-block: 0.2rem;
+  }
+  .plant-tv
+    .plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured):is(
+      :nth-child(4),
+      :nth-child(5),
+      :nth-child(6),
+      :nth-child(7),
+      :nth-child(9)
+    )
+    dl {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.15rem;
+    margin-top: 0;
+  }
+  .plant-tv
+    .plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured):is(
+      :nth-child(4),
+      :nth-child(5),
+      :nth-child(6),
+      :nth-child(7),
+      :nth-child(9)
+    )
+    dl
+    > div {
+    flex: 1 1 0;
+    padding: 0.15rem 0.1rem;
+  }
+  .plant-tv
+    .plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured):is(
+      :nth-child(4),
+      :nth-child(5),
+      :nth-child(6),
+      :nth-child(7),
+      :nth-child(9)
+    )
+    dt {
+    font-size: clamp(0.55rem, 0.7vw, 0.78rem);
+    line-height: 1.05;
+    white-space: normal;
+  }
+  .plant-tv
+    .plant-page--tv-packaging-active
+    .tank-card:not(.tank-card--tv-featured):is(
+      :nth-child(4),
+      :nth-child(5),
+      :nth-child(6),
+      :nth-child(7),
+      :nth-child(9)
+    )
+    dd {
+    font-size: clamp(0.62rem, 0.85vw, 0.94rem);
+    line-height: 1.05;
   }
 }
 
@@ -4642,21 +4698,6 @@ body {
 
 :root[data-theme='light'] .plant-tv-lab-status {
   color: #745000;
-}
-
-@media (min-width: 1100px) and (min-height: 650px) {
-  .plant-tv
-    .plant-page--tv-packaging-active
-    .tank-card:not(.tank-card--tv-featured)
-    dl
-    div:nth-child(n + 4) {
-    display: none;
-  }
-  .plant-tv .plant-page--tv-packaging-active .tank-card:not(.tank-card--tv-featured) dd {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 }
 
 /* El tanque que se envasa usa el alto completo de su tarjeta para sus datos. */

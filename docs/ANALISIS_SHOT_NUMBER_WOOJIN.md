@@ -47,9 +47,19 @@ Cuando producción indique qué molde corre en cada IP, conviene anclar la secue
 
 ## ¿Se puede identificar la IP con este patrón?
 
+**Comprobación de solo lectura del 19/10/2026:** en la sesión abierta de HeidiSQL, `shot_data` tenía 145.917 filas y último `TimeStamp=2026-10-19 16:09:31` al inicio de la consulta. Las filas nuevas de ese día correspondían únicamente a `cuerpo_4l_iml_JCA.db` (653 filas al consultar; el origen siguió avanzando) y conservaban `Machine_Name='-'`. El archivo estaba cargado en la IP `172.16.0.144` según la lectura DBS contemporánea, pero `real_data`/DBS muestra `current_quantity`, no el mismo valor que `Shot_Number` de `shot_data`. La coincidencia de archivo y fecha no constituye todavía un ancla de contador. No se importó ni asignó ninguna de esas filas a una tarjeta.
+
+Una segunda comprobación a las 16:25 confirmó que los números visibles en las cinco máquinas (44.101, 60.843, 42.622, 8.454 y 14.870) son del orden de `real_data.Current_Quantity`: a esa hora la tabla marcaba respectivamente 44.108, 60.848, 42.625, 8.456 y 14.871. Ninguno de los diez números consecutivos proporcionados aparecía como `shot_data.Shot_Number` ni como `shot_data_rec.Shot_Number`; las últimas filas de ambas tablas seguían en 919.551 a las 16:16. Son **contadores distintos** y no se debe emparejarlos por igualdad. La captura de disparos llevaba unos nueve minutos sin avanzar aunque `real_data` sí se actualizaba. También se revisaron `setting_log`, `alarm_log` y `ashot_data`: las dos primeras conservan `Machine_Name='-'` y la última está vacía, por lo que no aportan el vínculo faltante.
+
+A las 16:42, `real_data` seguía actualizando las cinco IP, pero `shot_data` y `shot_data_rec` permanecían en 145.937 filas y `TimeStamp=16:16:31`. La diferencia ya era de unos 26 minutos. La aplicación puede leer y mostrar los registros existentes por archivo; la reanudación de la captura de disparos depende de CMS y no se consigue con una consulta del dashboard.
+
+La conexión por comandos se puede repetir con `python scripts/cms-readonly.py status`, `shots --file <archivo>` o `shot <número>`. El script pide la contraseña localmente o lee `CMS_DB_PASSWORD`, abre una transacción de solo lectura y no modifica tablas. El usuario `cms` facilitado tiene `ALL PRIVILEGES` en MariaDB; para una integración permanente conviene sustituirlo por una cuenta `SELECT` limitada a `disal_cms`.
+
 **No todavía con certeza.** `itgr_machine_list` une cada `Machine_IP` con un modelo (`Machine_Nickname`), pero `shot_data` y `shot_data_rec` tienen `Machine_Name = '-'` en todos los registros relevados y no contienen IP. Durante esta consulta de fin de semana, los contadores actuales de `real_data` estaban en cero; tampoco aportaban un número de disparo para anclar una trayectoria.
 
 La continuidad del contador puede servir para **extender una atribución comprobada**, no para inventar la primera atribución. El siguiente ensayo de solo lectura debe hacerse durante producción:
+
+Mientras se obtiene esa atribución, el popup permite explorar las filas de `shot_data`/`shot_data_rec` cuyo `Additional_Info_1` coincide exactamente con el archivo actual informado para una inyectora. Es una **selección por molde**, no una asignación histórica definitiva por IP. Al 19/10/2026 había 48.777 filas de `cuerpo_4l_iml_JCA.db` y 14.250 de `tapa10lts_13_10_2024.db`; los otros tres archivos actuales informados no tenían filas. Los registros se consultan en páginas, sin actualizar `Machine_Name` ni etiquetar por IP en InfluxDB.
 
 1. Obtener del panel de CMS o de cada inyectora su **número de disparo actual**, archivo y hora, junto con la IP/modelo confirmado en `itgr_machine_list`.
 2. Comprobar varios disparos consecutivos de esa máquina contra `shot_data` y `shot_data_rec`, cotejando número, timestamp, archivo y tiempo de ciclo. Repetir para las cinco IP. Si CMS puede escribir `Machine_Name`, verificar también ese campo en un disparo nuevo de cada equipo.
