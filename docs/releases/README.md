@@ -8,17 +8,18 @@ Para la próxima versión, seguir [el procedimiento de publicación](../RELEASE_
 
 | Versión                             | Fecha      | Contenido principal                                                                                                                       |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [V0.0.47](RELEASE_NOTES_V0.0.47.md) | 20/10/2026 | TV de Látex y ENVASES, estado histórico Woojin, disparos CMS por archivo actual y espejo DBS local.                                      |
-| [V0.0.46](RELEASE_NOTES_V0.0.46.md) | 19/10/2026 | Corrección del formato del DTO para la CI; incluye íntegramente la integración DBS de V0.0.45.                                           |
-| [V0.0.45](RELEASE_NOTES_V0.0.45.md) | 19/10/2026 | Lectura DBS de cinco inyectoras Woojin, contrato ENVASES ampliado, temperatura actual/consigna e historial opcional.                     |
-| [V0.0.44](RELEASE_NOTES_V0.0.44.md) | 18/10/2026 | Corrección del formato del DTO Woojin para aprobar el lint de CI de la versión anterior.                                                   |
+| [V0.0.48](RELEASE_NOTES_V0.0.48.md) | 21/10/2026 | Corrección de códigos Woojin por IP y visualización decimal de tiempos en ENVASES.                                                        |
+| [V0.0.47](RELEASE_NOTES_V0.0.47.md) | 20/10/2026 | TV de Látex y ENVASES, estado histórico Woojin, disparos CMS por archivo actual y espejo DBS local.                                       |
+| [V0.0.46](RELEASE_NOTES_V0.0.46.md) | 19/10/2026 | Corrección del formato del DTO para la CI; incluye íntegramente la integración DBS de V0.0.45.                                            |
+| [V0.0.45](RELEASE_NOTES_V0.0.45.md) | 19/10/2026 | Lectura DBS de cinco inyectoras Woojin, contrato ENVASES ampliado, temperatura actual/consigna e historial opcional.                      |
+| [V0.0.44](RELEASE_NOTES_V0.0.44.md) | 18/10/2026 | Corrección del formato del DTO Woojin para aprobar el lint de CI de la versión anterior.                                                  |
 | [V0.0.43](RELEASE_NOTES_V0.0.43.md) | 18/10/2026 | Historial y receta Woojin por inyectora, flujo externo preparado y documentación del origen de temperaturas.                              |
-| [V0.0.42](RELEASE_NOTES_V0.0.42.md) | 17/10/2026 | Planta ENVASES y TV de inyectoras Woojin, simulador Node-RED local, telemetría y autogestión de plantas del administrador.              |
-| [V0.0.41](RELEASE_NOTES_V0.0.41.md) | 16/10/2026 | Corrección de la verificación de tags y lint proporcional en CI; incluye los cambios de aplicación de V0.0.39.                           |
+| [V0.0.42](RELEASE_NOTES_V0.0.42.md) | 17/10/2026 | Planta ENVASES y TV de inyectoras Woojin, simulador Node-RED local, telemetría y autogestión de plantas del administrador.                |
+| [V0.0.41](RELEASE_NOTES_V0.0.41.md) | 16/10/2026 | Corrección de la verificación de tags y lint proporcional en CI; incluye los cambios de aplicación de V0.0.39.                            |
 | [V0.0.40](RELEASE_NOTES_V0.0.40.md) | 16/10/2026 | Corrección de formato del seed de demostración para completar el lint general del backend en CI.                                          |
-| [V0.0.39](RELEASE_NOTES_V0.0.39.md) | 16/10/2026 | OF y OE en TV, PDF del historial por OF, agitación sin materiales y procedimientos de validación y publicación.                            |
-| [V0.0.38](RELEASE_NOTES_V0.0.38.md) | 15/10/2026 | Mejor contraste, distribución y tamaño de los datos del tanque destacado en TV; velocidad en Env/min truncada a dos decimales.          |
-| [V0.0.37](RELEASE_NOTES_V0.0.37.md) | 15/10/2026 | Velocidad Devree, filtros en la pizarra, pantallas TV por sector y perfiles de InfluxDB por planta.                                        |
+| [V0.0.39](RELEASE_NOTES_V0.0.39.md) | 16/10/2026 | OF y OE en TV, PDF del historial por OF, agitación sin materiales y procedimientos de validación y publicación.                           |
+| [V0.0.38](RELEASE_NOTES_V0.0.38.md) | 15/10/2026 | Mejor contraste, distribución y tamaño de los datos del tanque destacado en TV; velocidad en Env/min truncada a dos decimales.            |
+| [V0.0.37](RELEASE_NOTES_V0.0.37.md) | 15/10/2026 | Velocidad Devree, filtros en la pizarra, pantallas TV por sector y perfiles de InfluxDB por planta.                                       |
 | [V0.0.36](RELEASE_NOTES_V0.0.36.md) | 09/10/2026 | Pizarras de fabricación y envasado para Látex, con secuencia global de Devree y autocompletado de OF.                                     |
 | [V0.0.35](RELEASE_NOTES_V0.0.35.md) | 30/09/2026 | Mejoras de interfaz, resumen por OF y gráfico histórico de peso para Sintéticos.                                                          |
 | [V0.0.34](RELEASE_NOTES_V0.0.34.md) | 29/09/2026 | Endpoint consolidado y microcaché compartido para tableros Grafana multiplanta.                                                           |

@@ -23,11 +23,11 @@ Para apagarlo, cambiar `DISAL_ENABLE_ENVASES_SIMULATOR=false` y recrear backend 
 
 | Equipo | IP identificadora | Modelo | Ciclo base | Estado inicial |
 | --- | --- | --- | ---: | --- |
-| INY01 | 172.16.0.141 | DL650G5 | 26 s | AUTO, produce |
-| INY02 | 172.16.0.146 | DL450G5 | 21 s | AUTO, produce |
+| INY05 | 172.16.0.141 | DL650G5 | 26 s | AUTO, produce |
+| INY04 | 172.16.0.146 | DL450G5 | 21 s | AUTO, produce |
 | INY03 | 172.16.0.143 | TB280G5-1 | 24 s | MANUAL, detenido |
-| INY04 | 172.16.0.144 | TB280G5-2 | 21 s | AUTO, produce |
-| INY05 | 172.16.0.145 | TB200G5 | 18 s | PARO, alarma sintética 204 |
+| INY02 | 172.16.0.144 | TB280G5-2 | 21 s | AUTO, produce |
+| INY01 | 172.16.0.145 | TB200G5 | 18 s | PARO, alarma sintética 204 |
 
 Cada tick actualiza timestamp, operación, motor, calefacción, alarma, contadores, tiempos de producción, promedio y diagnóstico. El contador sólo aumenta cuando se completa un ciclo con motor en AUTO y sin alarma. Cada disparo completado cambia ligeramente el ciclo siguiente y actualiza `ultimo_ciclo_tecnico`, su número y timestamp. Al detener la máquina, el último ciclo técnico queda congelado. El lote parcial conserva los otros equipos; cuando se simula pérdida de comunicación de INY04 no se envía lectura para ella, por lo que su señal vence tras el umbral de 30 segundos. El reinicio de contador de INY05 informa delta negativo y `REINICIO_O_RETROCESO_CONTADOR`; no reduce el total acumulado ni crea producción ficticia.
 

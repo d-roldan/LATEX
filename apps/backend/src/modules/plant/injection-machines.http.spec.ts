@@ -104,11 +104,11 @@ describe('ENVASES HTTP', () => {
     expect(snapshot.status).toBe(200);
     const data = await snapshot.json();
     expect(data.machines.map((machine: { code: string }) => machine.code)).toEqual([
-      'INY05',
-      'INY04',
-      'INY03',
+      'INY01',
       'INY02',
-      'INY01'
+      'INY03',
+      'INY04',
+      'INY05'
     ]);
     expect(data.machines[4].reading.current_quantity).toBe(12);
     expect(data.machines[3].reading).toBeNull();

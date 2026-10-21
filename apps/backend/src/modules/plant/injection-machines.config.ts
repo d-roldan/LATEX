@@ -5,7 +5,7 @@ export const INJECTION_SIM_SOURCE = 'NODE_RED_ENVASES_SIM';
 // Catálogo único: para agregar una máquina, incorporar una entrada y reiniciar el backend.
 export const injectionMachines = [
   {
-    code: 'INY01',
+    code: 'INY05',
     name: 'INYECTORA 5',
     model: 'DL650G5',
     ip: '172.16.0.141',
@@ -13,7 +13,7 @@ export const injectionMachines = [
     visible: true
   },
   {
-    code: 'INY02',
+    code: 'INY04',
     name: 'INYECTORA 4',
     model: 'DL450G5',
     ip: '172.16.0.146',
@@ -29,7 +29,7 @@ export const injectionMachines = [
     visible: true
   },
   {
-    code: 'INY04',
+    code: 'INY02',
     name: 'INYECTORA 2',
     model: 'TB280G5-2',
     ip: '172.16.0.144',
@@ -37,7 +37,7 @@ export const injectionMachines = [
     visible: true
   },
   {
-    code: 'INY05',
+    code: 'INY01',
     name: 'INYECTORA 1',
     model: 'TB200G5',
     ip: '172.16.0.145',

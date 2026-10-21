@@ -32,11 +32,11 @@ En una comprobación adicional de solo lectura sobre **todas las filas** del 17/
 
 | Apodo en CMS | IP | Código usado en LATEX |
 | --- | --- | --- |
-| `DL650G5` | `172.16.0.141` | `INY01` |
-| `DL450G5` | `172.16.0.146` | `INY02` |
+| `DL650G5` | `172.16.0.141` | `INY05` |
+| `DL450G5` | `172.16.0.146` | `INY04` |
 | `TB280G5-1` | `172.16.0.143` | `INY03` |
-| `TB280G5-2` | `172.16.0.144` | `INY04` |
-| `TB200G5` | `172.16.0.145` | `INY05` |
+| `TB280G5-2` | `172.16.0.144` | `INY02` |
+| `TB200G5` | `172.16.0.145` | `INY01` |
 
 El código `INYxx` pertenece al catálogo de LATEX; no es una columna de CMS. Las cinco filas de `real_data` tenían `Machine_Name` vacío durante el relevamiento. En `shot_data`, `shot_data_rec`, `alarm_log` y `setting_log`, los registros observados tenían `Machine_Name = '-'`. Por ello, **el esquema y los valores actuales no aportan una unión fiable entre un disparo, un archivo o una alarma y una IP concreta**. No asignar esos históricos a una tarjeta por orden de filas, modelo o coincidencia de hora sin comprobar el origen con CMS/Node-RED.
 

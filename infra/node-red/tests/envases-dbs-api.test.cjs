@@ -79,7 +79,7 @@ test('cada máquina consulta 0 → 8 → 2 y recién entonces prepara el POST', 
   result = run(decode.func, msg, 1300);
   assert.equal(result[0], null);
   const reading = result[1].payload.maquinas[0];
-  assert.equal(reading.equipment_code, 'INY01');
+  assert.equal(reading.equipment_code, 'INY05');
   assert.equal(reading.current_quantity, 42);
   assert.equal(reading.defective_quantity, 2);
   assert.equal(reading.current_file_name, '10litros_jca.db');

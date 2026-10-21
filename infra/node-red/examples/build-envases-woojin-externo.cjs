@@ -62,8 +62,8 @@ node('w5_normalize').func = `if (!Array.isArray(msg.payload)) {
     return [null, null, {payload:{status:'SQL_INVALIDO'}}];
 }
 const catalogo = {
-    '172.16.0.141':'INY01', '172.16.0.146':'INY02',
-    '172.16.0.143':'INY03', '172.16.0.144':'INY04', '172.16.0.145':'INY05'
+    '172.16.0.141':'INY05', '172.16.0.146':'INY04',
+    '172.16.0.143':'INY03', '172.16.0.144':'INY02', '172.16.0.145':'INY01'
 };
 const ahora = Date.now();
 const historial = context.get('envases_contadores') || {};
@@ -376,7 +376,7 @@ if (!enabled || !/^https?:\\/\\/[^/?#]+$/.test(base) || !org || !bucket || !toke
     return [null,{payload:{status:'INFLUX_NO_CONFIGURADO'}}];
 }
 const url = base + '/api/v2/write?org=' + encodeURIComponent(org) + '&bucket=' + encodeURIComponent(bucket) + '&precision=ms';
-const catalog = {'172.16.0.141':['INY01','DL650G5'],'172.16.0.146':['INY02','DL450G5'],'172.16.0.143':['INY03','TB280G5-1'],'172.16.0.144':['INY04','TB280G5-2'],'172.16.0.145':['INY05','TB200G5']};
+const catalog = {'172.16.0.141':['INY05','DL650G5'],'172.16.0.146':['INY04','DL450G5'],'172.16.0.143':['INY03','TB280G5-1'],'172.16.0.144':['INY02','TB280G5-2'],'172.16.0.145':['INY01','TB200G5']};
 const valid = (r) => r && catalog[r.machine_ip] && catalog[r.machine_ip][0] === r.equipment_code && catalog[r.machine_ip][1] === r.modelo;
 const num = (v) => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const str = (v) => typeof v === 'string' ? '"' + v.replace(/\\\\/g,'\\\\\\\\').replace(/"/g,'\\\\"').replace(/\\n/g,' ') + '"' : null;

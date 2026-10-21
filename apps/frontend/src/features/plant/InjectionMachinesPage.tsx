@@ -167,6 +167,13 @@ interface CmsShots {
 
 const number = (value: number | null | undefined, digits = 0) =>
   value == null ? 'No informado' : value.toLocaleString('es-AR', { maximumFractionDigits: digits });
+const seconds = (value: number | null | undefined, digits = 1) =>
+  value == null
+    ? 'No informado'
+    : value.toLocaleString('es-AR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: digits
+      });
 const text = (value: string | number | null | undefined) =>
   value == null || value === '' ? 'No informado' : String(value);
 const time = (value: string | null | undefined) =>
@@ -309,8 +316,8 @@ function Details({
           ['Objetivo reportado', r?.target_quantity],
           ['Defectuosas reportadas', r?.defective_quantity],
           ['Promedio reportado por hora', r?.avg_quantity_per_hour],
-          ['Ciclo actual (s, inferido)', r?.cycle_time_current],
-          ['Ciclo anterior (s, inferido)', r?.cycle_time_before],
+          ['Ciclo actual (s, inferido)', seconds(r?.cycle_time_current)],
+          ['Ciclo anterior (s, inferido)', seconds(r?.cycle_time_before)],
           ['Tiempo de producción, horas', r?.production_time_hour],
           ['Tiempo de producción, minutos', r?.production_time_min],
           ['Delta observado', r?.delta_contador_observado],
@@ -327,25 +334,25 @@ function Details({
           ['Disparo', shot?.shot_number],
           ['Fecha del disparo', time(shot?.timestamp)],
           ['Vínculo con la inyectora', shot?.identity_source],
-          ['Tiempo de ciclo', shot?.cycle_time],
+          ['Tiempo de ciclo (s)', seconds(shot?.cycle_time)],
           ['Archivo del último ciclo', shot?.mold_name],
           ['Cavidades', shot?.cavity],
           ['NGmark (valor reportado)', shot?.ngmark],
-          ['Tiempo de inyección', shot?.injection_time],
-          ['Tiempo de llenado', shot?.filling_time],
+          ['Tiempo de inyección (s)', seconds(shot?.injection_time, 2)],
+          ['Tiempo de llenado (s)', seconds(shot?.filling_time, 2)],
           ['Presión máxima de inyección', shot?.max_injection_pressure],
           ['Velocidad máxima de inyección', shot?.max_injection_speed],
           ['Posición de transferencia', shot?.switch_over_position],
           ['Presión máxima de transferencia', shot?.max_switch_over_pressure],
           ['Posición de colchón', shot?.cushion_position],
-          ['Tiempo de plastificación', shot?.plasticizing_time],
+          ['Tiempo de plastificación (s)', seconds(shot?.plasticizing_time, 2)],
           ['Posición de plastificación', shot?.plasticizing_position],
           ['RPM promedio de tornillo', shot?.average_screw_rpm],
           ['RPM máxima de tornillo', shot?.max_screw_rpm],
           ['Contrapresión promedio', shot?.average_back_pressure],
           ['Contrapresión máxima', shot?.max_back_pressure],
-          ['Tiempo de cierre', shot?.clamp_close_time],
-          ['Tiempo de apertura', shot?.clamp_open_time],
+          ['Tiempo de cierre (s)', seconds(shot?.clamp_close_time, 2)],
+          ['Tiempo de apertura (s)', seconds(shot?.clamp_open_time, 2)],
           ['Posición de apertura', shot?.clamp_open_position],
           ['Peso de resina', shot?.resin_weight]
         ]
@@ -358,7 +365,7 @@ function Details({
           ['Velocidades de inyección', shot?.recipe?.inj_velocity],
           ['Presiones de inyección', shot?.recipe?.inj_pressure],
           ['Posiciones de inyección', shot?.recipe?.inj_position],
-          ['Tiempo SOV', shot?.recipe?.sov_time],
+          ['Tiempo SOV (s)', seconds(shot?.recipe?.sov_time, 2)],
           ['Posición SOV', shot?.recipe?.sov_position],
           ['Presiones de sostenimiento', shot?.recipe?.hld_pressure],
           ['Tiempos de sostenimiento', shot?.recipe?.hld_time],
@@ -384,7 +391,7 @@ function Details({
         'Origen y frescura',
         [
           ['Timestamp de lectura', time(r?.cms_timestamp)],
-          ['Edad de lectura, segundos', machine.cmsAgeSeconds],
+          ['Edad de lectura, segundos', seconds(machine.cmsAgeSeconds)],
           [
             'Lectura fresca informada',
             r?.cms_row_fresh == null ? null : r.cms_row_fresh ? 'Sí' : 'No'
@@ -677,8 +684,22 @@ function Details({
                       stroke="var(--color-text)"
                       minTickGap={28}
                     />
-                    <YAxis stroke="var(--color-text)" width={56} domain={['auto', 'auto']} />
-                    <Tooltip labelFormatter={(value) => time(String(value))} />
+                    <YAxis
+                      stroke="var(--color-text)"
+                      width={56}
+                      domain={['auto', 'auto']}
+                      tickFormatter={(value: number) =>
+                        historyMetric === 'cycle' ? seconds(value) : String(value)
+                      }
+                    />
+                    <Tooltip
+                      labelFormatter={(value) => time(String(value))}
+                      formatter={(value) =>
+                        historyMetric === 'cycle' && typeof value === 'number'
+                          ? `${seconds(value)} s`
+                          : value
+                      }
+                    />
                     <Legend />
                     {historyMetric === 'temperature' ? (
                       <>
@@ -750,7 +771,7 @@ function Details({
                                 <summary>
                                   <time dateTime={row.timestamp}>{time(row.timestamp)}</time>
                                   <strong>Disparo {number(row.shotNumber)}</strong>
-                                  <span>Ciclo {number(row.cycleTime, 1)} s</span>
+                                  <span>Ciclo {seconds(row.cycleTime)} s</span>
                                 </summary>
                                 <dl>
                                   <div>
@@ -759,7 +780,7 @@ function Details({
                                   </div>
                                   <div>
                                     <dt>Inyección</dt>
-                                    <dd>{number(row.injectionTime, 2)} s</dd>
+                                    <dd>{seconds(row.injectionTime, 2)} s</dd>
                                   </div>
                                   <div>
                                     <dt>Presión máxima</dt>
@@ -939,7 +960,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       <small>CICLO ACTUAL</small>
                       <strong>
                         {live && r?.cycle_time_current != null
-                          ? `${number(r.cycle_time_current, 1)} s`
+                          ? `${seconds(r.cycle_time_current)} s`
                           : 'Sin datos'}
                       </strong>
                     </div>
@@ -947,7 +968,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       <small>CICLO ANTERIOR</small>
                       <strong>
                         {live && r?.cycle_time_before != null
-                          ? `${number(r.cycle_time_before, 1)} s`
+                          ? `${seconds(r.cycle_time_before)} s`
                           : 'Sin datos'}
                       </strong>
                     </div>
@@ -1026,13 +1047,13 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
                       <strong>
                         {r?.cycle_time_current == null
                           ? 'No informado'
-                          : `${number(r.cycle_time_current, 1)} s`}
+                          : `${seconds(r.cycle_time_current)} s`}
                       </strong>
                       <span>
                         Anterior:{' '}
                         {r?.cycle_time_before == null
                           ? 'No informado'
-                          : `${number(r.cycle_time_before, 1)} s`}
+                          : `${seconds(r.cycle_time_before)} s`}
                       </span>
                     </div>
                     <div>

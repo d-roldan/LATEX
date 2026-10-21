@@ -9,11 +9,11 @@ if (!key) {
   return null;
 }
 const profiles = [
-  { code: 'INY01', ip: '172.16.0.141', model: 'DL650G5', cycle: 26, count: 11429, total: 65110, hours: 20, mold: 'ENV-650-A', cavity: 8, mode: 'AUTO', running: true, heater: true, alarm: 0 },
-  { code: 'INY02', ip: '172.16.0.146', model: 'DL450G5', cycle: 21, count: 8372, total: 52180, hours: 16, mold: 'ENV-450-B', cavity: 6, mode: 'AUTO', running: true, heater: true, alarm: 0 },
+  { code: 'INY05', ip: '172.16.0.141', model: 'DL650G5', cycle: 26, count: 11429, total: 65110, hours: 20, mold: 'ENV-650-A', cavity: 8, mode: 'AUTO', running: true, heater: true, alarm: 0 },
+  { code: 'INY04', ip: '172.16.0.146', model: 'DL450G5', cycle: 21, count: 8372, total: 52180, hours: 16, mold: 'ENV-450-B', cavity: 6, mode: 'AUTO', running: true, heater: true, alarm: 0 },
   { code: 'INY03', ip: '172.16.0.143', model: 'TB280G5-1', cycle: 24, count: 4328, total: 18320, hours: 9, mold: 'ENV-280-C', cavity: 4, mode: 'MANUAL', running: false, heater: true, alarm: 0 },
-  { code: 'INY04', ip: '172.16.0.144', model: 'TB280G5-2', cycle: 21, count: 13270, total: 74410, hours: 23, mold: 'ENV-280-D', cavity: 4, mode: 'AUTO', running: true, heater: true, alarm: 0 },
-  { code: 'INY05', ip: '172.16.0.145', model: 'TB200G5', cycle: 18, count: 6670, total: 29940, hours: 12, mold: 'ENV-200-E', cavity: 2, mode: 'PARO', running: false, heater: false, alarm: 204 }
+  { code: 'INY02', ip: '172.16.0.144', model: 'TB280G5-2', cycle: 21, count: 13270, total: 74410, hours: 23, mold: 'ENV-280-D', cavity: 4, mode: 'AUTO', running: true, heater: true, alarm: 0 },
+  { code: 'INY01', ip: '172.16.0.145', model: 'TB200G5', cycle: 18, count: 6670, total: 29940, hours: 12, mold: 'ENV-200-E', cavity: 2, mode: 'PARO', running: false, heater: false, alarm: 204 }
 ];
 const now = Date.now();
 const round = (value, digits = 1) => Number(value.toFixed(digits));

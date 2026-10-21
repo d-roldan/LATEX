@@ -110,11 +110,11 @@ assert.equal(duplicate[0].payload.maquinas.length, 1);
 assert.equal(duplicate[2].payload.problemas[0].tipo, 'IP_DESCONOCIDA_O_REPETIDA');
 
 const five = [
-  ['172.16.0.141', 'DL650G5', 'INY01'],
-  ['172.16.0.146', 'DL450G5', 'INY02'],
+  ['172.16.0.141', 'DL650G5', 'INY05'],
+  ['172.16.0.146', 'DL450G5', 'INY04'],
   ['172.16.0.143', 'TB280G5-1', 'INY03'],
-  ['172.16.0.144', 'TB280G5-2', 'INY04'],
-  ['172.16.0.145', 'TB200G5', 'INY05']
+  ['172.16.0.144', 'TB280G5-2', 'INY02'],
+  ['172.16.0.145', 'TB200G5', 'INY01']
 ];
 const all = run(
   id('w5_normalize'),
@@ -173,7 +173,7 @@ const influxEnv = {
 };
 const influxStatus = run('envases_influx_status_prepare_v1', {payload:result[0].payload}, {}, {}, influxEnv);
 assert.match(influxStatus[0].url,/\/api\/v2\/write\?org=disal&bucket=envases&precision=ms/);
-assert.match(influxStatus[0].payload,/woojin_nodered_status,machine=INY01,source=NODE_RED_ENVASES /);
+assert.match(influxStatus[0].payload,/woojin_nodered_status,machine=INY05,source=NODE_RED_ENVASES /);
 assert.match(influxStatus[0].payload,/current_quantity=105/);
 assert.equal(influxStatus[0].headers.Authorization,'Token token-de-prueba');
 const unidentified = structuredClone(result[0].payload);
@@ -182,7 +182,7 @@ const noShot = run('envases_influx_shot_prepare_v1', {payload:unidentified}, {},
 assert.equal(noShot[0],null);
 assert.match(noShot[1].payload.reason,/PENDIENTE_IDENTIFICAR_MAQUINA/);
 const influxShot = run('envases_influx_shot_prepare_v1', {payload:merged[0].payload}, {}, {}, influxEnv);
-assert.match(influxShot[0].payload,/woojin_nodered_shot,machine=INY01,source=NODE_RED_ENVASES /);
+assert.match(influxShot[0].payload,/woojin_nodered_shot,machine=INY05,source=NODE_RED_ENVASES /);
 assert.match(influxShot[0].payload,/shot_number=/);
 assert.equal(JSON.stringify(influxShot[1]).includes('token-de-prueba'),false);
 const influxResult = run('envases_influx_shot_result_v1',{...influxShot[0],statusCode:204,payload:''});

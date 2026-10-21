@@ -3,11 +3,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const machines = [
-  ['INY01', 'DL650G5', '172.16.0.141'],
-  ['INY02', 'DL450G5', '172.16.0.146'],
+  ['INY05', 'DL650G5', '172.16.0.141'],
+  ['INY04', 'DL450G5', '172.16.0.146'],
   ['INY03', 'TB280G5-1', '172.16.0.143'],
-  ['INY04', 'TB280G5-2', '172.16.0.144'],
-  ['INY05', 'TB200G5', '172.16.0.145']
+  ['INY02', 'TB280G5-2', '172.16.0.144'],
+  ['INY01', 'TB200G5', '172.16.0.145']
 ];
 const tab = 'envases_dbs_api_tab_v1';
 const id = (name) => `envases_dbs_api_${name}_v1`;

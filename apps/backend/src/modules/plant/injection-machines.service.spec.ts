@@ -58,13 +58,13 @@ describe('InjectionMachinesService', () => {
         }
       ])
     );
-    const result = await service.privateCmsShots('empresa', 'usuario', 'ENVASES', 'INY02');
+    const result = await service.privateCmsShots('empresa', 'usuario', 'ENVASES', 'INY04');
     expect(result).toMatchObject({ status: 'AVAILABLE', file: 'cuerpo_4l_iml_JCA.db' });
     expect(cmsHistory.readByFile).toHaveBeenCalledWith('cuerpo_4l_iml_JCA.db', undefined);
 
     prisma.plant.findFirst.mockResolvedValueOnce(null);
     await expect(
-      service.privateCmsShots('empresa', 'sin-acceso', 'ENVASES', 'INY02')
+      service.privateCmsShots('empresa', 'sin-acceso', 'ENVASES', 'INY04')
     ).rejects.toThrow(NotFoundException);
     expect(cmsHistory.readByFile).toHaveBeenCalledTimes(1);
   });
@@ -72,11 +72,11 @@ describe('InjectionMachinesService', () => {
   it('ordena cinco equipos y conserva ausencia de datos al reiniciar', async () => {
     const snapshot = await service.publicSnapshot('ENVASES');
     expect(snapshot.machines.map((machine) => machine.code)).toEqual([
-      'INY05',
-      'INY04',
-      'INY03',
+      'INY01',
       'INY02',
-      'INY01'
+      'INY03',
+      'INY04',
+      'INY05'
     ]);
     expect(snapshot.machines.map((machine) => machine.ip)).toEqual([
       '172.16.0.145',
@@ -179,6 +179,40 @@ describe('InjectionMachinesService', () => {
       batch([reading('172.16.0.146', t), reading('10.0.0.99', t), wrong])
     );
     expect(result).toMatchObject({ accepted: 1, rejected: 2 });
+  });
+
+  it('acepta los códigos físicos de Node-RED y rechaza el código anterior', async () => {
+    const timestamp = new Date().toISOString();
+    const machines = [
+      ['172.16.0.145', 'INY01', 'TB200G5'],
+      ['172.16.0.144', 'INY02', 'TB280G5-2'],
+      ['172.16.0.143', 'INY03', 'TB280G5-1'],
+      ['172.16.0.146', 'INY04', 'DL450G5'],
+      ['172.16.0.141', 'INY05', 'DL650G5']
+    ].map(([machine_ip, equipment_code, modelo]) => ({
+      machine_ip,
+      equipment_code,
+      modelo,
+      cms_timestamp: timestamp
+    }));
+    const accepted = await service.receive('ENVASES', 'key', batch(machines));
+    expect(accepted).toMatchObject({ accepted: 5, rejected: 0 });
+    const snapshot = await service.publicSnapshot('ENVASES');
+    expect(snapshot.machines.map((machine) => machine.reading?.equipment_code)).toEqual([
+      'INY01',
+      'INY02',
+      'INY03',
+      'INY04',
+      'INY05'
+    ]);
+    const oldCode = await service.receive('ENVASES', 'key', {
+      ...batch([{ ...machines[0], equipment_code: 'INY05' }]),
+      fecha_recepcion_nodered: new Date().toISOString()
+    });
+    expect(oldCode.results[0]).toMatchObject({
+      status: 'REJECTED',
+      message: 'Código de equipo incorrecto'
+    });
   });
 
   it('aísla el simulador y conserva el último ciclo técnico al recibir un disparo repetido', async () => {
