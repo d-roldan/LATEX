@@ -207,6 +207,8 @@ export function PlantBoardPage({
   const plantCode = isPublicMonitoring ? publicPlant!.code : (active?.code ?? 'LATEX');
   const plantName = isPublicMonitoring ? publicPlant!.name : (active?.name ?? plantCode);
   const base = `/plants/${plantCode}`;
+  // La TV evita reutilizar indefinidamente una respuesta HTTP si su reloj local está desfasado.
+  const tvRefreshBucket = serverNowMs == null ? 'inicio' : Math.floor(serverNowMs / 5_000);
   const navigationState = location.state as {
     highlightTankId?: string;
     highlightNonce?: number;
@@ -235,7 +237,14 @@ export function PlantBoardPage({
   const tanks = useQuery({
     queryKey: [isPublicMonitoring ? 'plant-tv-tanks' : 'plant-tanks', plantCode],
     queryFn: async () =>
-      (await api.get<Tank[]>(isPublicMonitoring ? `${base}/tv` : `${base}/tanks`)).data,
+      (
+        await api.get<Tank[]>(
+          isPublicMonitoring ? `${base}/tv` : `${base}/tanks`,
+          isPublicMonitoring
+            ? { params: { refresh: tvRefreshBucket }, headers: { 'Cache-Control': 'no-cache' } }
+            : undefined
+        )
+      ).data,
     refetchInterval: 2000,
     refetchIntervalInBackground: true
   });
