@@ -193,11 +193,13 @@ const emptyForm = {
 export function PlantBoardPage({
   sector,
   publicPlant,
-  tvSector
+  tvSector,
+  serverNowMs
 }: {
   sector: Sector;
   publicPlant?: PublicPlant;
   tvSector?: TvSector;
+  serverNowMs?: number | null;
 }) {
   const location = useLocation();
   const isPublicMonitoring = sector === 'monitoreo' && Boolean(publicPlant);
@@ -482,14 +484,20 @@ export function PlantBoardPage({
       }),
     []
   );
-  const [now, setNow] = useState(new Date());
+  const [localNow, setLocalNow] = useState(new Date());
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
+    if (isPublicMonitoring) return;
+    const id = window.setInterval(() => setLocalNow(new Date()), 1000);
     return () => window.clearInterval(id);
-  }, []);
-  const [clockHours = '00', clockMinutes = '00', clockSeconds = '00'] = timeFormatter
-    .format(now)
-    .split(':');
+  }, [isPublicMonitoring]);
+  const now = isPublicMonitoring
+    ? serverNowMs === null || serverNowMs === undefined
+      ? null
+      : new Date(serverNowMs)
+    : localNow;
+  const [clockHours = '--', clockMinutes = '--', clockSeconds = '--'] = now
+    ? timeFormatter.format(now).split(':')
+    : [];
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -958,7 +966,7 @@ export function PlantBoardPage({
               </span>
               <b>{clockSeconds}</b>
             </div>
-            <small>{dateFormatter.format(now)}</small>
+            <small>{now ? dateFormatter.format(now) : 'Hora no disponible'}</small>
           </article>
         ) : null}
       </section>

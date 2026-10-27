@@ -178,9 +178,11 @@ const text = (value: string | number | null | undefined) =>
   value == null || value === '' ? 'No informado' : String(value);
 const time = (value: string | null | undefined) =>
   value && !Number.isNaN(Date.parse(value))
-    ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'medium' }).format(
-        new Date(value)
-      )
+    ? new Intl.DateTimeFormat('es-AR', {
+        dateStyle: 'short',
+        timeStyle: 'medium',
+        timeZone: 'America/Argentina/Buenos_Aires'
+      }).format(new Date(value))
     : 'No informado';
 const temperatureTargets = (value: string | null | undefined, sizes: number[]) => {
   if (!value) return null;
@@ -198,6 +200,7 @@ function Details({
   source,
   schemaVersion,
   simulated,
+  nowMs,
   onClose
 }: {
   machine: Machine;
@@ -205,6 +208,7 @@ function Details({
   source: string;
   schemaVersion: number;
   simulated: boolean;
+  nowMs: number | null;
   onClose: () => void;
 }) {
   const r = machine.reading;
@@ -250,8 +254,8 @@ function Details({
     ).values()
   );
   const stateSegments =
-    historyMetric === 'state' && history.data?.status === 'AVAILABLE'
-      ? injectionStateTimeline(history.data.points, historyHours, Date.now())
+    historyMetric === 'state' && history.data?.status === 'AVAILABLE' && nowMs !== null
+      ? injectionStateTimeline(history.data.points, historyHours, nowMs)
       : [];
   const barrelTargets = temperatureTargets(shot?.recipe?.barrel_temperature, [7, 8]);
   const moldTargets = temperatureTargets(shot?.recipe?.mold_temperature, [12]);
@@ -678,7 +682,8 @@ function Details({
                       tickFormatter={(value: string) =>
                         new Intl.DateTimeFormat('es-AR', {
                           hour: '2-digit',
-                          minute: '2-digit'
+                          minute: '2-digit',
+                          timeZone: 'America/Argentina/Buenos_Aires'
                         }).format(new Date(value))
                       }
                       stroke="var(--color-text)"
@@ -758,7 +763,8 @@ function Details({
                       <>
                         <p>
                           Último disparo guardado con este archivo: {time(cmsRows[0].timestamp)}.
-                          {Date.now() - Date.parse(cmsRows[0].timestamp) > 5 * 60_000 &&
+                          {nowMs !== null &&
+                            nowMs - Date.parse(cmsRows[0].timestamp) > 5 * 60_000 &&
                             ' La captura de disparos no está al día con el contador actual.'}
                         </p>
                         <p>
@@ -835,7 +841,13 @@ function Details({
   );
 }
 
-export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
+export function InjectionMachinesPage({
+  tv = false,
+  serverNowMs
+}: {
+  tv?: boolean;
+  serverNowMs?: number | null;
+}) {
   const { active, isLoading } = useActivePlant({ enabled: !tv });
   const [selected, setSelected] = useState<string | null>(null);
   const allowed = tv || active?.code === 'ENVASES';
@@ -1116,6 +1128,7 @@ export function InjectionMachinesPage({ tv = false }: { tv?: boolean }) {
           source={snapshot?.source ?? 'NODE_RED_ENVASES'}
           schemaVersion={snapshot?.schemaVersion ?? 1}
           simulated={simulated}
+          nowMs={tv ? (serverNowMs ?? null) : Date.now()}
           onClose={() => setSelected(null)}
         />
       )}

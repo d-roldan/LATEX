@@ -5,6 +5,7 @@ import { PlantBoardPage } from './PlantBoardPage';
 import { ThemeToggle } from '../../shared/components/ThemeToggle';
 import { findPublicPlant, publicPlants } from './plantCatalog';
 import { InjectionMachinesPage } from './InjectionMachinesPage';
+import { useServerTime } from './useServerTime';
 
 const sectors = ['fabricacion', 'laboratorio', 'envasado'] as const;
 const sectorLabels = {
@@ -20,6 +21,9 @@ export function PlantTvPage() {
   const selectedPlant = findPublicPlant(requestedCode);
   const requestedSector = searchParams.get('sector');
   const selectedSector = sectors.find((sector) => sector === requestedSector);
+  const serverNowMs = useServerTime(
+    Boolean(selectedPlant && (selectedSector || selectedPlant.code === 'ENVASES'))
+  );
 
   useEffect(() => {
     const updateFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -102,10 +106,20 @@ export function PlantTvPage() {
         </button>
         <ThemeToggle className="plant-theme-toggle plant-tv__theme-toggle" />
       </div>
+      {serverNowMs === null ? (
+        <p role="status">
+          Sin hora verificada del servidor. Comprobá la conexión de esta pantalla.
+        </p>
+      ) : null}
       {selectedPlant.code === 'ENVASES' ? (
-        <InjectionMachinesPage tv />
+        <InjectionMachinesPage tv serverNowMs={serverNowMs} />
       ) : (
-        <PlantBoardPage sector="monitoreo" publicPlant={selectedPlant} tvSector={selectedSector!} />
+        <PlantBoardPage
+          sector="monitoreo"
+          publicPlant={selectedPlant}
+          tvSector={selectedSector!}
+          serverNowMs={serverNowMs}
+        />
       )}
     </main>
   );
