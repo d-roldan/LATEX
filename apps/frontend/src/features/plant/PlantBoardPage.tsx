@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Radio, RefreshCw, WifiOff } from 'lucide-react';
 import { api } from '../../shared/api/http';
+import { getSessionUser } from '../auth/session';
 import { Button } from '../../shared/ui/Button';
 import { Dialog } from '../../shared/ui/Dialog';
 import { Input } from '../../shared/ui/Input';
@@ -38,7 +39,9 @@ type Action =
   | 'emptyRejected'
   | 'serviceOut'
   | 'serviceIn'
-  | 'correctLot';
+  | 'correctLot'
+  | 'rollback';
+type RollbackPreview = { from: TankState; to: TankState; version: number; affectedRecord: string };
 type PendingRequest = { path: string; method: 'post' | 'patch'; payload: Record<string, unknown> };
 
 interface Tank {
@@ -218,7 +221,9 @@ export function PlantBoardPage({
     `${location.key}:${navigationState?.highlightNonce ?? ''}`
   );
   const client = useQueryClient();
+  const isAdministrator = !isPublicMonitoring && getSessionUser()?.role === 'ADMIN';
   const [selection, setSelection] = useState<{ tank: Tank; action: Action } | null>(null);
+  const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview | null>(null);
   const [pendingRequest, setPendingRequest] = useState<PendingRequest | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -372,6 +377,7 @@ export function PlantBoardPage({
   };
   const openAction = (tank: Tank, action: Action) => {
     setSelection({ tank, action });
+    setRollbackPreview(null);
     setPendingRequest(null);
     setConfirming(false);
     setError(null);
@@ -415,6 +421,23 @@ export function PlantBoardPage({
         : [{ materialCode: '', quantityKg: '' }]
     });
   };
+
+  useEffect(() => {
+    if (selection?.action !== 'rollback') return;
+    let active = true;
+    api
+      .get<RollbackPreview>(`${base}/tanks/${selection.tank.id}/rollback-preview`)
+      .then(({ data }) => {
+        if (active) setRollbackPreview(data);
+      })
+      .catch((requestError: { response?: { data?: { message?: string } } }) => {
+        if (active)
+          setError(requestError.response?.data?.message ?? 'No se puede retroceder este estado.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [selection, base]);
 
   const actionsFor = (tank: Tank) => {
     if (sector === 'monitoreo') return [] as Array<[string, Action, string]>;
@@ -512,6 +535,7 @@ export function PlantBoardPage({
     event.preventDefault();
     if (!selection) return;
     const { tank, action } = selection;
+    if (action === 'rollback' && !rollbackPreview) return;
     if (
       ((action === 'quality' && form.qualityResult === 'AJUSTE') || action === 'editAdjustment') &&
       form.adjustmentReasons.length === 0
@@ -690,6 +714,11 @@ export function PlantBoardPage({
           description: form.description,
           reason: form.reason
         }
+      },
+      rollback: {
+        path: `${base}/tanks/${tank.id}/rollback`,
+        method: 'post',
+        payload: { version: rollbackPreview?.version, reason: form.reason }
       }
     };
     setPendingRequest(map[action]);
@@ -699,6 +728,7 @@ export function PlantBoardPage({
   const closeDialog = () => {
     if (mutation.isPending) return;
     setSelection(null);
+    setRollbackPreview(null);
     setPendingRequest(null);
     setConfirming(false);
     setError(null);
@@ -940,6 +970,15 @@ export function PlantBoardPage({
                           {label}
                         </Button>
                       ))}
+                      {isAdministrator ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openAction(tank, 'rollback')}
+                        >
+                          Retroceder estado
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                   {tank.telemetryMode !== 'NOT_INSTALLED' ? (
@@ -993,7 +1032,9 @@ export function PlantBoardPage({
         }
         description={
           confirming
-            ? 'Esta acción modifica el estado operativo y quedará registrada.'
+            ? selection?.action === 'rollback'
+              ? 'Este retroceso anula el registro asociado y queda auditado. Confirmá el estado físico del tanque.'
+              : 'Esta acción modifica el estado operativo y quedará registrada.'
             : 'Revisá los datos. El backend volverá a validar rol, estado y versión antes de guardar.'
         }
       >
@@ -1009,6 +1050,12 @@ export function PlantBoardPage({
               <strong>{selection.tank.name}</strong>
               <span>PLANTA</span>
               <strong>{active?.name ?? plantCode}</strong>
+              {selection.action === 'rollback' && rollbackPreview ? (
+                <p>
+                  {stateLabel[rollbackPreview.from]} → {stateLabel[rollbackPreview.to]}. Se
+                  afectará: {rollbackPreview.affectedRecord}.
+                </p>
+              ) : null}
               <p>
                 Verificá físicamente el tanque antes de continuar. La operación no se ejecutará
                 hasta presionar “Sí, confirmar”.
@@ -1049,12 +1096,24 @@ export function PlantBoardPage({
                 planning.data?.tanks.find((tank) => tank.id === selection.tank.id)?.planningCards ??
                   []
               )}
+            {selection?.action === 'rollback' ? (
+              rollbackPreview ? (
+                <p role="status">
+                  {stateLabel[rollbackPreview.from]} → {stateLabel[rollbackPreview.to]}. Se
+                  afectará: {rollbackPreview.affectedRecord}. El historial permanecerá visible.
+                </p>
+              ) : !error ? (
+                <p role="status">Comprobando si se puede retroceder…</p>
+              ) : null
+            ) : null}
             {error ? <div className="plant-form-error">{error}</div> : null}
             <div className="plant-form-actions">
               <Button type="button" variant="secondary" onClick={closeDialog}>
                 Cancelar
               </Button>
-              <Button type="submit">Continuar</Button>
+              <Button type="submit" disabled={selection?.action === 'rollback' && !rollbackPreview}>
+                Continuar
+              </Button>
             </div>
           </form>
         )}
@@ -1081,7 +1140,8 @@ function actionTitle(action: Action) {
       emptyRejected: 'Vaciar rechazado',
       serviceOut: 'Sacar de servicio',
       serviceIn: 'Volver a servicio',
-      correctLot: 'Corregir lote'
+      correctLot: 'Corregir lote',
+      rollback: 'Retroceder estado'
     } as Record<Action, string>
   )[action];
 }
@@ -1550,11 +1610,11 @@ function renderFields(
     );
   return (
     <label>
-      Motivo / observación
+      {action === 'rollback' ? 'Motivo del retroceso' : 'Motivo / observación'}
       <Input
         value={form.reason}
         onChange={(e) => field('reason', e.target.value)}
-        required={action === 'emptyRejected'}
+        required={action === 'emptyRejected' || action === 'rollback'}
       />
     </label>
   );

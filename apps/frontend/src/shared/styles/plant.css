@@ -2615,6 +2615,22 @@ body {
   box-shadow: 0 1px 0 #293542;
   text-transform: uppercase;
 }
+.history-sort-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.history-sort-button:hover {
+  text-decoration: underline;
+}
+.history-sort-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
 .history-empty-cell {
   height: 8rem;
   color: #92a1b1;

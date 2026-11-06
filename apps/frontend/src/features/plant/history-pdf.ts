@@ -18,7 +18,8 @@ const formatDateTime = (value: string) =>
   new Date(value).toLocaleString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     dateStyle: 'short',
-    timeStyle: 'medium'
+    timeStyle: 'medium',
+    hour12: false
   });
 
 const formatDuration = (seconds: number) => {
@@ -52,13 +53,19 @@ function chronologicalDetail(
       .map((sample) => {
         const reception = sample.receivedAt
           ? formatDateTime(sample.receivedAt)
-          : 'Pendiente de recepción';
+          : sample.cancelledAt
+            ? 'Anulada'
+            : 'Pendiente de recepción';
         const resolution = sample.resolvedAt
           ? formatDateTime(sample.resolvedAt)
-          : 'Pendiente de resolución';
+          : sample.cancelledAt
+            ? 'Anulada'
+            : 'Pendiente de resolución';
         const waiting =
           sample.waitingForReceiptSeconds == null
-            ? 'en curso'
+            ? sample.cancelledAt
+              ? 'anulada'
+              : 'en curso'
             : formatDuration(sample.waitingForReceiptSeconds);
         const waitingForAnalysis =
           sample.waitingForAnalysisSeconds == null
@@ -67,8 +74,12 @@ function chronologicalDetail(
               : 'pendiente'
             : formatDuration(sample.waitingForAnalysisSeconds);
         const analysis =
-          sample.analysisSeconds == null ? 'en curso' : formatDuration(sample.analysisSeconds);
-        return `Muestra ${sample.iteration}\nIngreso: ${formatDateTime(sample.requestedAt)}\nRecepción: ${reception} · Demora de muestra: ${waiting}\nEspera para análisis: ${waitingForAnalysis}\nResolución: ${resolution} · Tiempo de análisis: ${analysis}`;
+          sample.analysisSeconds == null
+            ? sample.cancelledAt
+              ? 'anulada'
+              : 'en curso'
+            : formatDuration(sample.analysisSeconds);
+        return `Muestra ${sample.iteration}${sample.cancelledAt ? ` · Anulada ${formatDateTime(sample.cancelledAt)}` : ''}\nIngreso: ${formatDateTime(sample.requestedAt)}\nRecepción: ${reception} · Demora de muestra: ${waiting}\nEspera para análisis: ${waitingForAnalysis}\nResolución: ${resolution} · Tiempo de análisis: ${analysis}`;
       })
       .join('\n\n');
     return sampleDetail ? `${sampleDetail}\n${weightDetail}` : weightDetail;
@@ -92,7 +103,7 @@ function chronologicalDetail(
               .join(', ')
           : 'Sin materiales detallados';
         const responsible = `${adjustment.employeeNumber} / ${adjustment.user?.fullName ?? 'No informado'}`;
-        return `${formatDateTime(adjustment.createdAt)} · ${reason}\n${responsible}\n${materials}`;
+        return `${formatDateTime(adjustment.createdAt)} · ${reason}${adjustment.cancelledAt ? ` · Anulada ${formatDateTime(adjustment.cancelledAt)}` : ''}\n${responsible}\n${materials}`;
       })
       .join('\n\n');
     return adjustmentDetail ? `${adjustmentDetail}\n${weightDetail}` : weightDetail;

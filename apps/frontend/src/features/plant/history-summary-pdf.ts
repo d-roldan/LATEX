@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { HistoryRow } from './PlantHistoryPage';
+import type { HistoryRow, HistorySummary } from './PlantHistoryPage';
 
 interface ReportFilters {
   plant: string;
@@ -12,7 +12,10 @@ interface ReportFilters {
 }
 
 const dateTime = (value: string) =>
-  new Date(value).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+  new Date(value).toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    hour12: false
+  });
 
 const duration = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
@@ -20,7 +23,11 @@ const duration = (seconds: number) => {
   return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
 };
 
-export function buildHistorySummaryPdf(rows: HistoryRow[], filters: ReportFilters) {
+export function buildHistorySummaryPdf(
+  rows: HistoryRow[],
+  filters: ReportFilters,
+  summaries: HistorySummary[]
+) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   doc.setProperties({
     title: `Historial de estados - ${filters.plant}`,
@@ -47,28 +54,17 @@ export function buildHistorySummaryPdf(rows: HistoryRow[], filters: ReportFilter
   ];
   doc.text(filterText, 14, 34);
 
-  const groups = new Map<string, { lot: NonNullable<HistoryRow['lot']>; rows: HistoryRow[] }>();
-  rows.forEach((row) => {
-    if (!row.lot) return;
-    const group = groups.get(row.lot.id);
-    if (group) group.rows.push(row);
-    else groups.set(row.lot.id, { lot: row.lot, rows: [row] });
-  });
-  const summaries = [...groups.values()].sort((a, b) =>
-    a.lot.manufacturingOrder.localeCompare(b.lot.manufacturingOrder, 'es-AR', { numeric: true })
-  );
   doc.setFont('helvetica', 'bold');
   doc.text(`${summaries.length} OF · ${rows.length} estados registrados`, 14, 57);
   autoTable(doc, {
     startY: 61,
-    head: [['OF', 'Semielaborado', 'Producto', 'Ajustes', 'OE asignadas', 'Estados en el período']],
-    body: summaries.map(({ lot, rows: lotRows }) => [
+    head: [['OF', 'Semielaborado', 'Producto', 'Solicitudes de ajuste', 'OE asignadas']],
+    body: summaries.map((lot) => [
       lot.manufacturingOrder,
       lot.materialCode,
       lot.description,
-      String(lotRows.filter((row) => row.state === 'AJUSTE').length),
-      String(lot.packagingOrders.length),
-      String(lotRows.length)
+      String(lot.adjustments),
+      String(lot.packagingOrders)
     ]),
     theme: 'striped',
     styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
@@ -128,8 +124,12 @@ export function buildHistorySummaryPdf(rows: HistoryRow[], filters: ReportFilter
   return doc;
 }
 
-export function downloadHistorySummaryPdf(rows: HistoryRow[], filters: ReportFilters) {
-  const doc = buildHistorySummaryPdf(rows, filters);
+export function downloadHistorySummaryPdf(
+  rows: HistoryRow[],
+  filters: ReportFilters,
+  summaries: HistorySummary[]
+) {
+  const doc = buildHistorySummaryPdf(rows, filters, summaries);
   doc.save(
     `historial-estados-${filters.plant}-${filters.from || 'inicio'}-${filters.to || 'actual'}.pdf`
   );

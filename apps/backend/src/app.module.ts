@@ -14,10 +14,11 @@ import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from './common/security/rate-limit.guard';
 import { PlantModule } from './modules/plant/plant.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ 
+    ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../../.env']
     }),
@@ -28,7 +29,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     UsersModule,
     AuditModule,
     NotificationsModule,
-    PlantModule
+    PlantModule,
+    ReportingModule
   ],
   controllers: [AppController],
   providers: [

@@ -75,6 +75,11 @@ export class VersionedActionDto {
   @IsOptional() @IsString() @MaxLength(500) reason?: string;
 }
 
+export class RollbackTankStateDto {
+  @IsInt() @Min(0) version!: number;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason!: string;
+}
+
 export class ReceiveLaboratorySampleDto extends VersionedActionDto {
   @IsBoolean() startAnalysis!: boolean;
 }

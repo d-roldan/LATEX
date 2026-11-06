@@ -16,6 +16,11 @@ const PlantHistoryPage = lazy(() =>
     default: module.PlantHistoryPage
   }))
 );
+const ReportingPage = lazy(() =>
+  import('../../features/reporting/ReportingPage').then((module) => ({
+    default: module.ReportingPage
+  }))
+);
 const PlantManagementPage = lazy(() =>
   import('../../features/plant/PlantManagementPage').then((module) => ({
     default: module.PlantManagementPage
@@ -116,6 +121,20 @@ export function AppRouter() {
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['ENVASADO', 'ADMIN']} />}>
             <Route path="/envasado" element={page('envasado')} />
+          </Route>
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={['LABORATORIO', 'MONITOREO', 'JEFATURA', 'ADMIN']} />
+            }
+          >
+            <Route
+              path="/reporteria"
+              element={
+                <AppLayout>
+                  <ReportingPage />
+                </AppLayout>
+              }
+            />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['MONITOREO', 'JEFATURA', 'ADMIN']} />}>
             <Route path="/visualizacion" element={page('monitoreo')} />

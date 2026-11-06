@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   Optional,
@@ -26,6 +27,7 @@ import {
   PackagingDto,
   QualityDecisionDto,
   ReceiveLaboratorySampleDto,
+  RollbackTankStateDto,
   ServiceDto,
   StartManufacturingDto,
   StageTargetsDto,
@@ -390,7 +392,7 @@ export class PlantService {
           materialCode: true,
           description: true,
           packagingOrders: {
-            where: { finishedAt: null },
+            where: { finishedAt: null, cancelledAt: null },
             select: {
               packagingOrder: true,
               materialCode: true,
@@ -769,12 +771,17 @@ export class PlantService {
         activeLot: {
           include: {
             packagingOrders: {
-              where: { finishedAt: null },
+              where: { finishedAt: null, cancelledAt: null },
               orderBy: { startedAt: 'desc' },
               take: 1
             },
-            laboratorySamples: { orderBy: { iteration: 'desc' }, take: 1 },
+            laboratorySamples: {
+              where: { cancelledAt: null },
+              orderBy: { iteration: 'desc' },
+              take: 1
+            },
             qualityDecisions: {
+              where: { cancelledAt: null },
               include: { adjustmentItems: { orderBy: { position: 'asc' } } },
               orderBy: { createdAt: 'desc' },
               take: 1
@@ -1195,7 +1202,8 @@ export class PlantService {
             plantId: tank.plantId,
             tankId,
             lotId: tank.activeLotId,
-            status: 'AWAITING_RECEIPT'
+            status: 'AWAITING_RECEIPT',
+            cancelledAt: null
           },
           orderBy: { iteration: 'desc' }
         });
@@ -1266,7 +1274,8 @@ export class PlantService {
             plantId: tank.plantId,
             tankId,
             lotId: tank.activeLotId,
-            status: 'RECEIVED'
+            status: 'RECEIVED',
+            cancelledAt: null
           },
           orderBy: { iteration: 'desc' }
         });
@@ -1341,7 +1350,8 @@ export class PlantService {
             plantId: tank.plantId,
             tankId,
             lotId: tank.activeLotId,
-            status: 'ANALYZING'
+            status: 'ANALYZING',
+            cancelledAt: null
           },
           orderBy: { iteration: 'desc' }
         });
@@ -1449,7 +1459,7 @@ export class PlantService {
         if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
 
         const current = await tx.qualityDecision.findFirst({
-          where: { companyId, lotId: tank.activeLotId, result: 'AJUSTE' },
+          where: { companyId, lotId: tank.activeLotId, result: 'AJUSTE', cancelledAt: null },
           include: { adjustmentItems: { orderBy: { position: 'asc' } } },
           orderBy: { createdAt: 'desc' }
         });
@@ -1643,7 +1653,7 @@ export class PlantService {
         await this.validatePackaging(companyId, dto, tank.plantId);
         this.assertTank(tank, 'ENVASANDO', dto.version);
         const current = await tx.packagingOrder.findFirst({
-          where: { tankId, finishedAt: null },
+          where: { tankId, finishedAt: null, cancelledAt: null },
           orderBy: { startedAt: 'desc' }
         });
         if (!current) throw new ConflictException('No existe una OE abierta');
@@ -1797,7 +1807,7 @@ export class PlantService {
         if (!access?.canTransfer && user.role !== 'ADMIN')
           throw new UnauthorizedException('El usuario no tiene permiso explícito de trasvase');
         const operation = await tx.transferOperation.findFirst({
-          where: { tankId, finishedAt: null },
+          where: { tankId, finishedAt: null, cancelledAt: null },
           orderBy: { startedAt: 'desc' }
         });
         if (!operation) throw new ConflictException('No existe un trasvase abierto');
@@ -1936,6 +1946,145 @@ export class PlantService {
         row.durationSeconds ??
         Math.max(0, Math.floor(((row.endedAt ?? now).getTime() - row.startedAt.getTime()) / 1000))
     }));
+  }
+
+  async historySummary(
+    companyId: string,
+    plantId: string,
+    filters: {
+      tankId?: string;
+      state?: string;
+      from?: string;
+      to?: string;
+      search?: string;
+      sortBy?: string;
+      sortDirection?: string;
+      offset?: string;
+      limit?: string;
+    }
+  ) {
+    const fromDate = filters.from ? this.plantDayBounds(filters.from).start : undefined;
+    const toDate = filters.to ? this.plantDayBounds(filters.to).end : undefined;
+    if (fromDate && toDate && fromDate >= toDate)
+      throw new BadRequestException('El inicio debe ser anterior al fin');
+    if (filters.state && !Object.values(TankState).includes(filters.state as TankState))
+      throw new BadRequestException('Estado inválido');
+    const offset = Number(filters.offset ?? 0);
+    const limit = Number(filters.limit ?? 50);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100_000)
+      throw new BadRequestException('Desplazamiento inválido');
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
+      throw new BadRequestException('Límite inválido');
+    const sortBy = filters.sortBy ?? 'manufacturingOrder';
+    const allowedSorts = [
+      'manufacturingOrder',
+      'materialCode',
+      'description',
+      'adjustments',
+      'packagingOrders'
+    ];
+    if (!allowedSorts.includes(sortBy)) throw new BadRequestException('Columna de orden inválida');
+    const sortDirection = filters.sortDirection ?? 'asc';
+    if (sortDirection !== 'asc' && sortDirection !== 'desc')
+      throw new BadRequestException('Dirección de orden inválida');
+    const search = filters.search?.trim() ?? '';
+    if (search.length > 180) throw new BadRequestException('Búsqueda demasiado larga');
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        lotId: string;
+        manufacturingOrder: string;
+        materialCode: string;
+        description: string;
+        adjustments: bigint;
+        packagingOrders: bigint;
+      }>
+    >(Prisma.sql`
+      WITH matching_lots AS (
+        SELECT DISTINCT h."lotId"
+        FROM "TankStateHistory" h
+        JOIN "ProductionLot" l ON l.id = h."lotId"
+        JOIN "Tank" t ON t.id = h."tankId"
+        LEFT JOIN "User" u ON u.id = h."userId"
+        WHERE h."companyId" = ${companyId}
+          AND h."plantId" = ${plantId}
+          AND l."companyId" = ${companyId}
+          AND l."plantId" = ${plantId}
+          AND h."lotId" IS NOT NULL
+          ${filters.tankId ? Prisma.sql`AND h."tankId" = ${filters.tankId}` : Prisma.empty}
+          ${filters.state ? Prisma.sql`AND h.state = ${filters.state}::"TankState"` : Prisma.empty}
+          ${toDate ? Prisma.sql`AND h."startedAt" < ${toDate}` : Prisma.empty}
+          ${fromDate ? Prisma.sql`AND (h."endedAt" IS NULL OR h."endedAt" > ${fromDate})` : Prisma.empty}
+          ${
+            search
+              ? Prisma.sql`AND (
+            strpos(lower(t.name), lower(${search})) > 0
+            OR strpos(t.number::text, ${search}) > 0
+            OR strpos(lower(l."manufacturingOrder"), lower(${search})) > 0
+            OR strpos(lower(l."materialCode"), lower(${search})) > 0
+            OR strpos(lower(l.description), lower(${search})) > 0
+            OR strpos(lower(COALESCE(h.description, '')), lower(${search})) > 0
+            OR strpos(lower(COALESCE(u."fullName", '')), lower(${search})) > 0
+            OR strpos(lower(COALESCE(u.username, '')), lower(${search})) > 0
+            OR EXISTS (
+              SELECT 1 FROM "PackagingOrder" po
+              WHERE po."lotId" = l.id
+                AND po."companyId" = ${companyId}
+                AND po."plantId" = ${plantId}
+                AND (
+                strpos(lower(po."packagingOrder"), lower(${search})) > 0
+                OR strpos(lower(COALESCE(po."materialCode", '')), lower(${search})) > 0
+                OR strpos(lower(po.description), lower(${search})) > 0
+                OR strpos(lower(po.line), lower(${search})) > 0
+                OR strpos(lower(po.format), lower(${search})) > 0
+                OR strpos(lower(COALESCE(po.dispenser, '')), lower(${search})) > 0
+                OR strpos(lower(COALESCE(po.filter, '')), lower(${search})) > 0
+              )
+            )
+          )`
+              : Prisma.empty
+          }
+      )
+      SELECT l.id AS "lotId", l."manufacturingOrder", l."materialCode", l.description,
+        (SELECT COUNT(*) FROM "QualityDecision" q
+          WHERE q."lotId" = l.id
+            AND q."companyId" = ${companyId}
+            AND q."plantId" = ${plantId}
+            AND q.result = 'AJUSTE'::"QualityResult"
+            AND q."cancelledAt" IS NULL
+            ${fromDate ? Prisma.sql`AND q."createdAt" >= ${fromDate}` : Prisma.empty}
+            ${toDate ? Prisma.sql`AND q."createdAt" < ${toDate}` : Prisma.empty}
+        ) AS adjustments,
+        (SELECT COUNT(*) FROM "PackagingOrder" po
+          WHERE po."lotId" = l.id
+            AND po."companyId" = ${companyId}
+            AND po."plantId" = ${plantId}
+            AND po."cancelledAt" IS NULL
+        ) AS "packagingOrders"
+      FROM matching_lots m
+      JOIN "ProductionLot" l ON l.id = m."lotId"
+    `);
+    const collator = new Intl.Collator('es-AR', { numeric: true, sensitivity: 'base' });
+    const sorted = rows
+      .map((row) => ({
+        ...row,
+        adjustments: Number(row.adjustments),
+        packagingOrders: Number(row.packagingOrders)
+      }))
+      .sort((left, right) => {
+        const comparison =
+          sortBy === 'adjustments' || sortBy === 'packagingOrders'
+            ? Number(left[sortBy]) - Number(right[sortBy])
+            : collator.compare(
+                String(left[sortBy as 'manufacturingOrder' | 'materialCode' | 'description']),
+                String(right[sortBy as 'manufacturingOrder' | 'materialCode' | 'description'])
+              );
+        return (
+          (sortDirection === 'desc' ? -comparison : comparison) ||
+          left.lotId.localeCompare(right.lotId)
+        );
+      });
+    return { total: sorted.length, rows: sorted.slice(offset, offset + limit) };
   }
 
   async lotTimeline(
@@ -2111,7 +2260,7 @@ export class PlantService {
           orderBy: { startedAt: 'asc' }
         }),
         this.prisma.productionLot.findMany({
-          where: { companyId, plantId, finishedAt: { gte: start, lt: end } },
+          where: { companyId, plantId, cancelledAt: null, finishedAt: { gte: start, lt: end } },
           select: {
             id: true,
             manufacturingOrder: true,
@@ -2122,7 +2271,7 @@ export class PlantService {
           }
         }),
         this.prisma.qualityDecision.findMany({
-          where: { companyId, plantId, createdAt: { gte: start, lt: end } },
+          where: { companyId, plantId, cancelledAt: null, createdAt: { gte: start, lt: end } },
           select: { result: true }
         }),
         this.prisma.packagingOrder.findMany({
@@ -2133,6 +2282,7 @@ export class PlantService {
           where: {
             companyId,
             plantId,
+            cancelledAt: null,
             requestedAt: { lt: end },
             OR: [{ resolvedAt: null }, { resolvedAt: { gte: start } }]
           },
@@ -2542,6 +2692,566 @@ export class PlantService {
     };
   }
 
+  private assertRollbackAdministrator(user: JwtUser) {
+    if (user.role !== 'ADMIN')
+      throw new ForbiddenException('Sólo un Administrador puede retroceder estados');
+  }
+
+  private async rollbackCandidate(tx: Prisma.TransactionClient, companyId: string, tankId: string) {
+    const tank = await this.findTank(tx, companyId, tankId);
+    if (!tank.activeLotId) {
+      const history = await tx.tankStateHistory.findMany({
+        where: { companyId, plantId: tank.plantId, tankId },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }]
+      });
+      if (!history.length || history[0].endedAt || history[0].state !== tank.state)
+        throw new ConflictException('No hay un paso anterior verificable para este tanque');
+      if (history[0].lotId) {
+        const latestLot = await tx.productionLot.findUnique({ where: { id: history[0].lotId } });
+        if (latestLot?.cancelledAt)
+          throw new ConflictException('El lote ya fue retrocedido hasta su inicio');
+      }
+      const effective: typeof history = [];
+      for (const period of [...history].reverse()) {
+        if (period.description?.startsWith('Retroceso administrativo:')) {
+          if (effective.length < 2 || effective.at(-2)?.state !== period.state)
+            throw new ConflictException('El historial de retrocesos del tanque es inconsistente');
+          effective.pop();
+        } else effective.push(period);
+      }
+      const current = effective.at(-1);
+      const previous = effective.at(-2);
+      if (!current || !previous || current.state !== tank.state)
+        throw new ConflictException('No hay un paso anterior verificable para este tanque');
+      if (tank.state === 'FUERA_DE_SERVICIO' && previous.state === 'VACIO')
+        return {
+          tank,
+          target: TankState.VACIO,
+          sample: null,
+          decision: null,
+          plannedPackaging: null,
+          cancelLot: false,
+          packagingOrders: [],
+          transferOperations: [],
+          reactivateLotId: null,
+          reopenPackagingOrder: null,
+          reopenTransferOperation: null,
+          restoreServiceReason: null
+        };
+      if (tank.state === 'VACIO' && previous.state === 'FUERA_DE_SERVICIO')
+        return {
+          tank,
+          target: TankState.FUERA_DE_SERVICIO,
+          sample: null,
+          decision: null,
+          plannedPackaging: null,
+          cancelLot: false,
+          packagingOrders: [],
+          transferOperations: [],
+          reactivateLotId: null,
+          reopenPackagingOrder: null,
+          reopenTransferOperation: null,
+          restoreServiceReason: previous.description ?? 'Fuera de servicio'
+        };
+      if (
+        tank.state === 'VACIO' &&
+        current.lotId &&
+        previous.lotId === current.lotId &&
+        ['ENVASANDO', 'TRASVASANDO', 'RECHAZADO'].includes(previous.state)
+      ) {
+        const lot = await tx.productionLot.findUnique({ where: { id: current.lotId } });
+        if (!lot || lot.cancelledAt || !lot.finishedAt)
+          throw new ConflictException('El cierre del lote no está vigente');
+        const reopenPackagingOrder =
+          previous.state === 'ENVASANDO'
+            ? await tx.packagingOrder.findFirst({
+                where: { lotId: lot.id, cancelledAt: null },
+                orderBy: { startedAt: 'desc' }
+              })
+            : null;
+        const reopenTransferOperation =
+          previous.state === 'TRASVASANDO'
+            ? await tx.transferOperation.findFirst({
+                where: { lotId: lot.id, cancelledAt: null },
+                orderBy: { startedAt: 'desc' }
+              })
+            : null;
+        if (
+          (previous.state === 'ENVASANDO' && !reopenPackagingOrder) ||
+          (previous.state === 'TRASVASANDO' && !reopenTransferOperation)
+        )
+          throw new ConflictException('No existe la operación final del lote para reabrir');
+        return {
+          tank,
+          target: previous.state,
+          sample: null,
+          decision: null,
+          plannedPackaging: null,
+          cancelLot: false,
+          packagingOrders: [],
+          transferOperations: [],
+          reactivateLotId: lot.id,
+          reopenPackagingOrder,
+          reopenTransferOperation,
+          restoreServiceReason: null
+        };
+      }
+      throw new ConflictException(
+        `El retroceso ${tank.state} → ${previous.state} no está habilitado`
+      );
+    }
+    const periods = await tx.tankStateHistory.findMany({
+      where: { companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }]
+    });
+    if (!periods.length || periods[0].endedAt || periods[0].state !== tank.state)
+      throw new ConflictException('No hay un paso anterior verificable para este lote');
+    const effectivePeriods: typeof periods = [];
+    for (const period of [...periods].reverse()) {
+      if (period.description?.startsWith('Retroceso administrativo:')) {
+        if (effectivePeriods.length < 2 || effectivePeriods.at(-2)?.state !== period.state)
+          throw new ConflictException('El historial de retrocesos del lote es inconsistente');
+        effectivePeriods.pop();
+      } else {
+        effectivePeriods.push(period);
+      }
+    }
+    const currentPeriod = effectivePeriods.at(-1);
+    const previousPeriod = effectivePeriods.at(-2);
+    if (!currentPeriod || currentPeriod.state !== tank.state)
+      throw new ConflictException('No hay un paso anterior verificable para este lote');
+    if (!previousPeriod && currentPeriod.state === 'FABRICANDO') {
+      return {
+        tank,
+        target: TankState.VACIO,
+        sample: null,
+        decision: null,
+        plannedPackaging: null,
+        cancelLot: true,
+        packagingOrders: [],
+        transferOperations: [],
+        reactivateLotId: null,
+        reopenPackagingOrder: null,
+        reopenTransferOperation: null,
+        restoreServiceReason: null
+      };
+    }
+    if (!previousPeriod)
+      throw new ConflictException('No hay un paso anterior verificable para este lote');
+    const previous = previousPeriod.state;
+    if (tank.state === 'ENVASANDO' && previous === 'APROBADO') {
+      const packagingOrders = await tx.packagingOrder.findMany({
+        where: {
+          companyId,
+          plantId: tank.plantId,
+          tankId,
+          lotId: tank.activeLotId,
+          cancelledAt: null
+        },
+        orderBy: { startedAt: 'desc' }
+      });
+      if (!packagingOrders.length)
+        throw new ConflictException('No hay una OE vigente para revertir');
+      return {
+        tank,
+        target: previous,
+        sample: null,
+        decision: null,
+        plannedPackaging: null,
+        cancelLot: false,
+        packagingOrders,
+        transferOperations: [],
+        reactivateLotId: null,
+        reopenPackagingOrder: null,
+        reopenTransferOperation: null,
+        restoreServiceReason: null
+      };
+    }
+    if (tank.state === 'TRASVASANDO' && previous === 'APROBADO') {
+      const transferOperations = await tx.transferOperation.findMany({
+        where: {
+          companyId,
+          plantId: tank.plantId,
+          tankId,
+          lotId: tank.activeLotId,
+          cancelledAt: null
+        },
+        orderBy: { startedAt: 'desc' }
+      });
+      if (!transferOperations.length)
+        throw new ConflictException('No hay un trasvase vigente para revertir');
+      return {
+        tank,
+        target: previous,
+        sample: null,
+        decision: null,
+        plannedPackaging: null,
+        cancelLot: false,
+        packagingOrders: [],
+        transferOperations,
+        reactivateLotId: null,
+        reopenPackagingOrder: null,
+        reopenTransferOperation: null,
+        restoreServiceReason: null
+      };
+    }
+    const sample = await tx.laboratorySample.findFirst({
+      where: {
+        companyId,
+        plantId: tank.plantId,
+        tankId,
+        lotId: tank.activeLotId,
+        cancelledAt: null
+      },
+      orderBy: { iteration: 'desc' }
+    });
+    if (tank.state === 'LABORATORIO' && (previous === 'FABRICANDO' || previous === 'AJUSTE')) {
+      if (!sample) throw new ConflictException('No hay una muestra vigente para esta etapa');
+      if (sample.qualityDecisionId)
+        throw new ConflictException('La muestra tiene una decisión de calidad vinculada');
+      return {
+        tank,
+        target: previous,
+        sample,
+        decision: null,
+        plannedPackaging: null,
+        cancelLot: false,
+        packagingOrders: [],
+        transferOperations: [],
+        reactivateLotId: null,
+        reopenPackagingOrder: null,
+        reopenTransferOperation: null,
+        restoreServiceReason: null
+      };
+    }
+    if (
+      previous === 'LABORATORIO' &&
+      (tank.state === 'APROBADO' || tank.state === 'AJUSTE' || tank.state === 'RECHAZADO')
+    ) {
+      if (sample && (sample.status !== 'RESOLVED' || !sample.qualityDecisionId))
+        throw new ConflictException('No hay una decisión de calidad vigente para revertir');
+      if (!sample) {
+        const sampleCount = await tx.laboratorySample.count({
+          where: { companyId, plantId: tank.plantId, tankId, lotId: tank.activeLotId }
+        });
+        if (sampleCount)
+          throw new ConflictException('No hay una decisión de calidad vigente para revertir');
+      }
+      const decision = await tx.qualityDecision.findFirst({
+        where: sample
+          ? {
+              id: sample.qualityDecisionId!,
+              companyId,
+              plantId: tank.plantId,
+              lotId: tank.activeLotId,
+              cancelledAt: null
+            }
+          : {
+              companyId,
+              plantId: tank.plantId,
+              lotId: tank.activeLotId,
+              cancelledAt: null,
+              createdAt: { gte: previousPeriod.startedAt, lte: currentPeriod.startedAt }
+            },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (!decision) throw new ConflictException('La decisión de calidad ya fue anulada');
+      if (
+        (tank.state === 'APROBADO' && decision.result !== 'APROBADO') ||
+        (tank.state === 'AJUSTE' && decision.result !== 'AJUSTE') ||
+        (tank.state === 'RECHAZADO' && !decision.result.startsWith('RECHAZADO'))
+      )
+        throw new ConflictException('La decisión de calidad no coincide con el estado actual');
+      const plannedPackaging =
+        tank.state === 'APROBADO'
+          ? await tx.packagingPlanningCard.findFirst({
+              where: { companyId, plantId: tank.plantId, tankId }
+            })
+          : null;
+      const laterPackaging = await tx.packagingOrder.count({
+        where: {
+          lotId: tank.activeLotId,
+          cancelledAt: null,
+          startedAt: { gte: decision.createdAt }
+        }
+      });
+      const laterTransfers = await tx.transferOperation.count({
+        where: {
+          lotId: tank.activeLotId,
+          cancelledAt: null,
+          startedAt: { gte: decision.createdAt }
+        }
+      });
+      if (laterPackaging || laterTransfers)
+        throw new ConflictException('El lote ya registra envasado o trasvase posterior');
+      return {
+        tank,
+        target: previous,
+        sample,
+        decision,
+        plannedPackaging,
+        cancelLot: false,
+        packagingOrders: [],
+        transferOperations: [],
+        reactivateLotId: null,
+        reopenPackagingOrder: null,
+        reopenTransferOperation: null,
+        restoreServiceReason: null
+      };
+    }
+    throw new ConflictException(`El retroceso ${tank.state} → ${previous} no está habilitado`);
+  }
+
+  async rollbackPreview(companyId: string, tankId: string, user: JwtUser) {
+    this.assertRollbackAdministrator(user);
+    const candidate = await this.prisma.$transaction((tx) =>
+      this.rollbackCandidate(tx, companyId, tankId)
+    );
+    return {
+      from: candidate.tank.state,
+      to: candidate.target,
+      version: candidate.tank.version,
+      affectedRecord:
+        (candidate.reactivateLotId
+          ? 'Cierre del lote; se reabrirá la operación final si corresponde'
+          : candidate.packagingOrders.length
+            ? 'Órdenes de envasado del lote'
+            : candidate.transferOperations.length
+              ? 'Operación de trasvase del lote'
+              : candidate.tank.state === 'FUERA_DE_SERVICIO' ||
+                  candidate.target === 'FUERA_DE_SERVICIO'
+                ? 'Estado de servicio del tanque'
+                : candidate.cancelLot
+                  ? 'Lote de fabricación'
+                  : candidate.decision
+                    ? candidate.sample
+                      ? 'Decisión de calidad'
+                      : 'Decisión de calidad; se solicitará una muestra nueva'
+                    : 'Muestra de laboratorio') +
+        (candidate.plannedPackaging ? '; se quitará la tarjeta de planificación de envasado' : '')
+    };
+  }
+
+  async rollbackState(companyId: string, tankId: string, user: JwtUser, dto: RollbackTankStateDto) {
+    this.assertRollbackAdministrator(user);
+    const reason = dto.reason.trim();
+    if (!reason) throw new BadRequestException('Indicá el motivo del retroceso');
+    return this.prisma.$transaction(
+      async (tx) => {
+        const {
+          tank,
+          target,
+          sample,
+          decision,
+          plannedPackaging,
+          cancelLot,
+          packagingOrders,
+          transferOperations,
+          reactivateLotId,
+          reopenPackagingOrder,
+          reopenTransferOperation,
+          restoreServiceReason
+        } = await this.rollbackCandidate(tx, companyId, tankId);
+        if (tank.version !== dto.version)
+          throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
+        const cancelledAt = new Date();
+        if (reactivateLotId) {
+          await tx.productionLot.update({
+            where: { id: reactivateLotId },
+            data: { finishedAt: null }
+          });
+          if (reopenPackagingOrder) {
+            await this.audit(
+              tx,
+              companyId,
+              user,
+              tank.id,
+              reactivateLotId,
+              'ROLLBACK',
+              'PackagingOrder',
+              reopenPackagingOrder.id,
+              reopenPackagingOrder,
+              null,
+              reason
+            );
+            await tx.packagingOrder.update({
+              where: { id: reopenPackagingOrder.id },
+              data: {
+                finishedAt: null,
+                finishedByUserId: null,
+                durationSeconds: null,
+                producedKg: null,
+                wasteKg: null,
+                producedUnits: null
+              }
+            });
+          }
+          if (reopenTransferOperation) {
+            await this.audit(
+              tx,
+              companyId,
+              user,
+              tank.id,
+              reactivateLotId,
+              'ROLLBACK',
+              'TransferOperation',
+              reopenTransferOperation.id,
+              reopenTransferOperation,
+              null,
+              reason
+            );
+            await tx.transferOperation.update({
+              where: { id: reopenTransferOperation.id },
+              data: { finishedAt: null, finishedByUserId: null, durationSeconds: null }
+            });
+          }
+        }
+        for (const order of packagingOrders) {
+          await tx.packagingOrder.update({ where: { id: order.id }, data: { cancelledAt } });
+          await this.audit(
+            tx,
+            companyId,
+            user,
+            tank.id,
+            tank.activeLotId,
+            'ROLLBACK',
+            'PackagingOrder',
+            order.id,
+            order,
+            { cancelledAt },
+            reason
+          );
+        }
+        for (const operation of transferOperations) {
+          await tx.transferOperation.update({ where: { id: operation.id }, data: { cancelledAt } });
+          await this.audit(
+            tx,
+            companyId,
+            user,
+            tank.id,
+            tank.activeLotId,
+            'ROLLBACK',
+            'TransferOperation',
+            operation.id,
+            operation,
+            { cancelledAt },
+            reason
+          );
+        }
+        if (plannedPackaging) {
+          await tx.packagingPlanningCard.delete({ where: { id: plannedPackaging.id } });
+          await tx.packagingPlanningCard.updateMany({
+            where: { plantId: tank.plantId, position: { gt: plannedPackaging.position } },
+            data: { position: { decrement: 1 } }
+          });
+          await this.audit(
+            tx,
+            companyId,
+            user,
+            tank.id,
+            tank.activeLotId,
+            'DELETE',
+            'PackagingPlanningCard',
+            plannedPackaging.id,
+            plannedPackaging,
+            null,
+            `Tarjeta quitada por retroceso administrativo: ${reason}`
+          );
+        }
+        if (decision) {
+          await tx.qualityDecision.update({ where: { id: decision.id }, data: { cancelledAt } });
+          if (sample) {
+            await tx.laboratorySample.update({
+              where: { id: sample.id },
+              data: {
+                status: 'ANALYZING',
+                resolvedAt: null,
+                qualityDecisionId: null
+              }
+            });
+          } else {
+            await tx.laboratorySample.create({
+              data: {
+                companyId,
+                plantId: tank.plantId,
+                tankId,
+                lotId: tank.activeLotId!,
+                iteration: 1,
+                requestedByUserId: user.sub
+              }
+            });
+          }
+          await tx.productionLot.update({
+            where: { id: tank.activeLotId! },
+            data: { specificWeight: null }
+          });
+        } else if (sample) {
+          await tx.laboratorySample.update({ where: { id: sample!.id }, data: { cancelledAt } });
+        } else if (cancelLot) {
+          await tx.productionLot.update({
+            where: { id: tank.activeLotId! },
+            data: { cancelledAt }
+          });
+        }
+        await this.move(
+          tx,
+          tank,
+          target,
+          user,
+          tank.activeLotId ?? reactivateLotId,
+          `Retroceso administrativo: ${reason}`,
+          target === 'FUERA_DE_SERVICIO'
+            ? { serviceReason: restoreServiceReason, serviceNotes: null }
+            : tank.state === 'FUERA_DE_SERVICIO'
+              ? { serviceReason: null, serviceNotes: null }
+              : {}
+        );
+        if (cancelLot)
+          await tx.tank.update({ where: { id: tank.id }, data: { activeLotId: null } });
+        if (reactivateLotId)
+          await tx.tank.update({ where: { id: tank.id }, data: { activeLotId: reactivateLotId } });
+        await this.audit(
+          tx,
+          companyId,
+          user,
+          tank.id,
+          tank.activeLotId ?? reactivateLotId,
+          'ROLLBACK',
+          'Tank',
+          tank.id,
+          { state: tank.state, sampleId: sample?.id ?? null, decisionId: decision?.id ?? null },
+          {
+            state: target,
+            sampleCancelled: !decision && !!sample,
+            decisionCancelled: !!decision,
+            lotCancelled: cancelLot,
+            newSampleRequested: !!decision && !sample,
+            packagingPlanningRemoved: !!plannedPackaging,
+            packagingOrdersCancelled: packagingOrders.length,
+            transferOperationsCancelled: transferOperations.length,
+            lotReactivated: !!reactivateLotId
+          },
+          reason
+        );
+        await this.notifications.notifyTankAction(tx, {
+          companyId,
+          actorUserId: user.sub,
+          tankId: tank.id,
+          targetSector:
+            target === 'LABORATORIO'
+              ? 'LABORATORIO'
+              : ['APROBADO', 'ENVASANDO', 'TRASVASANDO'].includes(target)
+                ? 'ENVASADO'
+                : 'FABRICACION',
+          title: 'Estado retrocedido por Administración',
+          message: `${tank.name}: el estado volvió a ${target}. Motivo: ${reason}`
+        });
+        return { ok: true, state: target };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  }
+
   private async transition(
     companyId: string,
     tankId: string,
@@ -2708,7 +3418,7 @@ export class PlantService {
     metrics?: { producedKg?: number; wasteKg?: number; producedUnits?: number }
   ) {
     const current = await tx.packagingOrder.findFirst({
-      where: { tankId, finishedAt: null },
+      where: { tankId, finishedAt: null, cancelledAt: null },
       orderBy: { startedAt: 'desc' }
     });
     if (!current) throw new ConflictException('No existe una OE abierta');
@@ -2778,7 +3488,11 @@ export class PlantService {
   private plantDayBounds(date: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BadRequestException('Fecha inválida');
     const localMidnightAsUtc = Date.parse(`${date}T00:00:00.000Z`);
-    if (Number.isNaN(localMidnightAsUtc)) throw new BadRequestException('Fecha inválida');
+    if (
+      Number.isNaN(localMidnightAsUtc) ||
+      new Date(localMidnightAsUtc).toISOString().slice(0, 10) !== date
+    )
+      throw new BadRequestException('Fecha inválida');
     const start = new Date(localMidnightAsUtc + BUENOS_AIRES_OFFSET_MS);
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     return { start, end };

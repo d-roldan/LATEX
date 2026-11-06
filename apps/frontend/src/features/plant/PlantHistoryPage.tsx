@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { FileDown } from 'lucide-react';
 import {
   Area,
@@ -52,6 +53,23 @@ export interface HistoryRow {
   user?: { fullName: string; username: string };
 }
 
+export interface HistorySummary {
+  lotId: string;
+  manufacturingOrder: string;
+  materialCode: string;
+  description: string;
+  adjustments: number;
+  packagingOrders: number;
+}
+
+type SummarySort =
+  | 'manufacturingOrder'
+  | 'materialCode'
+  | 'description'
+  | 'adjustments'
+  | 'packagingOrders';
+const SUMMARY_PAGE_SIZE = 50;
+
 export interface ManufacturingCharge {
   id: string;
   materialCode: string;
@@ -68,6 +86,7 @@ export interface QualityAdjustment {
   reason?: string;
   adjustmentReasons: string[];
   createdAt: string;
+  cancelledAt?: string | null;
   user?: { fullName: string };
   adjustmentItems: Array<{
     id: string;
@@ -94,6 +113,7 @@ export interface Timeline {
     receivedAt?: string;
     analysisStartedAt?: string;
     resolvedAt?: string;
+    cancelledAt?: string | null;
     waitingForReceiptSeconds?: number | null;
     waitingForAnalysisSeconds?: number | null;
     analysisSeconds?: number | null;
@@ -136,13 +156,15 @@ const duration = (seconds: number) => {
 };
 const dateTime = (value: string) =>
   new Date(value).toLocaleString('es-AR', {
-    timeZone: 'America/Argentina/Buenos_Aires'
+    timeZone: 'America/Argentina/Buenos_Aires',
+    hour12: false
   });
 const chartTime = (value: string) =>
   new Date(value).toLocaleTimeString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    hour12: false
   });
 const kilograms = (value: number) => `${Math.round(value).toLocaleString('es-AR')} kg`;
 
@@ -169,6 +191,7 @@ const matchesHistorySearch = (row: HistoryRow, term: string) =>
   ].some((value) => value?.toLocaleLowerCase('es-AR').includes(term));
 
 export function PlantHistoryPage() {
+  const [urlParams, setUrlParams] = useSearchParams();
   const { active } = useActivePlant();
   const base = `/plants/${active?.code ?? 'LATEX'}`;
   const [state, setState] = useState('');
@@ -177,7 +200,10 @@ export function PlantHistoryPage() {
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
   const [collapsedByOrder, setCollapsedByOrder] = useState(false);
-  const [selectedLot, setSelectedLot] = useState<string | null>(null);
+  const [summarySort, setSummarySort] = useState<SummarySort>('manufacturingOrder');
+  const [summaryDirection, setSummaryDirection] = useState<'asc' | 'desc'>('asc');
+  const [summaryOffset, setSummaryOffset] = useState(0);
+  const [selectedLot, setSelectedLot] = useState<string | null>(() => urlParams.get('lotId'));
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isDownloadingSummary, setIsDownloadingSummary] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -215,43 +241,45 @@ export function PlantHistoryPage() {
     const term = search.trim().toLocaleLowerCase('es-AR');
     return (query.data ?? []).filter((row) => matchesHistorySearch(row, term));
   }, [query.data, search]);
-  const orderSummaries = useMemo(() => {
-    const summaries = new Map<
-      string,
-      {
-        lotId: string;
-        manufacturingOrder: string;
-        materialCode: string;
-        description: string;
-        adjustments: number;
-        packagingOrders: number;
-      }
-    >();
-
-    filteredRows.forEach((row) => {
-      if (!row.lot) return;
-      const current = summaries.get(row.lot.id);
-      if (current) {
-        if (row.state === 'AJUSTE') current.adjustments += 1;
-        return;
-      }
-      summaries.set(row.lot.id, {
-        lotId: row.lot.id,
-        manufacturingOrder: row.lot.manufacturingOrder,
-        materialCode: row.lot.materialCode,
-        description: row.lot.description,
-        adjustments: row.state === 'AJUSTE' ? 1 : 0,
-        packagingOrders: row.lot.packagingOrders.length
-      });
-    });
-
-    return [...summaries.values()].sort((left, right) =>
-      left.manufacturingOrder.localeCompare(right.manufacturingOrder, 'es-AR', {
-        numeric: true,
-        sensitivity: 'base'
-      })
+  useEffect(() => setSummaryOffset(0), [active?.code, tankId, state, from, to, search]);
+  const summaryParams = {
+    tankId: tankId || undefined,
+    state: state || undefined,
+    from: from || undefined,
+    to: to || undefined,
+    search: search.trim() || undefined,
+    sortBy: summarySort,
+    sortDirection: summaryDirection
+  };
+  const summaries = useQuery({
+    queryKey: [
+      'plant-history-summary',
+      active?.code,
+      tankId,
+      state,
+      from,
+      to,
+      search.trim(),
+      summarySort,
+      summaryDirection,
+      summaryOffset
+    ],
+    enabled: Boolean(active && collapsedByOrder),
+    queryFn: async () =>
+      (
+        await api.get<{ total: number; rows: HistorySummary[] }>(`${base}/history/summary`, {
+          params: { ...summaryParams, offset: summaryOffset, limit: SUMMARY_PAGE_SIZE }
+        })
+      ).data
+  });
+  const orderSummaries = summaries.data?.rows ?? [];
+  const changeSummarySort = (column: SummarySort) => {
+    setSummaryDirection((current) =>
+      summarySort === column && current === 'asc' ? 'desc' : 'asc'
     );
-  }, [filteredRows]);
+    setSummarySort(column);
+    setSummaryOffset(0);
+  };
 
   const downloadPdf = async () => {
     if (!timeline.data) return;
@@ -275,6 +303,16 @@ export function PlantHistoryPage() {
     try {
       const { downloadHistorySummaryPdf } = await import('./history-summary-pdf');
       const allRows: HistoryRow[] = [];
+      const allSummaries: HistorySummary[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const page = (
+          await api.get<{ total: number; rows: HistorySummary[] }>(`${base}/history/summary`, {
+            params: { ...summaryParams, offset, limit: 1000 }
+          })
+        ).data;
+        allSummaries.push(...page.rows);
+        if (allSummaries.length >= page.total) break;
+      }
       for (let offset = 0; ; offset += 1000) {
         const page = (
           await api.get<HistoryRow[]>(`${base}/history/states`, {
@@ -300,7 +338,8 @@ export function PlantHistoryPage() {
           tank: tanks.data?.find((tank) => tank.id === tankId)?.name ?? '',
           state,
           search: search.trim()
-        }
+        },
+        allSummaries
       );
     } catch (error) {
       console.error('No se pudo generar el PDF del historial', error);
@@ -320,7 +359,11 @@ export function PlantHistoryPage() {
         <div className="history-head-actions">
           <span>
             {collapsedByOrder
-              ? `${orderSummaries.length} órdenes de fabricación`
+              ? summaries.isError
+                ? 'Resumen no disponible'
+                : summaries.data
+                  ? `${summaries.data.total} órdenes de fabricación`
+                  : 'Cargando órdenes…'
               : `${filteredRows.length} registros`}
           </span>
           <button
@@ -336,7 +379,7 @@ export function PlantHistoryPage() {
               type="button"
               className="history-collapse-button"
               onClick={downloadSummary}
-              disabled={query.isLoading || query.isError || isDownloadingSummary}
+              disabled={summaries.isLoading || summaries.isError || isDownloadingSummary}
             >
               <FileDown aria-hidden="true" size={17} />
               {isDownloadingSummary ? 'Generando…' : 'Descargar informe PDF'}
@@ -394,13 +437,45 @@ export function PlantHistoryPage() {
             <>
               <thead>
                 <tr>
-                  <th>Orden de fabricación</th>
-                  <th>Semielaborado</th>
-                  <th>Ajustes realizados</th>
-                  <th>Órdenes de envasado asignadas</th>
+                  {(
+                    [
+                      ['manufacturingOrder', 'Orden de fabricación'],
+                      ['materialCode', 'Semielaborado'],
+                      ['description', 'Producto'],
+                      ['adjustments', 'Solicitudes de ajuste'],
+                      ['packagingOrders', 'Órdenes de envasado asignadas']
+                    ] as const
+                  ).map(([column, label]) => (
+                    <th
+                      key={column}
+                      aria-sort={
+                        summarySort === column
+                          ? summaryDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                    >
+                      <button
+                        className="history-sort-button"
+                        type="button"
+                        onClick={() => changeSummarySort(column)}
+                      >
+                        {label}{' '}
+                        {summarySort === column ? (summaryDirection === 'asc' ? '↑' : '↓') : '↕'}
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
+                {summaries.isError ? (
+                  <tr>
+                    <td colSpan={5} className="history-empty-cell" role="alert">
+                      No se pudo cargar el resumen. Volvé a intentar.
+                    </td>
+                  </tr>
+                ) : null}
                 {orderSummaries.map((summary) => (
                   <tr key={summary.lotId}>
                     <td>
@@ -415,21 +490,51 @@ export function PlantHistoryPage() {
                         OF {summary.manufacturingOrder}
                       </button>
                     </td>
-                    <td>
-                      {summary.materialCode} · {summary.description}
-                    </td>
+                    <td>{summary.materialCode}</td>
+                    <td>{summary.description}</td>
                     <td>{summary.adjustments}</td>
                     <td>{summary.packagingOrders}</td>
                   </tr>
                 ))}
-                {!orderSummaries.length ? (
+                {!orderSummaries.length && !summaries.isLoading && !summaries.isError ? (
                   <tr>
-                    <td colSpan={4} className="history-empty-cell">
+                    <td colSpan={5} className="history-empty-cell">
                       No hay órdenes de fabricación para los filtros seleccionados.
                     </td>
                   </tr>
                 ) : null}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5}>
+                    <button
+                      type="button"
+                      disabled={summaryOffset === 0 || summaries.isFetching}
+                      onClick={() =>
+                        setSummaryOffset(Math.max(0, summaryOffset - SUMMARY_PAGE_SIZE))
+                      }
+                    >
+                      Anterior
+                    </button>{' '}
+                    {summaries.data
+                      ? summaries.data.total === 0
+                        ? '0 de 0'
+                        : `${summaryOffset + 1}–${Math.min(summaryOffset + SUMMARY_PAGE_SIZE, summaries.data.total)} de ${summaries.data.total}`
+                      : 'Cargando…'}{' '}
+                    <button
+                      type="button"
+                      disabled={
+                        !summaries.data ||
+                        summaryOffset + SUMMARY_PAGE_SIZE >= summaries.data.total ||
+                        summaries.isFetching
+                      }
+                      onClick={() => setSummaryOffset(summaryOffset + SUMMARY_PAGE_SIZE)}
+                    >
+                      Siguiente
+                    </button>
+                  </td>
+                </tr>
+              </tfoot>
             </>
           ) : (
             <>
@@ -496,6 +601,9 @@ export function PlantHistoryPage() {
         onOpenChange={(open) => {
           if (!open) {
             setSelectedLot(null);
+            const next = new URLSearchParams(urlParams);
+            next.delete('lotId');
+            setUrlParams(next, { replace: true });
             setPdfError(null);
           }
         }}
@@ -612,13 +720,15 @@ function LaboratorySamples({ samples }: { samples: NonNullable<Timeline['laborat
             <header>
               <strong>Muestra {sample.iteration}</strong>
               <span>
-                {sample.status === 'AWAITING_RECEIPT'
-                  ? 'Esperando recepción'
-                  : sample.status === 'RECEIVED'
-                    ? 'Tanque en espera'
-                    : sample.status === 'ANALYZING'
-                      ? 'En análisis'
-                      : 'Resuelta'}
+                {sample.cancelledAt
+                  ? `Anulada · ${dateTime(sample.cancelledAt)}`
+                  : sample.status === 'AWAITING_RECEIPT'
+                    ? 'Esperando recepción'
+                    : sample.status === 'RECEIVED'
+                      ? 'Tanque en espera'
+                      : sample.status === 'ANALYZING'
+                        ? 'En análisis'
+                        : 'Resuelta'}
               </span>
             </header>
             <dl>
@@ -641,7 +751,9 @@ function LaboratorySamples({ samples }: { samples: NonNullable<Timeline['laborat
                 <dt>Demora en llegar la muestra</dt>
                 <dd>
                   {sample.waitingForReceiptSeconds == null
-                    ? 'En curso'
+                    ? sample.cancelledAt
+                      ? 'Anulada'
+                      : 'En curso'
                     : duration(sample.waitingForReceiptSeconds)}
                 </dd>
               </div>
@@ -657,23 +769,33 @@ function LaboratorySamples({ samples }: { samples: NonNullable<Timeline['laborat
                 <dt>Tanque en espera para análisis</dt>
                 <dd>
                   {sample.waitingForAnalysisSeconds == null
-                    ? sample.receivedAt
-                      ? 'En curso'
-                      : 'Pendiente'
+                    ? sample.cancelledAt
+                      ? 'Anulada'
+                      : sample.receivedAt
+                        ? 'En curso'
+                        : 'Pendiente'
                     : duration(sample.waitingForAnalysisSeconds)}
                 </dd>
               </div>
               <div>
                 <dt>Resolución del análisis</dt>
-                <dd>{sample.resolvedAt ? dateTime(sample.resolvedAt) : 'Pendiente'}</dd>
+                <dd>
+                  {sample.resolvedAt
+                    ? dateTime(sample.resolvedAt)
+                    : sample.cancelledAt
+                      ? 'Anulada'
+                      : 'Pendiente'}
+                </dd>
               </div>
               <div>
                 <dt>Tiempo de análisis</dt>
                 <dd>
                   {sample.analysisSeconds == null
-                    ? sample.analysisStartedAt
-                      ? 'En curso'
-                      : 'Pendiente'
+                    ? sample.cancelledAt
+                      ? 'Anulada'
+                      : sample.analysisStartedAt
+                        ? 'En curso'
+                        : 'Pendiente'
                     : duration(sample.analysisSeconds)}
                 </dd>
               </div>
@@ -1001,6 +1123,9 @@ function LaboratoryAdjustments({ adjustments }: { adjustments: QualityAdjustment
             <header>
               <strong>{adjustment.adjustmentReasons.join(' · ') || adjustment.reason}</strong>
               <span>{dateTime(adjustment.createdAt)}</span>
+              {adjustment.cancelledAt ? (
+                <span>Anulada · {dateTime(adjustment.cancelledAt)}</span>
+              ) : null}
             </header>
             <small>
               Legajo {adjustment.employeeNumber} ·{' '}

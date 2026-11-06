@@ -919,6 +919,7 @@ model ProductionLot {
   scheduledAt        DateTime?           @db.Timestamptz(3)
   startedAt          DateTime            @default(now()) @db.Timestamptz(3)
   finishedAt         DateTime?           @db.Timestamptz(3)
+  cancelledAt        DateTime?           @db.Timestamptz(3)
   createdByUserId    String
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
@@ -1018,6 +1019,7 @@ model QualityDecision {
   recoveryAction    String?
   userId            String
   createdAt         DateTime                @default(now()) @db.Timestamptz(3)
+  cancelledAt       DateTime?               @db.Timestamptz(3)
   company           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
   plant             Plant                   @relation(fields: [plantId], references: [id], onDelete: Restrict)
   lot               ProductionLot           @relation(fields: [lotId], references: [id], onDelete: Cascade)
@@ -1046,6 +1048,7 @@ model LaboratorySample {
   resolvedAt              DateTime?              @db.Timestamptz(3)
   qualityDecisionId       String?                @unique
   createdAt               DateTime               @default(now()) @db.Timestamptz(3)
+  cancelledAt             DateTime?              @db.Timestamptz(3)
   company                 Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
   plant                   Plant                  @relation(fields: [plantId], references: [id], onDelete: Restrict)
   tank                    Tank                   @relation(fields: [tankId], references: [id], onDelete: Restrict)
@@ -1091,6 +1094,7 @@ model PackagingOrder {
   finishedByUserId String?
   startedAt        DateTime      @default(now()) @db.Timestamptz(3)
   finishedAt       DateTime?     @db.Timestamptz(3)
+  cancelledAt      DateTime?     @db.Timestamptz(3)
   durationSeconds  Int?
   producedKg       Decimal?      @db.Decimal(12, 3)
   wasteKg          Decimal?      @db.Decimal(12, 3)
@@ -1118,6 +1122,7 @@ model TransferOperation {
   finishedByUserId String?
   startedAt        DateTime      @default(now()) @db.Timestamptz(3)
   finishedAt       DateTime?     @db.Timestamptz(3)
+  cancelledAt      DateTime?     @db.Timestamptz(3)
   durationSeconds  Int?
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
   company          Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)

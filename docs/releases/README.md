@@ -8,6 +8,7 @@ Para la próxima versión, seguir [el procedimiento de publicación](../RELEASE_
 
 | Versión                             | Fecha      | Contenido principal                                                                                                                       |
 | ----------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [V0.0.49](RELEASE_NOTES_V0.0.49.md) | 06/11/2026 | Reportería industrial y PDF/Excel de Laboratorio, resumen de HISTORIAL y retroceso administrativo auditado de tanques.                    |
 | [V0.0.48](RELEASE_NOTES_V0.0.48.md) | 21/10/2026 | Corrección de códigos Woojin por IP y visualización decimal de tiempos en ENVASES.                                                        |
 | [V0.0.47](RELEASE_NOTES_V0.0.47.md) | 20/10/2026 | TV de Látex y ENVASES, estado histórico Woojin, disparos CMS por archivo actual y espejo DBS local.                                       |
 | [V0.0.46](RELEASE_NOTES_V0.0.46.md) | 19/10/2026 | Corrección del formato del DTO para la CI; incluye íntegramente la integración DBS de V0.0.45.                                            |

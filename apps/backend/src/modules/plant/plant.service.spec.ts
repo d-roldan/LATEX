@@ -172,6 +172,563 @@ describe('PlantService planning board', () => {
   });
 });
 
+describe('PlantService administrative rollback', () => {
+  const admin = { sub: 'admin-1', companyId: 'company-1', role: 'ADMIN' } as any;
+  const tank = {
+    id: 'tank-101',
+    companyId: 'company-1',
+    plantId: 'plant-latex',
+    name: 'TK101',
+    state: 'LABORATORIO',
+    version: 7,
+    activeLotId: 'lot-1',
+    scaleKey: null
+  };
+  const periods = (current: string, previous: string) => [
+    {
+      id: 'current',
+      state: current,
+      lotId: 'lot-1',
+      endedAt: null,
+      startedAt: new Date('2026-10-27T12:00:00Z')
+    },
+    {
+      id: 'previous',
+      state: previous,
+      lotId: 'lot-1',
+      startedAt: new Date('2026-10-27T11:00:00Z'),
+      endedAt: new Date('2026-10-27T12:00:00Z')
+    }
+  ];
+  const setup = (
+    state = 'LABORATORIO',
+    previous = 'FABRICANDO',
+    sampleStatus = 'AWAITING_RECEIPT'
+  ) => {
+    const currentTank = { ...tank, state };
+    const sample =
+      sampleStatus === 'NONE'
+        ? null
+        : {
+            id: 'sample-1',
+            status: sampleStatus,
+            receivedAt: null,
+            qualityDecisionId: sampleStatus === 'RESOLVED' ? 'decision-1' : null
+          };
+    const tx = {
+      tank: {
+        findFirst: jest.fn().mockResolvedValue(currentTank),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn(),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ plantId: 'plant-latex' })
+      },
+      tankStateHistory: {
+        findMany: jest.fn().mockResolvedValue(periods(state, previous)),
+        findFirst: jest.fn().mockResolvedValue(periods(state, previous)[0]),
+        update: jest.fn(),
+        create: jest.fn()
+      },
+      laboratorySample: {
+        findFirst: jest.fn().mockResolvedValue(sample),
+        count: jest.fn().mockResolvedValue(sample ? 1 : 0),
+        update: jest.fn(),
+        create: jest.fn()
+      },
+      qualityDecision: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'decision-1',
+          result: state,
+          createdAt: new Date('2026-10-27T12:00:00Z')
+        }),
+        update: jest.fn()
+      },
+      packagingPlanningCard: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        delete: jest.fn(),
+        updateMany: jest.fn()
+      },
+      packagingOrder: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        update: jest.fn()
+      },
+      transferOperation: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        update: jest.fn()
+      },
+      productionLot: { update: jest.fn(), findUnique: jest.fn() },
+      plant: { findUnique: jest.fn().mockResolvedValue({ settings: {} }) },
+      plantAuditLog: { create: jest.fn() }
+    } as any;
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) } as any;
+    const notifications = { notifyTankAction: jest.fn() } as any;
+    return { service: new PlantService(prisma, { get: jest.fn() } as any, notifications), tx };
+  };
+
+  it('solo admite el rol ADMIN, incluso si otro rol es system owner', async () => {
+    const { service, tx } = setup();
+    await expect(
+      service.rollbackPreview('company-1', 'tank-101', {
+        ...admin,
+        role: 'JEFATURA',
+        isSystemOwner: true
+      })
+    ).rejects.toThrow('Administrador');
+    expect(tx.tank.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('retrocede laboratorio a fabricación, anula la muestra y conserva historial', async () => {
+    const { service, tx } = setup();
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'LABORATORIO',
+      to: 'FABRICANDO',
+      version: 7
+    });
+    await expect(
+      service.rollbackState('company-1', 'tank-101', admin, {
+        version: 6,
+        reason: 'Error de carga'
+      })
+    ).rejects.toThrow('El tanque cambió');
+    expect(tx.laboratorySample.update).not.toHaveBeenCalled();
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Error de carga'
+    });
+    expect(tx.laboratorySample.update).toHaveBeenCalledWith({
+      where: { id: 'sample-1' },
+      data: { cancelledAt: expect.any(Date) }
+    });
+    expect(tx.tank.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tank-101', state: 'LABORATORIO', version: 7 },
+      data: { state: 'FABRICANDO', version: { increment: 1 } }
+    });
+    expect(tx.tankStateHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        state: 'FABRICANDO',
+        description: 'Retroceso administrativo: Error de carga'
+      })
+    });
+    expect(tx.plantAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'ROLLBACK',
+        reason: 'Error de carga'
+      })
+    });
+  });
+
+  it.each(['RECEIVED', 'ANALYZING'])(
+    'retrocede laboratorio con muestra %s y conserva sus datos anulados',
+    async (status) => {
+      const { service, tx } = setup('LABORATORIO', 'FABRICANDO', status);
+      await service.rollbackState('company-1', 'tank-101', admin, {
+        version: 7,
+        reason: 'Volver a fabricación'
+      });
+      expect(tx.laboratorySample.update).toHaveBeenCalledWith({
+        where: { id: 'sample-1' },
+        data: { cancelledAt: expect.any(Date) }
+      });
+      expect(tx.tank.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { state: 'FABRICANDO', version: { increment: 1 } }
+        })
+      );
+    }
+  );
+
+  it('anula la decisión de calidad y reabre el análisis sin borrar registros', async () => {
+    const { service, tx } = setup('APROBADO', 'LABORATORIO', 'RESOLVED');
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Resultado incorrecto'
+    });
+    expect(tx.qualityDecision.update).toHaveBeenCalledWith({
+      where: { id: 'decision-1' },
+      data: { cancelledAt: expect.any(Date) }
+    });
+    expect(tx.laboratorySample.update).toHaveBeenCalledWith({
+      where: { id: 'sample-1' },
+      data: { status: 'ANALYZING', resolvedAt: null, qualityDecisionId: null }
+    });
+    expect(tx.productionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: { specificWeight: null }
+    });
+  });
+
+  it('recupera una decisión legada sin muestra y solicita una muestra nueva', async () => {
+    const { service, tx } = setup('APROBADO', 'LABORATORIO', 'NONE');
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      to: 'LABORATORIO',
+      affectedRecord: expect.stringContaining('muestra nueva')
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Aprobación cargada por error'
+    });
+    expect(tx.qualityDecision.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ createdAt: expect.any(Object), cancelledAt: null })
+      })
+    );
+    expect(tx.laboratorySample.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lotId: 'lot-1',
+        iteration: 1,
+        requestedByUserId: 'admin-1'
+      })
+    });
+    expect(tx.laboratorySample.update).not.toHaveBeenCalled();
+  });
+
+  it('no usa la ruta legada si hay muestras anteriores anuladas', async () => {
+    const { service, tx } = setup('APROBADO', 'LABORATORIO', 'NONE');
+    tx.laboratorySample.count.mockResolvedValue(1);
+    await expect(service.rollbackPreview('company-1', 'tank-101', admin)).rejects.toThrow(
+      'No hay una decisión de calidad vigente'
+    );
+    expect(tx.qualityDecision.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('bloquea una reversa de calidad si ya comenzó una OE', async () => {
+    const { service, tx } = setup('APROBADO', 'LABORATORIO', 'RESOLVED');
+    tx.packagingOrder.count.mockResolvedValue(1);
+    await expect(
+      service.rollbackState('company-1', 'tank-101', admin, { version: 7, reason: 'Error' })
+    ).rejects.toThrow('envasado o trasvase');
+    expect(tx.qualityDecision.update).not.toHaveBeenCalled();
+  });
+
+  it('quita una planificación sin conexión al retroceder una aprobación', async () => {
+    const { service, tx } = setup('APROBADO', 'LABORATORIO', 'RESOLVED');
+    tx.packagingPlanningCard.findFirst.mockResolvedValue({
+      id: 'card-1',
+      hooked: false,
+      position: 1,
+      tankId: 'tank-101'
+    });
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      affectedRecord: expect.stringContaining('tarjeta de planificación')
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Aprobación equivocada'
+    });
+    expect(tx.packagingPlanningCard.delete).toHaveBeenCalledWith({ where: { id: 'card-1' } });
+    expect(tx.packagingPlanningCard.updateMany).toHaveBeenCalledWith({
+      where: { plantId: 'plant-latex', position: { gt: 1 } },
+      data: { position: { decrement: 1 } }
+    });
+    expect(tx.plantAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'DELETE',
+        entityType: 'PackagingPlanningCard',
+        entityId: 'card-1'
+      })
+    });
+  });
+
+  it('quita y audita incluso una tarjeta marcada como conectada', async () => {
+    const { service, tx } = setup('APROBADO', 'LABORATORIO', 'RESOLVED');
+    tx.packagingPlanningCard.findFirst.mockResolvedValue({
+      id: 'card-1',
+      hooked: true,
+      position: 1
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Aprobación incorrecta'
+    });
+    expect(tx.packagingPlanningCard.delete).toHaveBeenCalledWith({ where: { id: 'card-1' } });
+    expect(tx.plantAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'DELETE',
+        before: expect.objectContaining({ hooked: true })
+      })
+    });
+  });
+
+  it('permite retroceder varios pasos consecutivos del mismo lote', async () => {
+    const { service, tx } = setup('AJUSTE', 'LABORATORIO', 'RESOLVED');
+    const history = [
+      {
+        id: 'latest-lab',
+        state: 'LABORATORIO',
+        lotId: 'lot-1',
+        endedAt: null,
+        startedAt: new Date('2026-10-27T13:00:00Z')
+      },
+      {
+        id: 'adjustment',
+        state: 'AJUSTE',
+        lotId: 'lot-1',
+        endedAt: new Date(),
+        startedAt: new Date('2026-10-27T12:00:00Z')
+      },
+      {
+        id: 'first-lab',
+        state: 'LABORATORIO',
+        lotId: 'lot-1',
+        endedAt: new Date(),
+        startedAt: new Date('2026-10-27T11:00:00Z')
+      },
+      {
+        id: 'manufacturing',
+        state: 'FABRICANDO',
+        lotId: 'lot-1',
+        endedAt: new Date(),
+        startedAt: new Date('2026-10-27T10:00:00Z')
+      }
+    ];
+    tx.tank.findFirst.mockResolvedValue({ ...tank, state: 'LABORATORIO' });
+    tx.tankStateHistory.findMany.mockResolvedValue(history);
+    tx.laboratorySample.findFirst.mockResolvedValue({
+      id: 'sample-1',
+      status: 'ANALYZING',
+      qualityDecisionId: null
+    });
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'LABORATORIO',
+      to: 'AJUSTE'
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Volver al ajuste'
+    });
+    expect(tx.laboratorySample.update).toHaveBeenCalledWith({
+      where: { id: 'sample-1' },
+      data: { cancelledAt: expect.any(Date) }
+    });
+    tx.tank.findFirst.mockResolvedValue({ ...tank, state: 'AJUSTE', version: 8 });
+    tx.tankStateHistory.findMany.mockResolvedValue([
+      {
+        id: 'rollback-ajuste',
+        state: 'AJUSTE',
+        lotId: 'lot-1',
+        endedAt: null,
+        startedAt: new Date('2026-10-27T14:00:00Z'),
+        description: 'Retroceso administrativo: volver al ajuste'
+      },
+      { ...history[0], endedAt: new Date() },
+      ...history.slice(1)
+    ]);
+    tx.laboratorySample.findFirst.mockResolvedValue({
+      id: 'sample-previous',
+      status: 'RESOLVED',
+      qualityDecisionId: 'decision-1'
+    });
+    tx.qualityDecision.findFirst.mockResolvedValue({
+      id: 'decision-1',
+      result: 'AJUSTE',
+      createdAt: new Date('2026-10-27T11:30:00Z')
+    });
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'AJUSTE',
+      to: 'LABORATORIO'
+    });
+  });
+
+  it('retrocede el inicio de fabricación y desactiva el lote al volver a vacío', async () => {
+    const { service, tx } = setup('FABRICANDO');
+    tx.tankStateHistory.findMany.mockResolvedValue([
+      {
+        id: 'manufacturing',
+        state: 'FABRICANDO',
+        lotId: 'lot-1',
+        endedAt: null,
+        startedAt: new Date('2026-10-27T10:00:00Z')
+      }
+    ]);
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'FABRICANDO',
+      to: 'VACIO',
+      affectedRecord: 'Lote de fabricación'
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'OF cargada por error'
+    });
+    expect(tx.productionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: { cancelledAt: expect.any(Date) }
+    });
+    expect(tx.tank.update).toHaveBeenCalledWith({
+      where: { id: 'tank-101' },
+      data: { activeLotId: null }
+    });
+  });
+
+  it('anula una OE activa y permite volver de envasando a aprobado', async () => {
+    const { service, tx } = setup('ENVASANDO', 'APROBADO', 'RESOLVED');
+    tx.packagingOrder.findMany.mockResolvedValue([{ id: 'oe-1', lotId: 'lot-1' }]);
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'ENVASANDO',
+      to: 'APROBADO'
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'OE incorrecta'
+    });
+    expect(tx.packagingOrder.update).toHaveBeenCalledWith({
+      where: { id: 'oe-1' },
+      data: { cancelledAt: expect.any(Date) }
+    });
+  });
+
+  it('anula un trasvase activo y permite volver a aprobado', async () => {
+    const { service, tx } = setup('TRASVASANDO', 'APROBADO', 'RESOLVED');
+    tx.transferOperation.findMany.mockResolvedValue([{ id: 'transfer-1', lotId: 'lot-1' }]);
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Trasvase incorrecto'
+    });
+    expect(tx.transferOperation.update).toHaveBeenCalledWith({
+      where: { id: 'transfer-1' },
+      data: { cancelledAt: expect.any(Date) }
+    });
+  });
+
+  it('reabre un lote terminado para retroceder de vacío a envasando', async () => {
+    const { service, tx } = setup('VACIO', 'ENVASANDO');
+    tx.tank.findFirst.mockResolvedValue({ ...tank, state: 'VACIO', activeLotId: null });
+    tx.tankStateHistory.findMany.mockResolvedValue([
+      {
+        id: 'empty',
+        state: 'VACIO',
+        lotId: 'lot-1',
+        endedAt: null,
+        startedAt: new Date('2026-10-27T13:00:00Z')
+      },
+      {
+        id: 'packaging',
+        state: 'ENVASANDO',
+        lotId: 'lot-1',
+        endedAt: new Date(),
+        startedAt: new Date('2026-10-27T12:00:00Z')
+      }
+    ]);
+    tx.productionLot.findUnique.mockResolvedValue({
+      id: 'lot-1',
+      finishedAt: new Date(),
+      cancelledAt: null
+    });
+    tx.packagingOrder.findFirst.mockResolvedValue({ id: 'oe-1', finishedAt: new Date() });
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'VACIO',
+      to: 'ENVASANDO'
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Cierre incorrecto'
+    });
+    expect(tx.productionLot.update).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: { finishedAt: null }
+    });
+    expect(tx.packagingOrder.update).toHaveBeenCalledWith({
+      where: { id: 'oe-1' },
+      data: expect.objectContaining({ finishedAt: null })
+    });
+    expect(tx.tank.update).toHaveBeenCalledWith({
+      where: { id: 'tank-101' },
+      data: { activeLotId: 'lot-1' }
+    });
+  });
+
+  it.each([
+    ['TRASVASANDO', true],
+    ['RECHAZADO', false]
+  ])('reabre desde vacío el cierre de %s', async (previous, hasTransfer) => {
+    const { service, tx } = setup('VACIO', previous);
+    tx.tank.findFirst.mockResolvedValue({ ...tank, state: 'VACIO', activeLotId: null });
+    tx.tankStateHistory.findMany.mockResolvedValue([
+      {
+        id: 'empty',
+        state: 'VACIO',
+        lotId: 'lot-1',
+        endedAt: null,
+        startedAt: new Date('2026-10-27T13:00:00Z')
+      },
+      {
+        id: 'prior',
+        state: previous,
+        lotId: 'lot-1',
+        endedAt: new Date(),
+        startedAt: new Date('2026-10-27T12:00:00Z')
+      }
+    ]);
+    tx.productionLot.findUnique.mockResolvedValue({
+      id: 'lot-1',
+      finishedAt: new Date(),
+      cancelledAt: null
+    });
+    if (hasTransfer)
+      tx.transferOperation.findFirst.mockResolvedValue({
+        id: 'transfer-1',
+        finishedAt: new Date()
+      });
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from: 'VACIO',
+      to: previous
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Cierre incorrecto'
+    });
+    if (hasTransfer)
+      expect(tx.transferOperation.update).toHaveBeenCalledWith({
+        where: { id: 'transfer-1' },
+        data: expect.objectContaining({ finishedAt: null })
+      });
+    expect(tx.tank.update).toHaveBeenCalledWith({
+      where: { id: 'tank-101' },
+      data: { activeLotId: 'lot-1' }
+    });
+  });
+
+  it.each([
+    ['FUERA_DE_SERVICIO', 'VACIO'],
+    ['VACIO', 'FUERA_DE_SERVICIO']
+  ])('retrocede el cambio de servicio %s a %s', async (from, to) => {
+    const { service, tx } = setup(from, to);
+    tx.tank.findFirst.mockResolvedValue({ ...tank, state: from, activeLotId: null });
+    tx.tankStateHistory.findMany.mockResolvedValue([
+      {
+        id: 'current',
+        state: from,
+        lotId: null,
+        endedAt: null,
+        startedAt: new Date('2026-10-27T13:00:00Z')
+      },
+      {
+        id: 'previous',
+        state: to,
+        lotId: null,
+        endedAt: new Date(),
+        startedAt: new Date('2026-10-27T12:00:00Z'),
+        description: 'Mantenimiento'
+      }
+    ]);
+    expect(await service.rollbackPreview('company-1', 'tank-101', admin)).toMatchObject({
+      from,
+      to
+    });
+    await service.rollbackState('company-1', 'tank-101', admin, {
+      version: 7,
+      reason: 'Cambio de servicio erróneo'
+    });
+    expect(tx.tank.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ state: to })
+      })
+    );
+  });
+});
+
 describe('PlantService telemetry', () => {
   const prisma = {
     company: {
@@ -847,5 +1404,110 @@ describe('PlantService history pagination', () => {
       'Infinity'
     );
     expect(findMany).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 0 }));
+  });
+});
+
+describe('PlantService history summary', () => {
+  const makeService = (rows: Array<Record<string, unknown>>) => {
+    const queryRaw = jest.fn().mockResolvedValue(rows);
+    const service = new PlantService(
+      { $queryRaw: queryRaw } as any,
+      { get: jest.fn() } as any,
+      { notifyTankAction: jest.fn() } as any
+    );
+    return { service, queryRaw };
+  };
+
+  it('ordena todas las OF antes de paginar, sin fusionar lotes con igual numeración', async () => {
+    const { service } = makeService([
+      {
+        lotId: 'a',
+        manufacturingOrder: '00000010',
+        materialCode: '100010',
+        description: 'Zeta',
+        adjustments: 1n,
+        packagingOrders: 2n
+      },
+      {
+        lotId: 'b',
+        manufacturingOrder: '00000002',
+        materialCode: '100002',
+        description: 'Ácido',
+        adjustments: 0n,
+        packagingOrders: 1n
+      },
+      {
+        lotId: 'c',
+        manufacturingOrder: '00000010',
+        materialCode: '100003',
+        description: 'Base',
+        adjustments: 3n,
+        packagingOrders: 0n
+      }
+    ]);
+
+    const first = await service.historySummary('company-1', 'plant-1', {
+      sortBy: 'manufacturingOrder',
+      sortDirection: 'asc',
+      offset: '0',
+      limit: '2'
+    });
+    const second = await service.historySummary('company-1', 'plant-1', {
+      sortBy: 'manufacturingOrder',
+      sortDirection: 'asc',
+      offset: '2',
+      limit: '2'
+    });
+    expect(first).toMatchObject({ total: 3, rows: [{ lotId: 'b' }, { lotId: 'a' }] });
+    expect(second.rows).toEqual([expect.objectContaining({ lotId: 'c' })]);
+
+    const byAdjustments = await service.historySummary('company-1', 'plant-1', {
+      sortBy: 'adjustments',
+      sortDirection: 'desc'
+    });
+    expect(byAdjustments.rows.map((row) => row.lotId)).toEqual(['c', 'a', 'b']);
+    const byProduct = await service.historySummary('company-1', 'plant-1', {
+      sortBy: 'description',
+      sortDirection: 'asc'
+    });
+    expect(byProduct.rows.map((row) => row.lotId)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('restringe la consulta a empresa/planta y cuenta decisiones, no estados ni materiales', async () => {
+    const { service, queryRaw } = makeService([]);
+    await service.historySummary('company-1', 'plant-1', {
+      from: '2026-10-01',
+      to: '2026-10-31',
+      search: 'OF',
+      state: 'AJUSTE'
+    });
+    const sql = queryRaw.mock.calls[0][0];
+    expect(sql.sql).toContain('h."companyId"');
+    expect(sql.sql).toContain('h."plantId"');
+    expect(sql.sql).toContain('"QualityDecision"');
+    expect(sql.sql).toContain('q."cancelledAt" IS NULL');
+    expect(sql.values).toContain('company-1');
+    expect(sql.values).toContain('plant-1');
+    expect(sql.values).toContain('OF');
+  });
+
+  it('rechaza columnas y límites no permitidos antes de consultar', async () => {
+    const { service, queryRaw } = makeService([]);
+    await expect(
+      service.historySummary('company-1', 'plant-1', { sortBy: 'drop table' })
+    ).rejects.toThrow(BadRequestException);
+    await expect(service.historySummary('company-1', 'plant-1', { limit: '1001' })).rejects.toThrow(
+      BadRequestException
+    );
+    await expect(
+      service.historySummary('company-1', 'plant-1', { state: 'INVENTADO' })
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.historySummary('company-1', 'plant-1', { from: '2026-02-31' })
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.historySummary('company-1', 'plant-1', { from: '2026-11-01', to: '2026-10-31' })
+    ).rejects.toThrow(BadRequestException);
+    expect(queryRaw).not.toHaveBeenCalled();
   });
 });

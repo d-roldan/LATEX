@@ -38,6 +38,7 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 - [Ejemplo de accesos](accesses.example.md): plantilla sin credenciales reales.
 - [Agentes de Codex](AGENTES_CODEX.md): roles en español para planificación, generación y diagnóstico de pruebas, revisión de planta y telemetría.
 - [Validación proporcional al cambio](ESTRATEGIA_VALIDACION.md): cómo elegir pruebas, builds y comprobaciones de integración según el riesgo sin repetir verificaciones innecesarias.
+- [Reportería y analítica industrial](reporteria/PLAN_IMPLEMENTACION.md): auditoría, indicadores, arquitectura, UX y plan de implementación del módulo.
 
 Los documentos maestros que describen el producto completo permanecen en la raíz del proyecto:
 
@@ -48,7 +49,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.48](releases/RELEASE_NOTES_V0.0.48.md): códigos de inyectoras por IP y tiempos decimales en ENVASES.
+- [Versión vigente · V0.0.49](releases/RELEASE_NOTES_V0.0.49.md): Reportería, informes de Laboratorio, mejoras de HISTORIAL y retroceso auditado de tanques.
 
 ## Criterio de actualización
 

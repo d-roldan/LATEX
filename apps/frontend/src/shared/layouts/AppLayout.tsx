@@ -47,6 +47,12 @@ const items = [
   },
   { to: '/jefatura', label: 'Resumen diario', icon: BarChart3, roles: ['JEFATURA', 'ADMIN'] },
   {
+    to: '/reporteria',
+    label: 'Reportería',
+    icon: BarChart3,
+    roles: ['LABORATORIO', 'MONITOREO', 'JEFATURA', 'ADMIN']
+  },
+  {
     to: '/historial',
     label: 'Historial',
     icon: History,

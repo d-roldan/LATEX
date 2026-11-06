@@ -34,6 +34,7 @@ import {
   PackagingDto,
   QualityDecisionDto,
   ReceiveLaboratorySampleDto,
+  RollbackTankStateDto,
   ServiceDto,
   StageTargetsDto,
   StartManufacturingDto,
@@ -274,6 +275,27 @@ export class PlantScopedController {
   ) {
     return this.service.deletePackagingPlanningCard(u.companyId, u, c, id);
   }
+  @Get(':plantCode/tanks/:id/rollback-preview')
+  @Roles('ADMIN')
+  async rollbackPreview(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string
+  ) {
+    await this.service.assertPlantAccess(u.companyId, u.sub, c, id);
+    return this.service.rollbackPreview(u.companyId, id, u);
+  }
+  @Post(':plantCode/tanks/:id/rollback')
+  @Roles('ADMIN')
+  async rollback(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: RollbackTankStateDto
+  ) {
+    await this.service.assertPlantAccess(u.companyId, u.sub, c, id);
+    return this.service.rollbackState(u.companyId, id, u, d);
+  }
   @Post(':plantCode/tanks/:id/manufacturing')
   @Roles('FABRICACION', 'ADMIN')
   async start(
@@ -463,6 +485,34 @@ export class PlantScopedController {
   ) {
     const p = await this.service.assertPlantAccess(u.companyId, u.sub, c, tankId);
     return this.service.history(u.companyId, tankId, state, from, to, p.id, offset);
+  }
+  @Get(':plantCode/history/summary')
+  @Roles('MONITOREO', 'JEFATURA', 'ADMIN')
+  async historySummary(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Query('tankId') tankId?: string,
+    @Query('state') state?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDirection') sortDirection?: string,
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string
+  ) {
+    const p = await this.service.assertPlantAccess(u.companyId, u.sub, c, tankId);
+    return this.service.historySummary(u.companyId, p.id, {
+      tankId,
+      state,
+      from,
+      to,
+      search,
+      sortBy,
+      sortDirection,
+      offset,
+      limit
+    });
   }
   @Get(':plantCode/history/audit')
   @Roles('ADMIN')
