@@ -2300,6 +2300,9 @@ body {
 .state-envasando {
   --state: #0998d7;
 }
+.state-envasado_pausado {
+  --state: #b77d2e;
+}
 .state-fuera_de_servicio {
   --state: #715aa8;
 }
@@ -2307,7 +2310,8 @@ body {
 .state-laboratorio .tank-state,
 .state-ajuste .tank-state,
 .state-aprobado .tank-state,
-.state-envasando .tank-state {
+.state-envasando .tank-state,
+.state-envasado_pausado .tank-state {
   color: #111827;
 }
 .plant-clock {
@@ -4498,6 +4502,9 @@ body {
     dl
     div:nth-child(n + 4):not(.tank-specific-weight) {
     display: none;
+  }
+  .plant-tv .plant-page--tv-packaging-active .tank-card.state-envasado_pausado dl .tank-order {
+    display: block;
   }
 }
 

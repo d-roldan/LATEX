@@ -112,6 +112,7 @@ const stateLabel: Record<string, string> = {
   RECHAZADO: 'Rechazado',
   APROBADO: 'Aprobado',
   ENVASANDO: 'Envasando',
+  ENVASADO_PAUSADO: 'Envasado pausado',
   TRASVASANDO: 'Trasvase',
   FUERA_DE_SERVICIO: 'Fuera de servicio'
 };

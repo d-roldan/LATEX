@@ -6,7 +6,7 @@
 |---|---|---|
 | `FABRICACION` | Fabricación | Iniciar/corregir OF, enviar a Laboratorio, cerrar rechazado y gestionar servicio |
 | `LABORATORIO` | Laboratorio | Confirmar recepción de muestra, aprobar, pedir ajuste o rechazar |
-| `ENVASADO` | Envasado | Iniciar/corregir/cambiar/finalizar OE |
+| `ENVASADO` | Envasado | Iniciar, pausar, reanudar, corregir, cambiar o finalizar OE |
 | `MONITOREO` | Monitoreo e Historial | Sólo lectura |
 | `JEFATURA` | Resumen diario, Monitoreo e Historial | Sólo lectura, cierres y exportaciones |
 | `ADMIN` | Todas | Todas las anteriores, usuarios y auditoría |
@@ -27,9 +27,17 @@ VACIO → FABRICANDO → LABORATORIO → APROBADO → ENVASANDO → VACIO
 VACIO → FUERA_DE_SERVICIO → VACIO
 
 APROBADO → TRASVASANDO → VACIO   (sólo Slurry; cierra lote, no crea OE)
+
+ENVASANDO ↔ ENVASADO_PAUSADO     (sólo Látex; conserva la OE abierta)
 ```
 
 Cada escritura incluye `version`. Si otro usuario actuó primero, el backend responde `409 Conflict` y la pantalla se actualiza.
+
+En Látex, Devree admite un solo tanque `ENVASANDO` a la vez. La pausa libera la línea sin cerrar
+la OE; se puede comenzar otro tanque y luego reanudar el anterior cuando la línea vuelva a estar
+libre. El servidor comprueba la ocupación dentro de la transición, también al reabrir un estado
+por retroceso administrativo. `TankStateHistory` registra inicio, pausa y reanudación. La
+duración de la OE sigue siendo tiempo entre apertura y cierre, incluidos los períodos pausados.
 
 Dentro de `LABORATORIO` existe un ciclo de muestra que no agrega estados físicos al tanque:
 

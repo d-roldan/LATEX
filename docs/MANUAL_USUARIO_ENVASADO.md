@@ -102,7 +102,7 @@ El tanque pasará a **Envasando** y la OE quedará activa.
 
 ![Formulario real para ingresar una nueva OE](imagenes-manuales/envasado-nueva-oe.png)
 
-Use **Nueva OE** cuando termina una orden y debe comenzar otra sobre el mismo producto y tanque, sin declarar el tanque vacío.
+Use **Nueva OE** cuando termina una orden y debe comenzar otra sobre el mismo producto y tanque, sin declarar el tanque vacío. No use esta acción para cambiar temporalmente de tanque.
 
 1. En el tanque **Envasando**, seleccione **Nueva OE**.
 2. Complete los datos de la nueva orden.
@@ -110,6 +110,18 @@ Use **Nueva OE** cuando termina una orden y debe comenzar otra sobre el mismo pr
 4. Revise y confirme.
 
 Al confirmar, el sistema cierra la OE anterior, calcula su duración y abre la nueva. No utilice **Nueva OE** para corregir un error de escritura de la orden actual.
+
+## Pausar y reanudar el envasado en Látex
+
+En Látex, la línea Devree puede envasar desde un solo tanque por vez. Si necesita cambiar de tanque antes de terminar la OE actual:
+
+1. En el tanque que está **Envasando**, seleccione **Pausar envasado** y confirme la operación física.
+2. El tanque queda en **Envasado pausado**. Su OE permanece abierta y el historial registra la pausa; Devree queda disponible para iniciar o reanudar otro tanque.
+3. Cuando corresponda volver al primero, pause o finalice el tanque que esté usando Devree. Luego seleccione **Reanudar envasado** en el tanque pausado.
+4. El sistema sólo permite reanudar si ningún otro tanque de Látex está envasando. Verifique físicamente la conexión y la configuración de la línea antes de confirmar.
+
+Puede haber más de un tanque pausado, pero sólo uno envasando. La pausa no termina la OE ni declara vacío el tanque. Para abrir otra OE o finalizar y vaciar, primero reanude ese tanque.
+La duración registrada al cerrar la OE continúa siendo tiempo transcurrido entre apertura y cierre; incluye los períodos de pausa, que quedan identificados por separado en el historial de estados.
 
 ## 7. Corregir la OE activa
 

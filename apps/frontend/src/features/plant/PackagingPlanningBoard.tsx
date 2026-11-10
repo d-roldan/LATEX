@@ -113,7 +113,10 @@ export function PackagingPlanningBoard() {
     const result: Record<Dispenser, PackagingTank[]> = { A: [], B: [] };
     for (const tank of board.data?.tanks ?? []) {
       const dispenser = tank.activeLot?.packagingOrders[0]?.dispenser;
-      if (tank.state === 'ENVASANDO' && (dispenser === 'A' || dispenser === 'B')) {
+      if (
+        (tank.state === 'ENVASANDO' || tank.state === 'ENVASADO_PAUSADO') &&
+        (dispenser === 'A' || dispenser === 'B')
+      ) {
         result[dispenser].push(tank);
       }
     }
@@ -128,7 +131,7 @@ export function PackagingPlanningBoard() {
     );
     return (board.data?.tanks ?? []).filter(
       (tank) =>
-        !['ENVASANDO', 'VACIO', 'FUERA_DE_SERVICIO'].includes(tank.state) &&
+        !['ENVASANDO', 'ENVASADO_PAUSADO', 'VACIO', 'FUERA_DE_SERVICIO'].includes(tank.state) &&
         !plannedTankIds.has(tank.id)
     );
   }, [board.data?.cards, board.data?.tanks, editing?.id]);
@@ -251,7 +254,8 @@ export function PackagingPlanningBoard() {
                   return (
                     <article className="planning-card planning-card--current" key={tank.id}>
                       <div className="planning-card__status">
-                        <CircleDot size={15} /> Envasando ahora
+                        <CircleDot size={15} />{' '}
+                        {tank.state === 'ENVASADO_PAUSADO' ? 'Envasado pausado' : 'Envasando ahora'}
                       </div>
                       <strong>{tank.name}</strong>
                       <span>

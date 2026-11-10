@@ -15,6 +15,7 @@ La fuente de verdad es `apps/backend/prisma/schema.prisma`.
 - `LaboratorySample`: una iteración de muestra por envío a Laboratorio, con estados de espera, recepción y resolución, responsables y timestamps.
 - `IntegrationInbox`: bandeja durable de eventos PLC/SCADA/Node-RED, idempotente por planta, fuente y `eventId`; recibir un evento no modifica por sí solo la operación.
 - `PackagingOrder`: OE, línea, formato, dosificadora, filtro, inicio/fin, duración, kilogramos, unidades y merma.
+- En Látex, `Tank.state = ENVASADO_PAUSADO` conserva la `PackagingOrder` abierta. Los períodos de pausa y reanudación se distinguen en `TankStateHistory`; la duración cerrada de la OE incluye el tiempo pausado.
 - `PlantAuditLog`: cambios auditables con valores anterior/nuevo y motivo.
 - `DailyPlantClosure`: fotografía JSON del resumen de una jornada, observaciones y responsable del cierre.
 
@@ -47,6 +48,7 @@ Esta memoria representa sólo el último valor para visualización. La señal co
 
 - `Tank.activeLotId` permite un único lote activo por tanque.
 - `PackagingOrder.lotId` vincula cada OE con un único lote.
+- La ocupación de Devree se define por un único tanque de Látex en `ENVASANDO`. Un tanque en `ENVASADO_PAUSADO` mantiene su OE, pero no ocupa la línea.
 - `Notification.readAt` registra lectura, pero no aceptación ni resolución de una entrega entre sectores.
 - `QualityDecision` conserva la decisión general y se vincula con el ciclo de muestra resuelto; todavía no conserva el detalle estructurado de cada ensayo.
 - No existen todavía entidades productivas para ejecución de receta, pasos, cargas o consumos parciales de envasado. La bandeja industrial recibe eventos, pero sus procesadores de negocio aún deben definirse y habilitarse por tipo.

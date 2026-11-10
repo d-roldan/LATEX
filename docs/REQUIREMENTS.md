@@ -68,6 +68,7 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 - El cierre de envasado declara el tanque vacío por operación humana; no existe todavía una validación automática contra peso remanente.
 - La relación persistida es una OE asociada a un lote. Debe confirmarse si la operación real admite relaciones uno-a-varios o varios-a-uno.
 - El historial operativo devuelve hasta 1.000 períodos por consulta y todavía no ofrece paginación.
+- La duración cerrada de una OE incluye los períodos de pausa; el historial de estados los identifica por separado.
 
 ## Evolución funcional recomendada
 
@@ -85,7 +86,7 @@ Este documento separa el alcance vigente de la evolución recomendada. Los requi
 Antes de ampliar la máquina de estados se debe validar con la planta la necesidad de representar:
 
 - Espera de materia prima o recurso.
-- Pausa de fabricación o envasado.
+- Pausa de fabricación (la pausa de envasado ya está disponible en Látex).
 - Muestra tomada y análisis en curso.
 - Retención o bloqueo de Calidad.
 - Limpieza y verificación de tanque vacío.

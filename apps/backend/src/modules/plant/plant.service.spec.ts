@@ -2,6 +2,221 @@ import { BadRequestException, ConflictException, UnauthorizedException } from '@
 import { PlantService } from './plant.service';
 import { createHash } from 'crypto';
 
+describe('PlantService pausa de envasado de Látex', () => {
+  const user = { sub: 'envasado-1' } as any;
+  const setup = (state: 'ENVASANDO' | 'ENVASADO_PAUSADO', activeOther = false, code = 'LATEX') => {
+    const tx = {
+      plant: { findUnique: jest.fn().mockResolvedValue({ code }) },
+      tank: { findFirst: jest.fn().mockResolvedValue(activeOther ? { id: 'other' } : null) },
+      packagingOrder: { findFirst: jest.fn().mockResolvedValue({ id: 'oe-1' }), update: jest.fn() },
+      $queryRaw: jest.fn().mockResolvedValue([{ lock: '' }])
+    } as any;
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) } as any;
+    const service = new PlantService(prisma, {} as any, {} as any);
+    jest.spyOn(service as any, 'findTank').mockResolvedValue({
+      id: 'tank-101',
+      companyId: 'company-1',
+      plantId: 'plant-1',
+      activeLotId: 'lot-1',
+      state,
+      version: 3
+    });
+    const move = jest.spyOn(service as any, 'move').mockResolvedValue(undefined);
+    return { service, tx, move };
+  };
+
+  it('pausa sin cerrar la OE y libera la línea', async () => {
+    const { service, tx, move } = setup('ENVASANDO');
+    await expect(
+      service.pausePackaging('company-1', 'tank-101', user, { version: 3 })
+    ).resolves.toEqual({ ok: true });
+    expect(move).toHaveBeenCalledWith(
+      tx,
+      expect.anything(),
+      'ENVASADO_PAUSADO',
+      user,
+      'lot-1',
+      'Envasado pausado'
+    );
+    expect(tx.packagingOrder.update).not.toHaveBeenCalled();
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('reanuda la misma OE cuando Devree está libre', async () => {
+    const { service, tx, move } = setup('ENVASADO_PAUSADO');
+    await expect(
+      service.resumePackaging('company-1', 'tank-101', user, { version: 3 })
+    ).resolves.toEqual({ ok: true });
+    expect(tx.$queryRaw).toHaveBeenCalled();
+    expect(move).toHaveBeenCalledWith(
+      tx,
+      expect.anything(),
+      'ENVASANDO',
+      user,
+      'lot-1',
+      'Envasado reanudado'
+    );
+    expect(tx.packagingOrder.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza reanudar si otro tanque ya está envasando', async () => {
+    const { service, move } = setup('ENVASADO_PAUSADO', true);
+    await expect(
+      service.resumePackaging('company-1', 'tank-101', user, { version: 3 })
+    ).rejects.toThrow('La línea Devree ya está envasando otro tanque');
+    expect(move).not.toHaveBeenCalled();
+  });
+
+  it('rechaza una versión anterior, una OE cerrada y otra planta', async () => {
+    const stale = setup('ENVASANDO');
+    await expect(
+      stale.service.pausePackaging('company-1', 'tank-101', user, { version: 2 })
+    ).rejects.toThrow('El tanque cambió');
+    const closed = setup('ENVASANDO');
+    closed.tx.packagingOrder.findFirst.mockResolvedValue(null);
+    await expect(
+      closed.service.pausePackaging('company-1', 'tank-101', user, { version: 3 })
+    ).rejects.toThrow('No existe una OE abierta');
+    const otherPlant = setup('ENVASANDO', false, 'SINTETICOS');
+    await expect(
+      otherPlant.service.pausePackaging('company-1', 'tank-101', user, { version: 3 })
+    ).rejects.toThrow('sólo está disponible para Látex');
+  });
+});
+
+describe('PlantService Devree', () => {
+  const user = { sub: 'envasado-1' } as any;
+  const dto = {
+    version: 2,
+    packagingOrder: '123456',
+    materialCode: '1234',
+    line: 'A',
+    format: '4 L',
+    dispenser: 'A',
+    filter: '1',
+    description: 'Producto'
+  };
+
+  const setup = (plantCode: string, occupied: boolean) => {
+    const tx = {
+      plant: { findUnique: jest.fn().mockResolvedValue({ code: plantCode }) },
+      tank: { findFirst: jest.fn().mockResolvedValue(occupied ? { id: 'other' } : null) },
+      $queryRaw: jest.fn().mockResolvedValue([{ lock: '' }]),
+      packagingOrder: { create: jest.fn().mockResolvedValue({ id: 'oe-1' }) },
+      packagingPlanningCard: { findFirst: jest.fn().mockResolvedValue(null) }
+    } as any;
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) } as any;
+    const service = new PlantService(prisma, {} as any, {} as any);
+    jest.spyOn(service as any, 'findTank').mockResolvedValue({
+      id: 'tank-101',
+      plantId: 'plant-1',
+      state: 'APROBADO',
+      version: 2,
+      activeLotId: 'lot-1'
+    });
+    jest.spyOn(service as any, 'assertFinalOperation').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'validatePackaging').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'move').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'audit').mockResolvedValue(undefined);
+    return { service, tx, prisma };
+  };
+
+  it('permite iniciar el primer tanque de Látex dentro del bloqueo de planta', async () => {
+    const { service, tx, prisma } = setup('LATEX', false);
+    await expect(service.startPackaging('company-1', 'tank-101', user, dto)).resolves.toEqual({
+      ok: true
+    });
+    expect(tx.$queryRaw).toHaveBeenCalled();
+    expect(tx.packagingOrder.create).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction.mock.calls[0][1]).toEqual({
+      isolationLevel: 'ReadCommitted'
+    });
+  });
+
+  it('rechaza otro tanque de Látex si Devree ya está envasando', async () => {
+    const { service, tx } = setup('LATEX', true);
+    await expect(service.startPackaging('company-1', 'tank-101', user, dto)).rejects.toThrow(
+      'La línea Devree ya está envasando otro tanque'
+    );
+    expect(tx.packagingOrder.create).not.toHaveBeenCalled();
+  });
+
+  it('no aplica la restricción a otra planta', async () => {
+    const { service, tx } = setup('SINTETICOS', true);
+    await expect(service.startPackaging('company-1', 'tank-101', user, dto)).resolves.toEqual({
+      ok: true
+    });
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+    expect(tx.tank.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlantService indicadores de TV de Látex', () => {
+  beforeEach(() => jest.useFakeTimers().setSystemTime(new Date('2026-11-06T15:00:00Z')));
+  afterEach(() => jest.useRealTimers());
+
+  it('suma sólo descensos de peso durante envasado y convierte con densidad', async () => {
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - 25 * 60_000);
+    const prisma = {
+      plant: { findFirst: jest.fn().mockResolvedValue({ id: 'plant-latex' }) },
+      tankStateHistory: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            tankId: 'tank-101',
+            startedAt: periodStart,
+            endedAt: null,
+            lot: { specificWeight: 1.25 },
+            tank: { scaleKey: 'TK101', number: 101 }
+          }
+        ])
+      }
+    } as any;
+    const influx = {
+      readWeightSeries: jest.fn().mockResolvedValue({
+        status: 'AVAILABLE',
+        points: [
+          { timestamp: new Date(now.getTime() - 20 * 60_000).toISOString(), grossKg: 1000 },
+          { timestamp: new Date(now.getTime() - 15 * 60_000).toISOString(), grossKg: 875 },
+          { timestamp: new Date(now.getTime() - 10 * 60_000).toISOString(), grossKg: 880 },
+          { timestamp: new Date(now.getTime() - 5 * 60_000).toISOString(), grossKg: 755 }
+        ]
+      })
+    } as any;
+    const service = new PlantService(prisma, { get: jest.fn() } as any, {} as any, influx);
+    await expect(service.publicPackagingEstimates('LATEX')).resolves.toEqual({
+      litersToday: 200,
+      status: 'AVAILABLE'
+    });
+    expect(influx.readWeightSeries).toHaveBeenCalledTimes(1);
+  });
+
+  it('no publica un total incompleto si falta la serie de peso', async () => {
+    const prisma = {
+      plant: { findFirst: jest.fn().mockResolvedValue({ id: 'plant-latex' }) },
+      tankStateHistory: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            tankId: 'tank-101',
+            startedAt: new Date(),
+            endedAt: null,
+            lot: { specificWeight: 1 },
+            tank: { scaleKey: 'TK101', number: 101 }
+          }
+        ])
+      }
+    } as any;
+    const influx = {
+      readWeightSeries: jest.fn().mockResolvedValue({ status: 'UNAVAILABLE' })
+    } as any;
+    const service = new PlantService(prisma, { get: jest.fn() } as any, {} as any, influx);
+    await expect(service.publicPackagingEstimates('LATEX')).resolves.toEqual({
+      litersToday: null,
+      status: 'INCOMPLETE'
+    });
+  });
+});
+
 describe('PlantService planning board', () => {
   const notifications = { notifyTankAction: jest.fn() } as any;
 
@@ -639,6 +854,38 @@ describe('PlantService administrative rollback', () => {
     });
   });
 
+  it('no reabre un tanque de Látex en envasado si Devree ya ocupa otro', async () => {
+    const { service, tx } = setup('VACIO', 'ENVASANDO');
+    tx.plant.findUnique.mockResolvedValue({ code: 'LATEX' });
+    tx.$queryRaw = jest.fn().mockResolvedValue([{ lock: '' }]);
+    tx.tank.findFirst
+      .mockResolvedValueOnce({ ...tank, state: 'VACIO', activeLotId: null })
+      .mockResolvedValueOnce({ id: 'tank-102' });
+    tx.tankStateHistory.findMany.mockResolvedValue([
+      { id: 'empty', state: 'VACIO', lotId: 'lot-1', endedAt: null, startedAt: new Date() },
+      {
+        id: 'packaging',
+        state: 'ENVASANDO',
+        lotId: 'lot-1',
+        endedAt: new Date(),
+        startedAt: new Date()
+      }
+    ]);
+    tx.productionLot.findUnique.mockResolvedValue({
+      id: 'lot-1',
+      finishedAt: new Date(),
+      cancelledAt: null
+    });
+    tx.packagingOrder.findFirst.mockResolvedValue({ id: 'oe-1', finishedAt: new Date() });
+    await expect(
+      service.rollbackState('company-1', 'tank-101', admin, {
+        version: 7,
+        reason: 'Cierre incorrecto'
+      })
+    ).rejects.toThrow('La línea Devree ya está envasando otro tanque');
+    expect(tx.productionLot.update).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['TRASVASANDO', true],
     ['RECHAZADO', false]
@@ -933,6 +1180,43 @@ describe('PlantService telemetry', () => {
         ]
       })
     ).resolves.toMatchObject({ accepted: 0, ignored: 1 });
+  });
+
+  it('descarta la velocidad anterior al momento de reanudar un tanque', async () => {
+    const service = new PlantService(prisma, config, notifications);
+    const now = new Date();
+    const resumedAt = new Date(now.getTime() - 5_000);
+    (service as any).packagingSpeeds.set('plant-latex:DEVREE', {
+      containersPerMinute: 20,
+      measuredAt: new Date(now.getTime() - 10_000).toISOString(),
+      receivedAt: now.toISOString()
+    });
+    const tank = {
+      id: 'tank-101',
+      companyId: 'company-1',
+      plantId: 'plant-latex',
+      number: 101,
+      name: 'TK101',
+      capacityKg: null,
+      scaleKey: 'TK101',
+      telemetryMode: 'AUTOMATIC',
+      state: 'ENVASANDO',
+      version: 3,
+      activeLot: {
+        packagingOrders: [{ line: 'A', startedAt: new Date(now.getTime() - 60_000) }],
+        qualityDecisions: []
+      },
+      stateHistory: [{ state: 'ENVASANDO', startedAt: resumedAt }]
+    };
+    prisma.tank.findMany.mockResolvedValueOnce([tank]);
+    expect((await service.tanks('company-1'))[0].packagingSpeed.online).toBe(false);
+    (service as any).packagingSpeeds.set('plant-latex:DEVREE', {
+      containersPerMinute: 20,
+      measuredAt: now.toISOString(),
+      receivedAt: now.toISOString()
+    });
+    prisma.tank.findMany.mockResolvedValueOnce([tank]);
+    expect((await service.tanks('company-1'))[0].packagingSpeed.online).toBe(true);
   });
 
   it('requiere una integración de LATEX para recibir la velocidad por planta', async () => {

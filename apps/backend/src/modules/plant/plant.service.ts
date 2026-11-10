@@ -84,6 +84,12 @@ const BUENOS_AIRES_OFFSET_MS = 3 * 60 * 60 * 1000;
 export class PlantService {
   private readonly weights = new Map<string, Telemetry>();
   private readonly packagingSpeeds = new Map<string, PackagingSpeed>();
+  private packagingEstimateCache?: {
+    plantId: string;
+    date: string;
+    at: number;
+    value: { litersToday: number | null; status: string };
+  };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -669,6 +675,113 @@ export class PlantService {
     return this.publicTanksForPlant(company.id, plantId);
   }
 
+  async publicPackagingEstimates(plantCode: string) {
+    if (plantCode.toUpperCase() !== 'LATEX')
+      throw new NotFoundException('Indicadores disponibles sólo para Látex');
+    const companyId = this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') || 'seed_company_disal';
+    const plant = await this.prisma.plant.findFirst({
+      where: { companyId, code: 'LATEX', isActive: true },
+      select: { id: true }
+    });
+    if (!plant) throw new NotFoundException('La planta solicitada no está configurada');
+    const now = new Date();
+    const today = new Date(now.getTime() - BUENOS_AIRES_OFFSET_MS).toISOString().slice(0, 10);
+    const cached = this.packagingEstimateCache;
+    if (cached?.plantId === plant.id && cached.date === today && Date.now() - cached.at < 60_000)
+      return cached.value;
+    if (!this.influxHistory) return { litersToday: null, status: 'UNAVAILABLE' };
+    const { start } = this.plantDayBounds(today);
+    const periods = await this.prisma.tankStateHistory.findMany({
+      where: {
+        companyId,
+        plantId: plant.id,
+        state: 'ENVASANDO',
+        startedAt: { lt: now },
+        OR: [{ endedAt: null }, { endedAt: { gt: start } }]
+      },
+      select: {
+        tankId: true,
+        startedAt: true,
+        endedAt: true,
+        lot: { select: { specificWeight: true } },
+        tank: { select: { scaleKey: true, number: true } }
+      }
+    });
+    if (!periods.length) {
+      const value = { litersToday: 0, status: 'AVAILABLE' };
+      this.packagingEstimateCache = { plantId: plant.id, date: today, at: Date.now(), value };
+      return value;
+    }
+    let liters = 0;
+    let incomplete = false;
+    const tankHistories = await Promise.all(
+      [...new Set(periods.map((period) => period.tankId))].map(async (tankId) => {
+        const tankPeriods = periods.filter((period) => period.tankId === tankId);
+        const tank = tankPeriods[0].tank;
+        const history = await this.influxHistory!.readWeightSeries(tank.scaleKey, start, now, {
+          plantCode: 'LATEX',
+          tankNumber: tank.number
+        });
+        return { tankPeriods, history };
+      })
+    );
+    for (const { tankPeriods, history } of tankHistories) {
+      if (history.status !== 'AVAILABLE') {
+        incomplete = true;
+        continue;
+      }
+      for (const period of tankPeriods) {
+        const from = Math.max(start.getTime(), period.startedAt.getTime());
+        const until = Math.min(now.getTime(), period.endedAt?.getTime() ?? now.getTime());
+        const within = history.points.filter((point) => {
+          const at = Date.parse(point.timestamp);
+          return at >= from && at <= until;
+        });
+        if (
+          !within.length ||
+          Date.parse(within[0].timestamp) - from > 10 * 60_000 ||
+          until - Date.parse(within[within.length - 1].timestamp) > 10 * 60_000
+        )
+          incomplete = true;
+      }
+      for (let index = 1; index < history.points.length; index++) {
+        const previous = history.points[index - 1];
+        const current = history.points[index];
+        const previousAt = Date.parse(previous.timestamp);
+        const currentAt = Date.parse(current.timestamp);
+        const minutes = (currentAt - previousAt) / 60_000;
+        if (minutes <= 0) continue;
+        const period = tankPeriods.find(
+          (item) =>
+            previousAt >= Math.max(start.getTime(), item.startedAt.getTime()) &&
+            currentAt <= (item.endedAt?.getTime() ?? now.getTime())
+        );
+        if (!period) continue;
+        if (minutes > 10) {
+          incomplete = true;
+          continue;
+        }
+        const density = Number(period.lot?.specificWeight);
+        const dropKg = previous.grossKg - current.grossKg;
+        if (!Number.isFinite(density) || density <= 0 || dropKg <= 2) {
+          if (!Number.isFinite(density) || density <= 0) incomplete = true;
+          continue;
+        }
+        if (dropKg / minutes > 1200) {
+          incomplete = true;
+          continue;
+        }
+        liters += dropKg / density;
+      }
+    }
+    const value = {
+      litersToday: incomplete ? null : Math.round(liters),
+      status: incomplete ? 'INCOMPLETE' : 'AVAILABLE'
+    };
+    this.packagingEstimateCache = { plantId: plant.id, date: today, at: Date.now(), value };
+    return value;
+  }
+
   async publicAllTanks() {
     const companyId = this.config.get<string>('SYSTEM_OWNER_COMPANY_ID') || 'seed_company_disal';
     const company = await this.prisma.company.findFirst({
@@ -795,6 +908,7 @@ export class PlantService {
     return tanks.map((tank) => {
       const reading = tank.scaleKey ? this.weights.get(`${plantId}:${tank.scaleKey}`) : undefined;
       const activeOrder = tank.activeLot?.packagingOrders[0];
+      const currentPeriod = tank.stateHistory[0];
       const speed =
         tank.state === 'ENVASANDO' && activeOrder
           ? (this.packagingSpeeds.get(`${plantId}:DEVREE`) ??
@@ -804,11 +918,11 @@ export class PlantService {
         !!speed &&
         Date.now() - Date.parse(speed.receivedAt) <= WEIGHT_SIGNAL_TIMEOUT_MS &&
         !!activeOrder &&
-        Date.parse(speed.measuredAt) >= activeOrder.startedAt.getTime();
+        Date.parse(speed.measuredAt) >=
+          Math.max(activeOrder.startedAt.getTime(), currentPeriod?.startedAt.getTime() ?? 0);
       const age = reading
         ? Date.now() - new Date(reading.receivedAt).getTime()
         : Number.POSITIVE_INFINITY;
-      const currentPeriod = tank.stateHistory[0];
       const stateElapsedSeconds = currentPeriod
         ? Math.max(0, Math.floor((Date.now() - currentPeriod.startedAt.getTime()) / 1000))
         : null;
@@ -1541,6 +1655,7 @@ export class PlantService {
         await this.validatePackaging(companyId, dto, tank.plantId);
         this.assertTank(tank, 'APROBADO', dto.version);
         if (!tank.activeLotId) throw new ConflictException('El tanque no tiene un lote activo');
+        await this.assertLatexPackagingSlot(tx, tank.plantId, tank.id);
         const order = await tx.packagingOrder.create({
           data: {
             companyId,
@@ -1586,8 +1701,65 @@ export class PlantService {
         );
         return { ok: true };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
     );
+  }
+
+  async pausePackaging(companyId: string, tankId: string, user: JwtUser, dto: VersionedActionDto) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const tank = await this.findTank(tx, companyId, tankId);
+        await this.assertLatexPackagingPlant(tx, tank.plantId);
+        this.assertTank(tank, 'ENVASANDO', dto.version);
+        await this.assertOpenPackagingOrder(tx, tank.id);
+        await this.move(
+          tx,
+          tank,
+          'ENVASADO_PAUSADO',
+          user,
+          tank.activeLotId,
+          dto.reason?.trim() || 'Envasado pausado'
+        );
+        return { ok: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
+    );
+  }
+
+  async resumePackaging(companyId: string, tankId: string, user: JwtUser, dto: VersionedActionDto) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const tank = await this.findTank(tx, companyId, tankId);
+        await this.assertLatexPackagingPlant(tx, tank.plantId);
+        this.assertTank(tank, 'ENVASADO_PAUSADO', dto.version);
+        await this.assertOpenPackagingOrder(tx, tank.id);
+        await this.assertLatexPackagingSlot(tx, tank.plantId, tank.id);
+        await this.move(
+          tx,
+          tank,
+          'ENVASANDO',
+          user,
+          tank.activeLotId,
+          dto.reason?.trim() || 'Envasado reanudado'
+        );
+        return { ok: true };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
+    );
+  }
+
+  private async assertLatexPackagingPlant(tx: Prisma.TransactionClient, plantId: string) {
+    const plant = await tx.plant.findUnique({ where: { id: plantId }, select: { code: true } });
+    if (plant?.code !== 'LATEX')
+      throw new BadRequestException('La pausa de envasado sólo está disponible para Látex');
+  }
+
+  private async assertOpenPackagingOrder(tx: Prisma.TransactionClient, tankId: string) {
+    const order = await tx.packagingOrder.findFirst({
+      where: { tankId, finishedAt: null, cancelledAt: null },
+      select: { id: true }
+    });
+    if (!order) throw new ConflictException('No existe una OE abierta');
   }
 
   async newPackagingOrder(companyId: string, tankId: string, user: JwtUser, dto: PackagingDto) {
@@ -2839,6 +3011,26 @@ export class PlantService {
     if (!previousPeriod)
       throw new ConflictException('No hay un paso anterior verificable para este lote');
     const previous = previousPeriod.state;
+    if (
+      (tank.state === 'ENVASADO_PAUSADO' && previous === 'ENVASANDO') ||
+      (tank.state === 'ENVASANDO' && previous === 'ENVASADO_PAUSADO')
+    ) {
+      await this.assertOpenPackagingOrder(tx, tank.id);
+      return {
+        tank,
+        target: previous,
+        sample: null,
+        decision: null,
+        plannedPackaging: null,
+        cancelLot: false,
+        packagingOrders: [],
+        transferOperations: [],
+        reactivateLotId: null,
+        reopenPackagingOrder: null,
+        reopenTransferOperation: null,
+        restoreServiceReason: null
+      };
+    }
     if (tank.state === 'ENVASANDO' && previous === 'APROBADO') {
       const packagingOrders = await tx.packagingOrder.findMany({
         where: {
@@ -3021,13 +3213,16 @@ export class PlantService {
               : candidate.tank.state === 'FUERA_DE_SERVICIO' ||
                   candidate.target === 'FUERA_DE_SERVICIO'
                 ? 'Estado de servicio del tanque'
-                : candidate.cancelLot
-                  ? 'Lote de fabricación'
-                  : candidate.decision
-                    ? candidate.sample
-                      ? 'Decisión de calidad'
-                      : 'Decisión de calidad; se solicitará una muestra nueva'
-                    : 'Muestra de laboratorio') +
+                : candidate.tank.state === 'ENVASADO_PAUSADO' ||
+                    candidate.target === 'ENVASADO_PAUSADO'
+                  ? 'Pausa de la OE activa'
+                  : candidate.cancelLot
+                    ? 'Lote de fabricación'
+                    : candidate.decision
+                      ? candidate.sample
+                        ? 'Decisión de calidad'
+                        : 'Decisión de calidad; se solicitará una muestra nueva'
+                      : 'Muestra de laboratorio') +
         (candidate.plannedPackaging ? '; se quitará la tarjeta de planificación de envasado' : '')
     };
   }
@@ -3054,6 +3249,7 @@ export class PlantService {
         } = await this.rollbackCandidate(tx, companyId, tankId);
         if (tank.version !== dto.version)
           throw new ConflictException('El tanque cambió. Actualizá la pantalla.');
+        if (target === 'ENVASANDO') await this.assertLatexPackagingSlot(tx, tank.plantId, tank.id);
         const cancelledAt = new Date();
         if (reactivateLotId) {
           await tx.productionLot.update({
@@ -3248,8 +3444,23 @@ export class PlantService {
         });
         return { ok: true, state: target };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
     );
+  }
+
+  private async assertLatexPackagingSlot(
+    tx: Prisma.TransactionClient,
+    plantId: string,
+    tankId: string
+  ) {
+    const plant = await tx.plant.findUnique({ where: { id: plantId }, select: { code: true } });
+    if (plant?.code !== 'LATEX') return;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('LATEX_PACKAGING'), hashtext(${plantId}))::text AS lock`;
+    const active = await tx.tank.findFirst({
+      where: { plantId, state: 'ENVASANDO', id: { not: tankId } },
+      select: { id: true }
+    });
+    if (active) throw new ConflictException('La línea Devree ya está envasando otro tanque.');
   }
 
   private async transition(
@@ -3291,8 +3502,8 @@ export class PlantService {
   }
 
   private assertPackagingPlanningTankState(state: TankState) {
-    if (state === TankState.ENVASANDO) {
-      throw new ConflictException('El tanque ya se encuentra envasando');
+    if (state === TankState.ENVASANDO || state === TankState.ENVASADO_PAUSADO) {
+      throw new ConflictException('El tanque ya tiene una OE activa');
     }
     if (state === TankState.VACIO || state === TankState.FUERA_DE_SERVICIO) {
       throw new ConflictException(

@@ -95,6 +95,12 @@ export class PlantPublicScopedController {
   tv(@Param('plantCode') code: string) {
     return this.service.publicTanks(code);
   }
+  @Get(':plantCode/tv/packaging-estimates')
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { ttl: 60000, limit: 120 } })
+  packagingEstimates(@Param('plantCode') code: string) {
+    return this.service.publicPackagingEstimates(code);
+  }
   @Get(':plantCode/tv/injection-machines')
   @Header('Cache-Control', 'no-store')
   @Throttle({ default: { ttl: 60000, limit: 600 } })
@@ -372,6 +378,28 @@ export class PlantScopedController {
   ) {
     await this.service.assertPlantAccess(u.companyId, u.sub, c, id);
     return this.service.startPackaging(u.companyId, id, u, d);
+  }
+  @Post(':plantCode/tanks/:id/packaging/pause')
+  @Roles('ENVASADO', 'ADMIN')
+  async pausePackaging(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: VersionedActionDto
+  ) {
+    await this.service.assertPlantAccess(u.companyId, u.sub, c, id);
+    return this.service.pausePackaging(u.companyId, id, u, d);
+  }
+  @Post(':plantCode/tanks/:id/packaging/resume')
+  @Roles('ENVASADO', 'ADMIN')
+  async resumePackaging(
+    @CurrentUser() u: JwtUser,
+    @Param('plantCode') c: string,
+    @Param('id') id: string,
+    @Body() d: VersionedActionDto
+  ) {
+    await this.service.assertPlantAccess(u.companyId, u.sub, c, id);
+    return this.service.resumePackaging(u.companyId, id, u, d);
   }
   @Post(':plantCode/tanks/:id/packaging/new-order')
   @Roles('ENVASADO', 'ADMIN')
@@ -656,6 +684,26 @@ export class PlantProtectedController {
   @Roles('ENVASADO', 'ADMIN')
   packaging(@CurrentUser() user: JwtUser, @Param('id') id: string, @Body() dto: PackagingDto) {
     return this.service.startPackaging(user.companyId, id, user, dto);
+  }
+
+  @Post('tanks/:id/packaging/pause')
+  @Roles('ENVASADO', 'ADMIN')
+  pausePackaging(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: VersionedActionDto
+  ) {
+    return this.service.pausePackaging(user.companyId, id, user, dto);
+  }
+
+  @Post('tanks/:id/packaging/resume')
+  @Roles('ENVASADO', 'ADMIN')
+  resumePackaging(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: VersionedActionDto
+  ) {
+    return this.service.resumePackaging(user.companyId, id, user, dto);
   }
 
   @Post('tanks/:id/packaging/new-order')

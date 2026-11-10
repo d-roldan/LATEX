@@ -147,6 +147,7 @@ const states = [
   'RECHAZADO',
   'APROBADO',
   'ENVASANDO',
+  'ENVASADO_PAUSADO',
   'FUERA_DE_SERVICIO'
 ];
 const duration = (seconds: number) => {
@@ -553,7 +554,9 @@ export function PlantHistoryPage() {
               <tbody>
                 {filteredRows.map((row) => {
                   const packaging =
-                    row.state === 'ENVASANDO' ? row.lot?.packagingOrders[0] : undefined;
+                    row.state === 'ENVASANDO' || row.state === 'ENVASADO_PAUSADO'
+                      ? row.lot?.packagingOrders[0]
+                      : undefined;
                   return (
                     <tr key={row.id}>
                       <td>{row.tank.name}</td>

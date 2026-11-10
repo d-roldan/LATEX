@@ -12,6 +12,7 @@ export const historyStatePresentation: Record<string, { label: string; color: st
   RECHAZADO: { label: 'Rechazado', color: '#c92a2f' },
   APROBADO: { label: 'Aprobado', color: '#3b9848' },
   ENVASANDO: { label: 'Envasando', color: '#0998d7' },
+  ENVASADO_PAUSADO: { label: 'Envasado pausado', color: '#b77d2e' },
   TRASVASANDO: { label: 'Trasvasando', color: '#715aa8' },
   FUERA_DE_SERVICIO: { label: 'Fuera de servicio', color: '#715aa8' }
 };

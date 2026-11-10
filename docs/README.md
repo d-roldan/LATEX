@@ -8,7 +8,7 @@ Este directorio reúne la documentación funcional, operativa y técnica del sis
 
 - [Manual de Fabricación](MANUAL_USUARIO_FABRICACION.md): inicio y corrección de fabricaciones, envío a Laboratorio, ajustes, rechazados y servicio.
 - [Manual de Laboratorio](MANUAL_USUARIO_LABORATORIO.md): recepción de muestras, aprobación, ajustes, rechazos y correcciones.
-- [Manual de Envasado](MANUAL_USUARIO_ENVASADO.md): inicio y cambio de OE, correcciones, finalización y trasvase.
+- [Manual de Envasado](MANUAL_USUARIO_ENVASADO.md): inicio, pausa y reanudación en Látex, cambio de OE, correcciones, finalización y trasvase.
 - [Manual de Administrador](MANUAL_USUARIO_ADMINISTRADOR.md): usuarios, accesos, asistencia operativa, resumen, historial y auditoría.
 
 ### Documentación funcional y técnica
@@ -49,7 +49,7 @@ Los documentos maestros que describen el producto completo permanecen en la raí
 ## Historial de versiones
 
 - [Historial completo de versiones](releases/README.md): índice ordenado de todas las notas disponibles.
-- [Versión vigente · V0.0.49](releases/RELEASE_NOTES_V0.0.49.md): Reportería, informes de Laboratorio, mejoras de HISTORIAL y retroceso auditado de tanques.
+- [Versión vigente · V0.0.50](releases/RELEASE_NOTES_V0.0.50.md): pausa y reanudación del envasado de Látex, ocupación única de Devree y TV sin indicadores estimados.
 
 ## Criterio de actualización
 

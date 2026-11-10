@@ -21,6 +21,7 @@ type TankState =
   | 'RECHAZADO'
   | 'APROBADO'
   | 'ENVASANDO'
+  | 'ENVASADO_PAUSADO'
   | 'TRASVASANDO'
   | 'FUERA_DE_SERVICIO';
 type Action =
@@ -31,6 +32,8 @@ type Action =
   | 'quality'
   | 'editAdjustment'
   | 'packaging'
+  | 'pausePackaging'
+  | 'resumePackaging'
   | 'newOrder'
   | 'correctOrder'
   | 'finish'
@@ -143,6 +146,7 @@ const stateLabel: Record<TankState, string> = {
   RECHAZADO: 'Rechazado',
   APROBADO: 'Aprobado',
   ENVASANDO: 'Envasando',
+  ENVASADO_PAUSADO: 'Envasado pausado',
   TRASVASANDO: 'Trasvase',
   FUERA_DE_SERVICIO: 'Fuera de servicio'
 };
@@ -308,9 +312,9 @@ export function PlantBoardPage({
         });
     }
     if (tvSector === 'envasado' && plantCode === 'LATEX') {
-      return [...all].sort(
-        (a, b) => Number(b.state === 'ENVASANDO') - Number(a.state === 'ENVASANDO')
-      );
+      const priority = (tank: Tank) =>
+        tank.state === 'ENVASANDO' ? 2 : tank.state === 'ENVASADO_PAUSADO' ? 1 : 0;
+      return [...all].sort((a, b) => priority(b) - priority(a));
     }
     return all;
   }, [tanks.data, isPublicMonitoring, tvSector, plantCode]);
@@ -485,14 +489,27 @@ export function PlantBoardPage({
         return [['Finalizar trasvase', 'finishTransfer', 'danger']] as Array<
           [string, Action, string]
         >;
+      if (
+        (tank.state === 'APROBADO' || tank.state === 'ENVASADO_PAUSADO') &&
+        plantCode === 'LATEX' &&
+        tanks.data?.some((other) => other.id !== tank.id && other.state === 'ENVASANDO')
+      )
+        return [] as Array<[string, Action, string]>;
       if (tank.state === 'APROBADO')
         return [['Iniciar envasado', 'packaging', 'primary']] as Array<[string, Action, string]>;
       if (tank.state === 'ENVASANDO')
         return [
+          ...(plantCode === 'LATEX'
+            ? [['Pausar envasado', 'pausePackaging', 'warning'] as [string, Action, string]]
+            : []),
           ['Nueva OE', 'newOrder', 'secondary'],
           ['Corregir OE', 'correctOrder', 'secondary'],
           ['Finalizar y vaciar', 'finish', 'danger']
         ] as Array<[string, Action, string]>;
+      if (tank.state === 'ENVASADO_PAUSADO' && plantCode === 'LATEX')
+        return [['Reanudar envasado', 'resumePackaging', 'primary']] as Array<
+          [string, Action, string]
+        >;
     }
     return [] as Array<[string, Action, string]>;
   };
@@ -631,6 +648,16 @@ export function PlantBoardPage({
                 description: form.description
               })
         }
+      },
+      pausePackaging: {
+        path: `${base}/tanks/${tank.id}/packaging/pause`,
+        method: 'post',
+        payload: { version, reason: form.reason || undefined }
+      },
+      resumePackaging: {
+        path: `${base}/tanks/${tank.id}/packaging/resume`,
+        method: 'post',
+        payload: { version, reason: form.reason || undefined }
       },
       newOrder: {
         path: `${base}/tanks/${tank.id}/packaging/new-order`,
@@ -862,7 +889,8 @@ export function PlantBoardPage({
                         </div>
                       ) : null}
                       {tank.activeLot ? (
-                        tank.state === 'ENVASANDO' && order ? (
+                        (tank.state === 'ENVASANDO' || tank.state === 'ENVASADO_PAUSADO') &&
+                        order ? (
                           <>
                             <div>
                               <dt>SEMI</dt>
@@ -934,7 +962,7 @@ export function PlantBoardPage({
                               <dd>{tank.activeLot.manufacturingOrder}</dd>
                             </div>
                           ) : null}
-                          <div>
+                          <div className="tank-order">
                             <dt>OE</dt>
                             <dd>{order.packagingOrder}</dd>
                           </div>
@@ -960,6 +988,14 @@ export function PlantBoardPage({
                       ) : null}
                     </dl>
                     <div className="tank-actions">
+                      {sector === 'envasado' &&
+                      plantCode === 'LATEX' &&
+                      (tank.state === 'APROBADO' || tank.state === 'ENVASADO_PAUSADO') &&
+                      tanks.data?.some(
+                        (other) => other.id !== tank.id && other.state === 'ENVASANDO'
+                      ) ? (
+                        <small>Devree ya está envasando otro tanque</small>
+                      ) : null}
                       {actionsFor(tank).map(([label, action, variant]) => (
                         <Button
                           key={action}
@@ -1057,8 +1093,11 @@ export function PlantBoardPage({
                 </p>
               ) : null}
               <p>
-                Verificá físicamente el tanque antes de continuar. La operación no se ejecutará
-                hasta presionar “Sí, confirmar”.
+                {selection.action === 'pausePackaging'
+                  ? 'Confirmá que la línea dejó de envasar desde este tanque. La OE seguirá abierta y Devree quedará disponible.'
+                  : selection.action === 'resumePackaging'
+                    ? 'Confirmá que la línea está conectada a este tanque. La OE abierta continuará y Devree quedará ocupada.'
+                    : 'Verificá físicamente el tanque antes de continuar. La operación no se ejecutará hasta presionar “Sí, confirmar”.'}
               </p>
             </div>
             {error ? <div className="plant-form-error">{error}</div> : null}
@@ -1132,6 +1171,8 @@ function actionTitle(action: Action) {
       quality: 'Decisión de calidad',
       editAdjustment: 'Editar solicitud de ajuste',
       packaging: 'Iniciar envasado',
+      pausePackaging: 'Pausar envasado',
+      resumePackaging: 'Reanudar envasado',
       newOrder: 'Ingresar nueva OE',
       correctOrder: 'Corregir OE activa',
       finish: 'Finalizar envasado',
